@@ -1,0 +1,566 @@
+Title: Learning a Fix and Explore Framework for Continuous Generalized Category Discovery
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/37530/41492
+
+Number of Pages: 9
+
+Markdown Content:
+# Learning a Fix and Explore Framework for Continuous Generalized Category Discovery 
+
+## Chunming Li 1, Shidong Wang 2, Haofeng Zhang 1* 
+
+> 1
+
+School of Computer Science and Engineering, Nanjing University of Science and Technology, China 
+
+> 2
+
+School of Engineering, Newcastle University United Kingdom chunmingli@njust.edu.cn, shidong.wang@newcastle.ac.uk, zhanghf@njust.edu.cn 
+
+Abstract 
+
+To address the limitations of transductive learning in evolv-ing real-world scenarios where unknown categories may con-tinuously emerge, Continual Generalized Category Discov-ery (C-GCD) presents a novel paradigm that extends con-ventional category discovery frameworks. Unlike traditional static learning environments, C-GCD requires models to in-crementally discover novel categories across multiple oper-ational phases while maintaining discrimination capabilities for previously learned classes, posing significant challenges in balancing stability and plasticity. Prior approaches typ-ically employ parameter-level knowledge distillation from historical models to alleviate catastrophic forgetting, which effectively preserves prior knowledge and optimizes com-putational efficiency. However, our analysis reveals that the persistent availability of samples from previous stages en-ables more sophisticated knowledge preservation strategies. Specifically, we present a Fix and Explore strategy that em-ploys distinct learning methodologies for different types of potential data, aiming to preserve the features of old cate-gories as much as possible and gradually exploring the po-tential distribution of new class latent spaces, we can en-hance the model’s ability to discover novel categories. This paper investigates this effect and introduces a novel heuris-tic paradigm to solve the C-GCD problem, called Fix and Explore (FaE), which aims to provide sufficient imaginative space for new classes while preserving the classification abil-ity for old tasks. We conducted experiments across multi-ple datasets and performed detailed comparisons. The results demonstrate that our method achieves state-of-the-art perfor-mance at each stage across all datasets. 
+
+## Introduction 
+
+In recent years, the rapid development of deep supervised learning has been attributed mainly to the accumulation of large-scale datasets (Krizhevsky, Sutskever, and Hinton 2012). With sufficient annotated data, deep learning mod-els are capable of surpassing human-level performance in many important computer vision tasks (He et al. 2016, 2022; Dosovitskiy et al. 2021). Annotating large-scale data is labor-intensive and impractical due to the vast number of categories in open-world scenarios. To mitigate this, New 
+
+> *
+
+corresponding Author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Category Discovery (NCD) (Han, Vedaldi, and Zisserman 2019; Gu et al. 2023; Li et al. 2023; Fini et al. 2021) ex-plores leveraging labeled data to cluster or classify unlabeled samples from novel categories. Generalized Category Dis-covery (GCD) (Vaze et al. 2022; Wen, Zhao, and Qi 2023; Pu, Zhong, and Sebe 2023; Rastegar et al. 2024) further re-laxes assumptions by allowing unlabeled samples to orig-inate from both seen and unseen classes. However, both NCD and GCD adopt a transductive setting (Vaze et al. 2022), restricting them to single-stage inference and lim-iting their ability to detect emerging categories dynami-cally (Ma et al. 2024; Cendra, Zhao, and Han 2024). Re-cent extensions—Continuous NCD (C-NCD) and Continu-ous GCD (C-GCD)—address this by enabling multi-stage discovery. C-NCD assumes each stage contains entirely new categories, while C-GCD permits samples from previously seen classes. Like typical continual learning, both C-GCD and C-NCD face the severe issue of catastrophic forgetting (Roy et al. 2022; Zhang et al. 2022). Common approaches to miti-gate forgetting include data replay, dynamic networks, and knowledge distillation (Zhou et al. 2024). Data replay and dynamic networks tend to outperform knowledge distillation in terms of performance but they face challenges related to privacy concerns or storage limitations. As shown in Fig. 1, the model is required to recognize both old classes from previous stages and new classes it has never seen before, while facing a large number of un-labeled samples at each stage (Ma et al. 2024). To resist for-getting, Happy (Ma et al. 2024) proposed cosine distance knowledge distillation for all samples in each session. PA-CGCD (Kim et al. 2023) proposed using proxies to classify samples into new and old classes, performing feature distil-lation only on old classes. GM (Zhang et al. 2022) dynami-cally classifies all samples as coming from novel categories and applies cosine distance loss knowledge distillation to all samples. Compared to knowledge distillation on all samples, this approach may be more conducive to discovering new categories, which inspired us to explore different distillation strategies for C-GCD. This paper addresses the C-GCD task of “More learning stages with more new classes” proposed in Happy (Ma et al. 2024), analyzing the impact of different distillation strate-gies and introducing the Fix and Explore (FaE) framework. The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+6064 Init Stage        
+
+> Training Dataset
+> Labeled data
+> Unlabeled Known data
+> Unlabeled Unknown data
+> Classfier
+> Dog Cat Dog Cat Novel-1 Dog Novel-1 Cat Novel-T
+
+Stage-1 Stage-T Figure 1: Illustration of C-GCD setting. In the initialization phase, the model is pre-trained on labeled data. During the continual learning phase, the model receives unlabeled images belonging to both known and novel classes. Finally, the model is evaluated on a test set comprising all encountered classes. While existing methods mitigate catastrophic forgetting (Ma et al. 2024), they still suffer from negative optimization in later stages due to growing coupling between new and old class feature spaces. We attribute this to the lack of mech-anisms for preserving old-class information and exploring new-class potential. L2 norm-based distillation ensures strict feature alignment, whereas graph-based distillation allows slight deviations while preserving structure (Zhou et al. 2024). Building on these insights, FaE heuristically distin-guishes potential old and new samples via clustering, ap-plying distinct distillation strategies to extract information of different hardness levels from the previous model. It fur-ther employs regularization to reduce prediction bias and an improved Hardness-aware Reweighed Feature Reply to alle-viate forgetting. To enhance novel category discovery, FaE observes centroid drift in new classes during training and in-troduces a graph regularization based on visible categories, iteratively separating new from old distributions. Our contributions can be summarized as follows: • We propose a Fix and Explore framework FaE for C-GCD, which utilizes a Fix term to stabilize and an Ex-plore term to better adapt the latent space for new cate-gories. • We introduce Known-Aware Graph Regularization 
+
+and employ distinct distillation losses for data from dif-ferent categories to reduce control over the feature space distribution of new categories and mitigate catastrophic forgetting. • Extensive experiments on multiple datasets demonstrate that our method significantly outperforms others in both category discovery and forgetting mitigation. 
+
+## Related Works 
+
+Category Discovery 
+
+Category Discovery addresses the challenge of classifying unlabeled samples from novel categories with limited la-beled data. Novel Category Discovery (NCD) (Han, Vedaldi, and Zisserman 2019) assumes that unlabeled data only con-tain unseen classes, distinguishing it from semi-supervised learning. Early methods like DTC use clustering and pro-totypes, while AutoNovel (Han et al. 2020) adopts self-supervised pretraining and pseudo-labeling. Recent works extend NCD to tasks like semantic segmentation, incremen-tal learning, and Generalized Category Discovery (GCD), which includes both known and novel classes. Representa-tive approaches include PromptCAL (Zhang et al. 2023), SimGCD (Wen, Zhao, and Qi 2023), and SPTNet (Wang, Vaze, and Han 2024). Continual Novel Category Discovery (C-NCD) (Joseph et al. 2022) further enables models to discover new classes from streaming data. It involves learning from labeled data and incrementally processing unlabeled samples. Tech-niques such as feature replay (FRoST (Roy et al. 2022)), self-supervised learning (MSc-iNCD (Liu et al. 2023b)), and Growing-Merging frameworks (GM (Zhang et al. 2022)) have been proposed. Other works like PA-CGCD (Kim et al. 2023) and MetaGCD (Wu et al. 2023) focus on mit-igating forgetting via pseudo-labeling and meta-learning. PromptCCD (Cendra, Zhao, and Han 2024) employs dy-namic prompting and Gaussian Mixture Prompting to en-hance representation learning. 
+
+Graph Knowledge Distillation 
+
+Graph Knowledge Distillation (a.k.a. Relational Distilla-tion) was first applied in GNNs (Liu et al. 2023a), utilizing a “Teacher-Student” framework to transfer the parameters of a high-capacity model to a lower-capacity model, thereby improving its performance. Similarly, in deep neural net-works, many approaches suggest that student models can di-rectly extract rich inter-sample relational knowledge learned by the teacher model through constructed graphs (Yim et al. 2017; Passalis, Tzelepi, and Tefas 2020). This ability to align inter-model distributions naturally lends itself to incremental learning. In incremental learning, graph knowledge distilla-tion often involves constructing triplet relations (Zhou et al. 6065 2024) (anchor, positive, and negative samples) and preserv-ing the triplet relationship distances between the old and new models (Gao et al. 2022). Compared to traditional instance-based distillation in incremental learning, graph knowledge distillation reveals more structural information about the dis-tribution (Zhou et al. 2024). 
+
+## Methodology 
+
+Problem Definition 
+
+The C-GCD consists of two phases. During the initializa-tion phase, the model is provided with a labeled train-ing dataset D0 
+
+> train
+
+= {(x0 
+
+> i
+
+, y0 
+
+> i
+
+)}N0
+
+> i=1
+
+, consisting of input-output pairs (x0 
+
+> i
+
+, y0 
+
+> i
+
+) from a set of known categories C0 =
+
+{1, 2, ..., K 0}. The objective is for the model to learn gener-alizable representations from these categories. In the sub-sequent continual learning phase ( Stage -1 → Stage -T ), at Stage -t(t ∈ [1 , T ]) , the model is given a sequence of unlabeled datasets Dttrain = {xti}Nt
+
+> i=1
+
+, containing samples from Ct = {1, 2, ..., K t}, where Ct = Ct−1 ∪ { Kt−1 +1, K t−1 + 2 , ..., K t}. For convenience of description, we define the number of classes in each phase of the continual learning process as Knew . Finally, after T discovery stages, the model will be tested on the dataset DU containing all categories CT .
+
+Distillation in Traditional Continual Learning 
+
+Assume that at Stage -t, we have the set of all samples 
+
+{x, y} from the current stage and the current stage model 
+
+ϕt = {ft, ht, gt}, which can be decomposed into a feature extractor ft(·), a classifier ht(·), and a projection head gt(·).In the process of incremental learning, it is common to lever-age the model from the previous stage to guide the train-ing of the current model and a process often referred to as knowledge distillation. The loss used in this context is typ-ically divided into the loss for mitigating forgetting and the loss for learning new classes. Formally, this can be summa-rized as: 
+
+L = L1(ϕt(x), y) + L2(ϕt(x), ϕ t−1(x)) , (1) where L1 is the cross-entropy loss for learning new samples, and L2 is distillation loss and used to prevent forgetting. L2
+
+can take various forms, such as logit distillation or graph-based knowledge distillation. ϕt−1(·) denotes the model from the previous stage, which is often frozen during the current training. The distillation loss used in methods like LwF is defined as LLwF  
+
+> 2
+
+= P −S (ϕt−1(x)) log S(ϕt(x)) ,where S denotes Softmax activation. The main goal is to es-tablish a mapping between the predicted probabilities of the old and new models, ensuring that their outputs converge to similar values. Similarly, graphical knowledge distillation can be sum-marised as: 
+
+L2 = D( ωs(ϕt(xi), ϕ t(xj )) , ω t(ϕt−1(xi), ϕ t−1(xj ))) ,
+
+(2) where ωs(·, ·) and ωt(·, ·) denote the similarity/distance function for student and teacher networks, and D( ·, ·) rep-resents the objective function used to minimize the distance between the distributions. Compared to instance-level distil-lation, graph knowledge distillation offers greater flexibil-ity. As illustrated in Fig. 2, the proposed FaE framework leverages diverse distillation strategies to preserve existing knowledge while actively exploring accessible information. 
+
+Initialization Phase 
+
+To ensure fairness in comparing results, the model is trained on D0 
+
+> train
+
+during the initialization phase and adapts the loss used in SimGCD (Wen, Zhao, and Qi 2023) and Happy (Ma et al. 2024). Precisely, to extract more generalizable fea-tures, cross-entropy loss Lcls , supervised contrastive learn-ing (Khosla et al. 2020) Llcon and self-supervised contrastive learning (Chen et al. 2020) Lucon can be formulated as: 
+
+Lcls = 1
+
+|B|
+
+X
+
+> i∈B
+
+−yi log pi, (3) 
+
+Ll 
+
+> con
+
+= − 1
+
+|B|
+
+X
+
+> i∈B
+
+1
+
+|P (i)|
+
+X 
+
+> q∈P(i)
+
+log exp  z⊤ 
+
+> i
+
+zq /τ c
+
+P 
+
+> n̸=i
+
+exp  z⊤ 
+
+> i
+
+zn/τ c
+
+ ,
+
+(4) 
+
+Lu 
+
+> con
+
+= − 1
+
+|B|
+
+X
+
+> i∈B
+
+log exp  z⊤ 
+
+> i
+
+z′
+
+> i
+
+/τ c
+
+P 
+
+> n̸=i
+
+exp  z⊤ 
+
+> i
+
+zn/τ c
+
+ , (5) where pi = h(f( xi)) is the logit prediction and z =g(f( xi)) is the projection. The final loss for initialization phase can be summarized as: 
+
+Linit = Lcls + Llcon + Lucon . (6) 
+
+Continual Learning Phase 
+
+Classifier Initialization. During the training phase, FaE needs to distinguish possible samples from new classes. Us-ing a fixed threshold to identify new classes will make the model cumbersome and increase the difficulty of model tun-ing. To avoid setting a threshold and the potential instability caused by a randomly initialized classifier during training, we use clustering to initialize the classifier. Specifically, we cluster the data of each phase into Kt classes and select the top Knew centers that are farthest from the known class pro-totypes as the new class classifiers. The initialized classifier then serves as the new class de-tector and participates in the subsequent training process. When the classifier predicts a sample as a new class, we temporarily treat it as a potential new class. For simplic-ity, in Stage -t, the samples detected as potentially new classes are marked as Btnew = {xbnew }|Btnew | 
+
+> b=1
+
+, while the re-maining samples are marked as Btold = {xkold }|Btold | 
+
+> k=1
+
+and 
+
+Bt = Btnew ∪ Btold .
+
+Fix Term: Different Distillations Strategies. As men-tioned earlier, different distillation strategies should be adopted for various types of data. In contrast to existing methods that apply a one-size-fits-all approach, where in-formation is distilled from individual samples, such meth-ods are no longer suitable due to the limited information they provide. However, for the old category samples, the old model still performed well as a teacher model. There-fore, for samples that may belong to old classes, using a loss 6066 KUUKUUU K
+
+Clustering Init 
+
+Known Class 
+
+Unknown Class  
+
+> KUUKUUUK
+
+Teacher's Embedding 
+
+> KKK
+> K
+> K
+> KUUU
+> U
+
+Fix Term  
+
+> U
+
+Exploring Term 
+
+> Clustering Init
+> Unknown Class
+> Exploring Term
+
+Fix Term 
+
+> ...............
+> ....................
+> Different Prediction Embedding of Previous Stage
+
+EMA  
+
+> EMA Exponential Moving Average
+> Distillation
+> ::::
+> Known Class
+
+Figure 2: Main architecture of FaE. Firstly, we use K-means to initialize the classifier, providing a rough estimation of potential unknown class samples. In the Fix Term, different distillation strategies are employed to mitigate forgetting, while in the Explore Term, all unknown samples are gradually uncovered. The model adopts an EMA (Exponential Moving Average) update mechanism to prevent it from prematurely converging to a local optimum. function based on the cosine distance is more effective than traditional methods: 
+
+Lold = 1
+
+|Btold ||Btold |X
+
+> k=1
+
+1 − cos(f t(xkold ), ft−1(xkold )) , (7) where xold ∈ Btold are the samples predicted to old classes, and cos( a, b) = a·b 
+
+> ∥a∥2∥b∥2
+
+denotes cosine similarity. Using the same distillation strategy may hinder new classes from converging to a unified representation space. Incorporating the previously introduced graph-based knowl-edge distillation helps retain semantic information from the teacher network, enabling gradual discovery and learning of new classes. We construct the graph using cosine distance between samples and employ MSE as the distillation objec-tive, as shown in Eq. 2: 
+
+Lnew = 1
+
+|Btnew ||Btnew |X
+
+> i=1
+
+∥ cos(f t(xinew ), ft(xjnew )) 
+
+− cos(f t−1(xinew ), ft−1(xjnew )) ∥2 
+
+> F
+
+.
+
+(8) The overall distillation loss can be summarized as: 
+
+Ldistill = Lold + Lnew . (9) 
+
+Explore Term: Known-Aware Graph Regularization. As stated in the introduction, continual learning should not only mitigate forgetting but also facilitate new class discovery. To this end, we enhance the FaE framework with graph-based learning. We identify two key limitations in existing methods: (1) Self-supervised contrastive learning is class-agnostic, often forcing different representations for same-class images—undesirable for classification; (2) Strong cor-relation between feature distribution and predictions can cause class overlap, leading to incorrect hard pseudo-labels and impaired class discovery. Inspired by Comatch (Li, Xiong, and Hoi 2021), we propose using logit predictions on old classes to generate pseudo-label graphs and guide the learning of representa-tion. Due to the shift in the new category centroids obtained from the clustering initialization and the continuous move-ment of the centroids during training, we employ a more stable classifier from the old classes to guide the model’s representation learning. Given the logit prediction set Pnew = {ptb}|Bnew | 
+
+> b=1
+
+, where 
+
+ptb = S(h told (f t(xb))) represents the prediction classifier of the old class and xb ∈ { xbnew }|Bnew | 
+
+> b=1
+
+. We construct pseudo-label graphs based on the similarity of the predictions: 
+
+W tbj =
+
+
+
+1, if b = j, 
+
+ptb · ptj , if b̸ = j
+
+0, otherwise .
+
+(10) The pseudo-labels obtained from the logit predictions serve as the target for the projection layer during training. To construct the projection graph, we apply image augmen-tation Aug( ·) to each sample of a possible new category and construct the embedding graph: 
+
+W zbj =
+
+exp ( zb · z′
+
+> b
+
+/τ ) , if b = j, 
+
+exp ( zb · zj /τ ) , otherwise , (11) where zb = g t(f t(xb)) , z′ 
+
+> b
+
+= g t(f t(Aug( xb))) and xb ∈
+
+Btnew .Finally, we normalize the two graphs W zbj and W tbj as 
+
+ˆWbj = Wbj / P 
+
+> j
+
+Wbj , ensuring that the similarity of each row sums to 1. We then minimize the cross-entropy between 6067 the two normalized graphs and define the contrastive loss as: 
+
+Lg = 1
+
+Btnew Btnew X
+
+> b=1
+
+H
+
+ ˆW tbj , ˆW zbj 
+
+
+
+, (12) where H(·, ·) is the contrastive loss function, and we employ cross-entropy here. In the initialization phase, the dense distribution of la-beled samples leads to fewer detected new-category sam-ples. The graph regularization loss Lg encourages samples and newly discovered ones with similar pseudo-labels to share embeddings. Unlike computing loss over all samples, this relaxes constraints on labeled data and enhances latent space exploration. 
+
+Other Loss 
+
+In addition to the aforementioned loss, we also employ methods from prior work. Standard entropy regularization typically performs poorly when faced with imbalanced sam-ple distributions, especially when the number of samples from old classes exceeds that of new classes, leading to a bias towards the old classes. To address this issue, we intro-duce Group-wise Soft Entropy Regularization :
+
+Lentropy = ¯ pold log ¯ pold + ¯ pnew log ¯ pnew 
+
++ X
+
+> c∈Ct
+> old
+
+¯p(c) log ¯ p(c) + X
+
+> c∈Ct
+> new
+
+¯p(c) log ¯ p(c), (13) where ¯p = 1
+
+> |Bt|
+
+P 
+
+> x∈Bt
+
+ht ◦ ft(x) ∈ RKt
+
+, ¯pold =
+
+P
+
+> c∈Ct
+> old
+
+¯p(c) ∈ R and ¯pnew = P
+
+> c∈Ct
+> new
+
+¯p(c) ∈ R. The first two terms control the marginal distribution balance between the old and new classes because of ¯pnew + ¯ pold = 1 , while the last two terms control the marginal distribution balance within the old and new classes, respectively. To maintain the ability to predict old classes and mit-igate forgetting while placing more focus on harder sam-ples, we adopt the Hardness-aware Prototype Sam-pling base feature reply . Given means and variances 
+
+μc = 1
+
+> Nc
+
+P 
+
+> yi=c
+
+f tθ (xi), Σc = 1
+
+> Nc
+
+P
+
+> yi=c
+
+(f tθ (xi) −
+
+μc)( f tθ (xi) − μc)⊤. In each stage, data is generated using a normal distribution N (μc, Σ) to combat forgetting, where 
+
+Σ = 
+
+qP 
+
+> c∈C 0
+
+Tr Σc/(dK 0).The hardness is defined as p(i) 
+
+> hardness
+
+= σ(hi/τ h), where 
+
+hi = 1
+
+> Kt
+> old −1
+
+PKt  
+
+> old
+> j=1 ,j ̸=i
+
+cos( μi, μ j ), and the final loss can be expressed as: 
+
+Lhap = Ec∼phardness Ezc∼N (μc,rI ) − yc log σ(gtϕ(zc)/τ p).
+
+(14) Subsequently, after introducing the self-distillation loss (Caron et al. 2021a) Lself = 12|B|
+
+P 
+
+> i∈B
+
+ℓ(q′
+
+> i
+
+, pi) + ℓ(qi, p′
+
+> i
+
+)
+
+with the same hyper-parameter in Happy (Ma et al. 2024). the sum of the other losses is given by: 
+
+Lh = Lhap + Lself + Lentropy . (15) Finally, to avoid overfitting when the model learns new categories and to preserve the knowledge it has already ac-quired, we applied the Exponential Moving Average (EMA) method during the learning process. Hence, the overall loss can be written as follows: 
+
+L = Ldistill + Lg + Lh. (16) 
+
+## Experiment 
+
+Datasets 
+
+We evaluate our methods on two well-known large-scale datasets: CIFAR-100 (Krizhevsky, Hinton et al. 2009) ,Tiny-ImageNet (Le and Yang 2015) and ImageNet-100 (Krizhevsky, Sutskever, and Hinton 2012), as well as a fine-grained datasets CUB-200 (Reed et al. 2016). Each dataset is split into two sets: labeled data is used for the initial phase (Stage -0), and unlabeled data is used for continual learning (Stage -1 → Stage -T ). More statistics on the partitioning of adopted datasets are presented in the Appendix. 
+
+Evaluation Protocol 
+
+After the completion of training Stage -t on Dttrain ,the model is evaluated on the test set Dttest , which contains samples from Ct. With the prediction ˆ† and the ground truth y. The accuracy is calculated as: 
+
+ACC = max p∈P ( ˆY)
+
+ 1
+
+> M
+
+PMi=1 I(yi = p(ˆ yi)) 
+
+
+
+, where 
+
+M = |D ttest |, and P( ˆY) defines how the predicted labels for test samples are matched to the true labels. At the same time, we adapt the maximum forgetting metric ( Mf ) and the final discovery metric ( Md) as extra metrics. 
+
+Implement Details 
+
+The backbone employed in our experiments was ViT-B/16 (Dosovitskiy et al. 2021) pre-trained on the Imagenet-1K dataset using the DINO self-supervised learning approach (Caron et al. 2021b) and only fine-tuned the last block of the ViT model. At Stage -0, models are trained for 100 epochs. At the continual learning stage, models are trained for 30 epochs. All experiments were conducted using an NVIDIA GeForce RTX A6000 GPU. 
+
+Main Results 
+
+We compared adaptive methods from other tasks, such as K-means (MacQueen 1967), the recent C-GCD method: Vanil-laGCD (Vaze et al. 2022) and SimGCD (Wen, Zhao, and Qi 2023) and SimGCD+LwF (Li and Hoiem 2017), C-GCD methods: GM (Zhang et al. 2022) and FRoST (Roy et al. 2022), and MetaGCD (Wu et al. 2023), and the current state-of-the-art method Happy (Ma et al. 2024). As shown in Table 1, FaE outperforms the best baseline across mul-tiple datasets in the 5-stage continual learning task. With more learning stages, its performance steadily improves and the gains become more pronounced—for example, improve-ments on CIFAR-100 and Tiny-ImageNet rise from 3.2% and 0.58% in Stage -1 to 5.21% and 9.09% in Stage -5.We further compared GM metrics in Table 2, including maximum forgetting ( Mf ) and final discovery ( Md), re-flecting the model’s ability to retain old-class performance 6068 DATASETS METHODS S-0 STAGE -1 STAGE -2 STAGE -3 STAGE -4 STAGE -5 ALL ALL OLD NEW ALL OLD NEW ALL OLD NEW ALL OLD NEW ALL OLD NEW 
+
+C100 KM EANS 66.16 40.27 41.76 32.80 37.14 38.33 30.00 36.20 37.63 26.20 36.66 38.30 23.50 35.69 36.79 25.80 VANILLA GCD 90.82 72.32 78.50 41.40 67.04 72.50 34.30 57.99 62.26 28.10 56.60 59.55 33.00 51.36 53.70 30.30 SIM GCD 90.36 73.37 86.44 8.00 62.56 72.43 3.30 54.17 61.61 2.10 47.62 53.37 1.60 43.53 47.86 4.60 SIM GCD+ 90.36 75.93 87.04 20.40 67.07 75.33 17.50 58.45 64.33 17.30 54.31 58.71 19.10 50.49 53.90 19.80 FR OST 90.36 76.87 79.58 63.30 65.31 68.88 43.90 58.01 61.09 36.50 49.27 50.90 36.20 48.03 48.17 46.80 GM 90.36 76.58 79.80 60.50 71.10 74.52 50.60 63.51 68.16 31.00 59.74 62.51 37.60 54.11 54.74 48.40 META GCD 90.82 76.12 83.60 38.70 69.40 72.82 48.90 61.95 65.76 35.30 58.22 61.21 34.30 55.78 58.47 31.60 HAPPY 90.36 80.40 85.26 56.10 74.13 78.27 49.30 68.23 70.86 49.80 62.26 63.75 50.30 59.99 60.96 51.30 FAE (O URS ) 90.36 83.60 86.38 69.70 78.84 83.10 53.30 73.05 76.17 51.20 67.76 70.00 49.80 65.20 66.44 54.00 
+
+IN100 KM EANS 85.56 54.90 57.04 44.20 54.73 56.37 44.90 54.67 56.66 40.80 54.63 56.25 41.70 53.92 56.18 33.60 VANILLA GCD 95.96 70.13 72.92 56.20 69.37 73.47 44.80 68.50 70.63 53.60 65.56 67.85 47.20 64.54 67.44 38.40 SIM GCD 96.20 79.67 91.68 19.60 70.23 78.83 18.60 61.90 67.43 23.20 56.67 60.92 22.60 52.90 56.40 21.40 SIM GCD+ 96.20 83.07 95.16 22.60 74.57 83.47 21.20 67.60 73.57 25.80 62.09 66.83 24.20 57.62 61.47 23.00 FR OST 96.20 87.50 92.96 60.20 79.63 83.37 57.20 76.78 77.00 75.20 66.18 68.65 46.40 63.82 66.40 40.60 GM 96.20 89.53 95.04 62.00 82.34 86.93 54.80 77.97 79.17 69.60 72.80 74.65 58.00 71.08 71.76 65.00 META GCD 95.96 75.27 78.20 60.60 73.79 75.93 54.90 69.35 72.20 49.40 67.22 70.10 44.20 66.68 69.31 43.00 HAPPY 96.20 91.20 95.36 70.40 87.83 90.83 69.80 85.22 86.40 77.00 81.93 83.00 73.40 78.58 79.11 73.80 FAE (O URS ) 96.20 92.33 96.20 73.00 89.46 92.13 73.40 87.50 88.86 78.00 83.00 86.08 58.00 80.88 81.64 74.00 
+
+TINY 
+
+KM EANS 61.70 35.42 35.46 35.20 34.99 35.75 30.40 34.80 36.07 25.90 34.77 35.90 24.90 34.62 35.63 25.50 VANILLA GCD 84.20 55.93 58.92 41.00 54.96 58.58 33.20 52.82 55.74 32.40 48.81 51.46 27.60 45.94 48.06 26.90 SIM GCD 85.86 66.95 79.94 2.00 57.81 66.98 2.80 52.70 59.83 2.77 45.01 50.29 2.80 41.59 45.79 3.80 SIM GCD+ 85.86 70.38 81.80 13.30 62.47 70.75 12.80 54.55 60.46 13.20 47.98 52.49 11.90 42.98 46.46 12.70 FR OST 85.86 75.15 78.56 58.10 65.64 67.83 52.50 51.32 54.31 30.40 48.22 52.14 16.90 40.15 42.73 16.90 GM 85.86 76.42 82.40 46.50 68.87 73.82 39.20 58.68 63.43 25.40 52.86 57.21 18.10 46.90 50.62 13.40 META GCD 84.20 60.88 64.90 40.80 57.20 61.03 34.20 54.36 57.19 34.60 50.83 53.59 28.80 48.14 50.16 30.00 HAPPY 85.86 78.85 82.40 61.10 71.34 76.18 42.30 64.68 68.70 36.50 58.49 60.64 41.30 54.56 56.66 35.70 FAE (O URS ) 85.86 79.43 83.46 59.30 75.26 76.72 66.50 69.60 72.13 51.90 63.99 66.50 43.90 63.65 66.12 41.40 
+
+CUB KM EANS 43.93 32.54 30.76 41.18 31.19 30.53 35.20 29.28 27.46 42.09 29.19 28.13 37.61 28.17 27.01 38.53 VANILLA GCD 89.20 64.47 67.06 51.93 58.15 60.65 42.91 54.10 56.40 37.91 49.98 51.33 39.32 46.84 46.58 49.14 SIM GCD 90.26 73.84 84.54 22.02 63.36 72.35 8.58 55.63 61.95 11.13 49.31 54.55 7.86 44.72 48.69 9.25 SIM GCD+ 90.26 75.62 85.55 25.97 65.32 73.93 13.68 57.40 63.28 16.26 51.11 55.72 14.27 45.79 49.29 14.28 FR OST 90.26 77.03 83.95 43.53 50.77 53.46 34.33 46.42 49.31 26.09 39.40 41.47 23.08 34.55 35.12 29.45 GM 90.26 76.17 80.23 56.51 67.91 73.38 34.58 61.12 66.53 23.00 55.90 57.49 43.38 51.96 54.40 30.10 META GCD 89.20 67.08 70.21 51.92 60.77 62.39 50.86 57.53 59.33 37.78 51.90 52.22 49.40 49.60 49.96 46.38 HAPPY 90.26 81.40 85.06 63.70 74.27 76.03 63.57 67.09 71.06 39.13 62.25 63.83 49.74 59.39 60.49 49.52 
+
+FAE (O URS ) 90.26 80.80 88.73 38.15 74.30 77.38 55.52 69.95 73.75 43.13 66.41 68.93 46.50 63.72 66.47 39.21 
+
+Table 1: Performance (%) for 5 Stages continual learning on CIFAR-100 (C100), ImageNet-100 (IN100), Tiny-ImageNet (Tiny) and CUB-200 (CUB). 
+
+METHOD C100 TINY 
+
+Mf ↓ Md ↑ Mf ↓ Md ↑
+
+VANILLA GCD 17.10 33.42 22.20 32.22 FR OST 22.82 45.34 21.62 34.96 META GCD 16.56 37.76 19.30 33.68 HAPPY 11.22 51.36 9.75 43.38 FAE 6.82 55.60 5.43 52.60 
+
+Table 2: Forgetting & discovery. and discover new classes. FaE achieves a 5–9% overall im-provement, maintaining balanced enhancement. This indi-cates that FaE stabilizes old class distributions while explor-ing features beneficial for new class discovery. In a more challenging 10-stage continual setting (Table 3), FaE consis-tently outperforms others, with performance gaps expand-ing to 6.26% and 11.14%, demonstrating superior stability in complex scenarios. 
+
+## Ablation Study 
+
+Components Analysis 
+
+FaE comprises two core components: distinct distillation strategies and knowledge-aware graph regularization. As shown in Table 4, “Old distill” denotes the distillation strat-egy for potential old-class samples. Using cosine loss-based distillation for old classes and graph-based distillation for new classes yields notable gains. Moreover, incorporating graph regularization further balances old–new class per-formance, improving results by 4.34% on CIFAR-100 and 4.79% on Tiny-ImageNet. 
+
+Effects of Training Stragey 
+
+Notably, Happy adopts the best-performing model from all epochs at each stage, which is impractical in real-world set-tings. Without a validation set, using the last epoch’s output is often more feasible. On datasets like Tiny-ImageNet and CUB-200, extended training across stages leads to negative optimization, mainly due to latent space confusion and poor retention of old category distributions—challenges FaE is designed to address. As shown in Fig. 3, comparing the best-epoch model with the last-epoch model as input to the next stage, our method achieves more stable performance across long-term training. 
+
+Unknown Class Number 
+
+We assume the number of categories per stage is known, though this is often unavailable in practice. Since stage in-6069 DATASETS METHODS 0 1 2 3 4 5 6 7 8 9 10 C100 VANILLA GCD 90.82 78.42 75.68 70.35 66.64 64.29 61.05 58.33 57.14 56.23 55.15 META GCD 90.82 81.07 76.55 74.26 67.64 64.45 61.58 59.13 60.13 56.91 56.51 HAPPY 90.36 85.62 81.88 79.82 74.01 71.81 68.46 64.05 62.14 61.38 57.81 FAE (O URS ) 90.36 86.96 82.75 80.03 76.53 74.91 71.41 68.00 67.03 64.74 64.07 
+
+TINY 
+
+VANILLA GCD 84.20 65.15 64.63 60.94 59.46 56.52 55.47 51.65 50.66 49.83 48.56 META GCD 84.20 68.87 65.48 62.92 60.81 58.21 56.16 54.68 52.58 50.57 48.92 HAPPY 85.86 80.75 76.92 73.34 69.77 66.33 62.75 57.56 54.73 53.02 50.69 FAE (O URS ) 85.86 82.95 79.82 76.62 74.10 71.55 68.90 68.07 64.21 62.53 61.83 
+
+Table 3: Performance (%) for 10 Stages continual learning. 
+
+OLD DISTILL NEW DISTILL GRAPH -R EG C100 TINY 
+
+COSINE GRAPH COSINE GRAPH ALL OLD NEW ALL OLD NEW (1) " % " % % 69.00 71.82 51.36 65.58 68.92 43.38 (2) " % " % " 73.16 74.97 62.22 67.59 71.16 43.70 (3) % " % " % 69.95 73.95 41.94 69.03 72.93 43.30 (4) " % % " % 72.44 75.47 52.42 70.35 73.33 51.62 (5) " % % " " 73.34 76.05 55.39 70.39 72.99 52.60 
+
+Table 4: Results (%) for the effectiveness of different distillation strategies and graph regularization. 
+
+(a) CUB-200 (b) CUB-200 (c) Tiny-ImageNet (d) Tiny-ImageNet 
+
+Figure 3: Performance (%) with different training strageies. (a, c): Selecting the optimal model from all epochs in the stage as the output, while the dot represents the optimal point. (b, d): Selecting the final model as the output. 
+
+C100 METHOD ALL OLD NEW GCD 58.72 62.66 32.92 META GCD 63.28 67.65 34.94 HAPPY 68.80 72.40 45.74 OURS 71.45 74.79 53.12 
+
+Table 5: Performance (%) with estimated the estimated num-ber of categories on CIFAR-100. puts are unlabeled, accuracy-based estimation is infeasible. Following Happy, we estimate category numbers using the silhouette coefficient, selecting the k-means result with the highest score. As shown in Table 5, our method consistently outperforms others. 
+
+## Conclusion 
+
+In this paper, we propose a Fix and Explore learning frame-work, FaE, to address the problem of Continual General-ized Category Discovery. FaE effectively balances the re-tention of knowledge about old categories and the discov-ery of new categories through a divide-and-conquer strategy. Specifically, the framework employs a clustering algorithm to differentiate between potential old and new category sam-ples, adopts distinct knowledge distillation strategies for dif-ferent types of samples, and introduces a known-category-aware graph regularization method to isolate new categories progressively. Results on multiple datasets demonstrate that FaE consistently achieves outstanding performance across all stages, excelling in category discovery while significantly mitigating catastrophic forgetting. 6070 Acknowledgments 
+
+This work was supported in part by the National Natural Sci-ence Foundation of China under the Grants No. 62371235 and No. U25A20444, in part by the Key Research and Development Plan of Jiangsu Province under Grant No. BE2023008-2. 
+
+## References 
+
+Caron, M.; Touvron, H.; Misra, I.; J´ egou, H.; Mairal, J.; Bo-janowski, P.; and Joulin, A. 2021a. Emerging properties in self-supervised vision transformers. In ICCV , 9650–9660. Caron, M.; Touvron, H.; Misra, I.; J´ egou, H.; Mairal, J.; Bo-janowski, P.; and Joulin, A. 2021b. Emerging properties in self-supervised vision transformers. In ICCV , 9650–9660. Cendra, F. J.; Zhao, B.; and Han, K. 2024. PromptCCD: Learning Gaussian Mixture Prompt Pool for Continual Cat-egory Discovery. In ECCV .Chen, T.; Kornblith, S.; Norouzi, M.; and Hinton, G. 2020. A simple framework for contrastive learning of visual repre-sentations. In ICML , 1597–1607. PMLR. Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn, D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.; Heigold, G.; and Gelly, S. 2021. An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. In 
+
+ICLR .Fini, E.; Sangineto, E.; Lathuiliere, S.; Zhong, Z.; Nabi, M.; and Ricci, E. 2021. A unified objective for novel class dis-covery. In ICCV , 9284–9292. Gao, Q.; Zhao, C.; Ghanem, B.; and Zhang, J. 2022. R-dfcil: Relation-guided representation learning for data-free class incremental learning. In ECCV , 423–439. Springer. Gu, P.; Zhang, C.; Xu, R.; and He, X. 2023. Class-relation Knowledge Distillation for Novel Class Discovery. In ICCV ,16474–16483. Han, K.; Rebuffi, S.-A.; Ehrhardt, S.; Vedaldi, A.; and Zis-serman, A. 2020. Automatically Discovering and Learning New Visual Categories with Ranking Statistics. In ICLR .Han, K.; Vedaldi, A.; and Zisserman, A. 2019. Learning to discover novel visual categories via deep transfer clustering. In ICCV , 8401–8409. He, K.; Chen, X.; Xie, S.; Li, Y.; Doll´ ar, P.; and Girshick, R. 2022. Masked Autoencoders Are Scalable Vision Learners. In CVPR , 15979–15988. He, K.; Zhang, X.; Ren, S.; and Sun, J. 2016. Deep Residual Learning for Image Recognition. In CVPR , 770–778. Joseph, K. J.; Paul, S.; Aggarwal, G.; Biswas, S.; Rai, P.; Han, K.; and Balasubramanian, V. N. 2022. Novel Class Discovery Without Forgetting. In ECCV , 570–586. Cham: Springer Nature Switzerland. Khosla, P.; Teterwak, P.; Wang, C.; Sarna, A.; Tian, Y.; Isola, P.; Maschinot, A.; Liu, C.; and Krishnan, D. 2020. Super-vised contrastive learning. In NeurIPS , volume 33, 18661– 18673. Kim, H.; Suh, S.; Kim, D.; Jeong, D.; Cho, H.; and Kim, J. 2023. Proxy Anchor-based Unsupervised Learning for Con-tinuous Generalized Category Discovery. In ICCV , 16688– 16697. Krizhevsky, A.; Hinton, G.; et al. 2009. Learning multiple layers of features from tiny images. Technical report, Uni-veristy of Toronto. Krizhevsky, A.; Sutskever, I.; and Hinton, G. E. 2012. Im-agenet classification with deep convolutional neural net-works. In NeurIPS .Le, Y.; and Yang, X. 2015. Tiny imagenet visual recognition challenge. CS 231N , 7(7): 3. Li, J.; Xiong, C.; and Hoi, S. C. 2021. Semi-supervised Learning with Contrastive Graph Regularization. In ICCV ,9475–9484. Li, W.; Fan, Z.; Huo, J.; and Gao, Y. 2023. Modeling Inter-Class and Intra-Class Constraints in Novel Class Discovery. In CVPR , 3449–3458. Li, Z.; and Hoiem, D. 2017. Learning without forgetting. 
+
+IEEE transactions on pattern analysis and machine intelli-gence , 40(12): 2935–2947. Liu, J.; Zheng, T.; Zhang, G.; and Hao, Q. 2023a. Graph-based Knowledge Distillation: A survey and experimental evaluation. arXiv preprint arXiv:2302.14643 .Liu, M.; Roy, S.; Zhong, Z.; Sebe, N.; and Ricci, E. 2023b. Large-scale pre-trained models are surprisingly strong in incremental novel class discovery. arXiv preprint arXiv:2303.15975 .Ma, S.; Zhu, F.; Zhong, Z.; Liu, W.; Zhang, X.-Y.; and Liu, C.-L. 2024. Happy: A Debiased Learning Framework for Continual Generalized Category Discovery. In NeurIPS .MacQueen, J. 1967. Some methods for classification and analysis of multivariate observations. In Proceedings of 5-th Berkeley Symposium on Mathematical Statistics and Proba-bility .Passalis, N.; Tzelepi, M.; and Tefas, A. 2020. Proba-bilistic knowledge transfer for lightweight deep representa-tion learning. IEEE Transactions on Neural Networks and Learning Systems , 32(5): 2030–2039. Pu, N.; Zhong, Z.; and Sebe, N. 2023. Dynamic Concep-tional Contrastive Learning for Generalized Category Dis-covery. In CVPR , 7579–7588. Rastegar, S.; Salehi, M.; Asano, Y. M.; Doughty, H.; and Snoek, C. G. M. 2024. SelEx: Self-Expertise in Fine-Grained Generalized Category Discovery. In ECCV .Reed, S.; Akata, Z.; Lee, H.; and Schiele, B. 2016. Learning deep representations of fine-grained visual descriptions. In 
+
+CVPR , 49–58. Roy, S.; Liu, M.; Zhong, Z.; Sebe, N.; and Ricci, E. 2022. Class-incremental novel class discovery. In ECCV , 317– 333. Vaze, S.; Han, K.; Vedaldi, A.; and Zisserman, A. 2022. Generalized Category Discovery. In CVPR , 7492–7501. Wang, H.; Vaze, S.; and Han, K. 2024. SPTNet: An Efficient Alternative Framework for Generalized Category Discovery with Spatial Prompt Tuning. In ICLR .6071 Wen, X.; Zhao, B.; and Qi, X. 2023. Parametric Classifica-tion for Generalized Category Discovery: A Baseline Study. In ICCV , 16590–16600. Wu, Y.; Chi, Z.; Wang, Y.; ; and Feng, S. 2023. MetaGCD: Learning to Continually Learn in Generalized Category Dis-covery. In ICCV .Yim, J.; Joo, D.; Bae, J.; and Kim, J. 2017. A gift from knowledge distillation: Fast optimization, network mini-mization and transfer learning. In CVPR , 4133–4141. Zhang, S.; Khan, S.; Shen, Z.; Naseer, M.; Chen, G.; and Khan, F. S. 2023. PromptCAL: Contrastive Affinity Learn-ing via Auxiliary Prompts for Generalized Novel Category Discovery. In CVPR , 3479–3488. Zhang, X.; Jiang, J.; Feng, Y.; Wu, Z.-F.; Zhao, X.; Wan, H.; Tang, M.; Jin, R.; and Gao, Y. 2022. Grow and Merge: A Unified Framework for Continuous Categories Discovery. In NeurIPS .Zhou, D.-W.; Wang, Q.-W.; Qi, Z.-H.; Ye, H.-J.; Zhan, D.-C.; and Liu, Z. 2024. Class-Incremental Learning: A Survey. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelli-gence , 46(12): 9851–9873. 6072

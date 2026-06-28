@@ -1,0 +1,463 @@
+Title: Seeing and Knowing in the Wild: Open-domain Visual Entity Recognition with Large-scale Knowledge Graphs via Contrastive Learning
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38370/42332
+
+Number of Pages: 9
+
+Markdown Content:
+# Seeing and Knowing in the Wild: Open-domain Visual Entity Recognition with Large-scale Knowledge Graphs via Contrastive Learning 
+
+# Hongkuan Zhou 1 2 , Lavdim Halilaj 1, Sebastian Monka 1, Stefan Schmid 1,Yuqicheng Zhu 1 2 , Jingcheng Wu 2, Nadeem Nazer 1 4 , Steffen Staab 2 3 
+
+> 1
+
+Corporate Research, Robert Bosch GmbH, Renningen, Germany 
+
+> 2
+
+University of Stuttgart, Stuttgart, Germany 
+
+> 3
+
+University of Southampton, Southampton, UK 
+
+> 4
+
+Otto-von-Guericke-University Magdeburg, Magdeburg, Germany 
+
+{hongkuan.zhou, lavdim.halilaj, sebastian.monka, stefan.schmid5, yuqicheng.zhu, fixed-term.nadeem.nazer }@de.bosch.com 
+
+{jingcheng.wu, steffen.staab }@ki.uni-stuttgart.de 
+
+Abstract 
+
+Open-domain visual entity recognition aims to identify and link entities depicted in images to a vast and evolving set of real-world concepts, such as those found in Wikidata. Un-like conventional classification tasks with fixed label sets, it operates under open-set conditions, where most target enti-ties are unseen during training and exhibit long-tail distri-butions. This makes the task inherently challenging due to limited supervision, high visual ambiguity, and the need for semantic disambiguation. We propose a Know ledge-guided 
+
+Co ntrastive Learning (KnowCoL) framework that combines both images and text descriptions into a shared semantic space grounded by structured information from Wikidata. By abstracting visual and textual inputs to a conceptual level, the model leverages entity descriptions, type hierarchies, and re-lational context to support zero-shot entity recognition. We evaluate our approach on the OVEN benchmark, a large-scale open-domain visual recognition dataset with Wikidata IDs as the label space. Our experiments show that using visual, tex-tual, and structured knowledge greatly improves accuracy, es-pecially for rare and unseen entities. Our smallest model im-proves the accuracy on unseen entities by 10.5% compared to the state-of-the-art, despite being 35 × smaller. 
+
+Code — https://github.com/boschresearch/KnowCoL 
+
+Extended version — https://arxiv.org/abs/2510.13675 
+
+# Introduction 
+
+The ability to recognize and identify visual entities in the open world is a critical milestone for scalable computer vi-sion systems. In contrast to traditional classification tasks that depend on a fixed set of categories, open-world visual entity recognition seeks to recognize and link images to a vast and evolving universe of real-world entities, such as specific landmarks, artworks, biological species, or public figures. The recently introduced Open-domain Visual Entity recognitioN (OVEN) benchmark (Hu et al. 2023) challenges models to link images and accompanying text query (spec-ifying the intent of the image) to the correct Wikidata enti-
+
+Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+ties, 1 identified by its unique QID. A few examples of the OVEN-based tasks are shown in Figure 1a. Previous approaches addressing open-world visual entity recognition typically adopt a dual-encoder paradigm, which aligns visual representations with textual descriptions of cor-responding entities. CLIP2CLIP and CLIPFusion (Hu et al. 2023) include the information of the lead image(s) of the entities into the training pipeline for a better alignment of different modalities. Recently, researchers (Hu et al. 2023; Caron et al. 2024; Xiao et al. 2024) have developed two-step approaches which leverage generative language models, such as PaLI (Chen et al. 2023), GIT (Wang et al. 2022), and Vicuna (Zheng et al. 2023), to generate textual labels of im-ages and then utilize search algorithms (e.g. BM25 (Robert-son, Walker, and Hancock-Beaulieu 1995)) to identify enti-ties whose names closely match these predicted labels. Despite the progress, this task remains fundamentally challenging. First, the label space is extremely large and long-tailed, encompassing millions of entities, many of which are rare or entirely unseen during training. Second, existing visual classifiers treat entities as isolated labels, ignoring the wealth of semantic relationships and factual knowledge that exist between entities. These limitations hin-der generalization, especially in zero-shot settings, where the model must recognize entities it has never encountered during training. Third, a key drawback of the two-step gen-erative approaches is the information loss incurred when converting rich visual content into simplified textual labels, leading to semantic ambiguity (Sevgili et al. 2022; Bouar-roudj, Boufa¨ ıda, and Bellatreche 2022) when conducting BM25 search algorithms based on the predicted textual la-bels to find the final entity. Entities with similar or identi-cal textual labels may represent fundamentally different con-cepts. For instance, “Mercury” can denote either the inner-most planet of our Solar System or the liquid metal with chemical symbol Hg (atomic number 80), showing how sim-ple text matching cannot distinguish these distinct meanings. 
+
+> 1
+
+We consistently use the term entity to refer to uniquely identi-fiable real-world concepts in Wikidata (e.g. Albert Einstein (Q937) and Golden Retriever (Q38686)), which differs from the typical us-age of class, denoting categories within a predefined set. The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+13638 (a) (b)     
+
+> Entity ID: Q41225 Name: Big Ben Q: What is the clock tower? Entity: Q84 Name: London Q: What is the city in the picture? Entity: Q18536 Name: The Shard Q: What is the glass building on the right? Entity: Q160659 Name: London Eye Q: What is the wheel here? Entity: Q62408 Name: Palace of Westm. Q: What is palace near the Big Ben?
+> Text Space Image Space Semantic Space
+> London Palace of Westm. Big Ben London Eye Ferris Wheel Wheel Tourist Attract. Westm. Bridge Road. Bridge Bridge
+> P276 P276 P276 P31 P31 P31 P31 P31 P361 P279 P279
+> P276 = Location P31 = Instance of P361 = Part of P279 = Sub Class of
+> The Palace of Westminster is the meeting... Big Ben is the nickname for the Great... The London Eye, originally the Millennium Wheel...
+> Interclass Dist. Intraclass Dist. Modality Gap
+
+Figure 1: (a) The open-domain visual entity recognition task aims to link an image and a text query to a corresponding Wikidata entity. The text query expresses the intent to the image. (b) Both visual and textual inputs can be mapped to a shared seman-tic space enriched with structured knowledge, such as entity relations (e.g., instance-of, part-of, subclass-of) from Wikidata. Leveraging this additional knowledge source enables contextual reasoning and effective disambiguation of entities. We propose that open-domain visual entity recogni-tion should move beyond superficial recognition toward semantic-level understanding. This involves abstracting both images and textual description into a shared conceptual space with rich structural knowledge among entities (cf. Fig-ure 1b). In this view, recognition is not simply matching vi-sual features to entity names, but of aligning image content with structured, contextualized knowledge about the enti-ties depicted. Available knowledge graphs (KGs), such as Wikidata, which offers a rich and structured representation of hierarchical and association relations for millions of real-world entities, can be leveraged to achieve this. We present Know ledge-Guided Co ntrastive Learning (KnowCoL), an approach for open-domain visual entity recognition. Input images and candidate entities’ descrip-tions and/or lead images are projected into a shared seman-tic embedding space, structured with the prior knowledge from the KG. This enables zero-shot recognition by allowing the model to generalize from seen to unseen entities based on semantic similarity, while also supporting entity disam-biguation via knowledge-informed representations. Know-CoL is based on a dual-encoder paradigm, eliminating the information loss in the process of conversion in the two-step approaches. We evaluate our approach on the OVEN bench-mark. Our contributions are as follows: 1. We present a dual-encoder approach for the open-domain visual entity recognition task that leverages external knowledge from both Wikidata and Wikipedia to enable a better representation of images and text descriptions. 2. We investigate the impact of different forms of exter-nal knowledge (including lead images) and different re-lations between entities on the recognition performance. 3. Our approach demonstrates strong zero-shot generaliza-tion on the OVEN benchmark, showing that incorpo-rating external knowledge significantly improves entity recognition performance of unseen entities by 10.5%, even with models that are 35 × smaller. 
+
+# Preliminary 
+
+Contrastive Loss 
+
+Contrastive loss is a widely used objective in representation learning, particularly in contexts such as metric learning, image-text alignment, and self-supervised learning. Given two sets of embeddings A = {ai}Ni=1 and B = {bi}Ni=1 ,where (ai, b i) is a positive (matching) pair and ∀(ai, b j ), j ̸ =
+
+i, is a negative pair, we define the contrastive loss as: 
+
+ℓ(A, B ) = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+log exp ( sim (ai, b i)/τ )
+
+PNj=1 exp ( sim (ai, b j )/τ ) , (1) where sim (·, ·) denotes the similarity function, τ is a tem-perature parameter controlling the softness, and N is the set size. Common similarity functions include cosine similar-ity and Euclidean distance-based similarity. Specifically, the symmetric contrastive loss can be defined as 
+
+ℓsym (A, B ) = 12 (ℓ (A, B ) + ℓ (B, A )) , (2) which encourages mutual alignment, and it is widely used in various models like CLIP. 
+
+Wikidata Knowledge Graph and Wikipedia Knowledge Base 
+
+Wikidata is a collaboratively-maintained, multilingual knowledge graph that can be formalised as the directed graph G = ( E, R, T ), where E is the set of entities (called items and uniquely referenced by “Q-identifiers” (QIDs), e.g., Q42 for Douglas Adams), R is the set of relation types (called properties and referenced by ”P-identifiers“ (PIDs), 13639 e.g., P31 for instance of), and T ⊆ E × R × E is the set of knowledge triples (e1, r, e 2) stating that subject en-tity e1 is linked to object entity e2 via property r. As of 2025, Wikidata KG contains more than 100 million entities, 12,000 properties, and 10 billion triples and is growing daily through human and bot contributions. Wikipedia is a collaboratively edited, multilingual ency-clopedia whose every article is linked to a unique Wikidata QID. This tight coupling lets each page serve as a multi-modal hub: rich encyclopedic text is paired with lead im-ages that provide both descriptive and visual context for the corresponding entity in the Wikidata KG. 
+
+# Related Work 
+
+Zero-Shot Classification 
+
+Open-world recognition is closely related to zero-shot learn-ing (ZSL), where models must recognize classes with no training images by relying on auxiliary information. Early approaches (Farhadi et al. 2009; Lampert, Nickisch, and Harmeling 2009) introduced human-defined attributes as intermediate semantic representations for recognition of unseen classes. Later methods moved toward unsupervised semantic embeddings derived from text corpora (Socher et al. 2013; Frome et al. 2013; Norouzi et al. 2014). These dual-encoder or projection-based approaches have proven that aligning images with distributed text representations en-ables zero-shot recognition at scale. Vision-language pre-training has greatly advanced this paradigm. A well-known example is CLIP (Radford et al. 2021), which is trained on millions of image-text pairs to learn a joint embedding space for images and natural language. CLIP encodes images and labels into one space and ranks them by similarity to per-form zero-shot classification. It has wide applications in vi-sual inspection (Jeong et al. 2023; Sadikaj et al. 2025) and robotics (Zhou et al. 2023, 2024a; Yao et al. 2025). Another line of zero-shot research uses large-scale gen-erative models to bridge the gap to unseen classes. Instead of directly mapping images to text semantics, these genera-tive approaches output the entity names based on given im-ages and then link the entity names to the categories (two-step approach). For instance, Hu et al. (2023) use PaLI and BLIP-v2 (Li et al. 2023a) on the OVEN benchmark to make the model predict the entity name and then uses the BM25 search algorithm to find the closest label in the label space of Wikidata ids. Instead of generating entity names, GER-ALD (Caron et al. 2024) generates the semantic and discrim-inative “code” to identify entities. Auto-VER (Xiao et al. 2024) combines contrastive learning with generative models to enhance the ability to distinguish similar entities within a vast label space. Unlike dual-encoder approaches, two-step generative methods output text conditioned on images and then match them to labels in the label space. This in-troduces semantic ambiguity, as generated outputs may be correct lexically but vague or incomplete semantically. 
+
+Knowledge Graphs for Visual Entity Recognition 
+
+Many studies have explored incorporating knowledge into vision-and-language tasks (Monka, Halilaj, and Rettinger 2022), including visual question answering (Chang et al. 2022; Chen et al. 2021) and entity-aware image caption-ing (Biten et al. 2019). For visual entity recognition task, Wang, Ye, and Gupta (2018) and Kampffmeyer et al. (2019) use semantic embeddings and categorical relationships from KGs through graph convolution networks for zero-shot pre-diction. Li et al. (2023b) augments few-shot image recogni-tion by introducing auxiliary semantic prior knowledge and propagating knowledge among categories via a semantic-visual mapping. KG-NN (Monka et al. 2021) combines prior knowledge encoded in KGs with visual representa-tions to enhance generalization under distribution shifts, and KGV (Zhou et al. 2024b) demonstrates that the integra-tion of richer multi-modal priors can further improve perfor-mance. Instead of relying on small domain-specific knowl-edge graphs, our approach is the first to leverage a large-scale knowledge graph for open-domain visual entity recog-nition, demonstrating strong scalability potential. 
+
+# Methodology 
+
+Our goal is to integrate the rich, structured knowledge from Wikidata into the training pipeline. To achieve this, we align knowledge graph embeddings (KGEs), image embeddings, and text embeddings within a shared latent space, enabling the structured knowledge captured by the KGEs to be ef-fectively injected into the latent space’s representation. A framework overview can be seen in Figure 2. 
+
+Problem Definition 
+
+Let E be the set of Wikidata entities identified by QIDs. De-fine the input space as X = I ×L , where I denotes the do-main of RGB images and L is the linguistic (text) space. The Open-domain Visual Entity Recognition (OVEN) task seeks a function f : X → E which maps each image-text pair ( xp,
+
+xt) to the unique entity e ∈ E . Every entity e is associated with a Wikipedia-derived record (te, I e) ∈ K ⊆ L × 2I ,where te ∈ L is its encyclopaedic description and Ie ⊂ I 
+
+is the finite set of lead images illustrating the correspond-ing entity. Given a labeled training dataset {(xi, e i)}Ni=1 ⊂X × E , the goal is to learn a function f that minimizes the number of misclassifications. 
+
+Embeddings 
+
+Knowledge Graph Embeddings To model the knowl-edge existing in the knowledge graph G, we adopt embed-ding methods to inject the knowledge into the latent space. We define knowledge graph embeddings as mappings: 
+
+ϕ : E → Z , ψ : R → Rdr ,where Z ⊆ Rde is the latent space with dimension de.
+
+ϕ(e), ψ (r) are the node and relation embeddings, respec-tively. Common knowledge graph embedding methods de-fine score function fs(e1, r, e 2) to measure the plausibility of a triple (e1, r, e 2) ∈ T .
+
+Image Embeddings Let I be the space of input images. We define an image mapping function as: 
+
+fθ : I → Z ,13640 Fuser 
+
+LP 1
+
+Image Encoder 
+
+LP 2
+
+Text Encoder 
+
+What’s the wheel in this image? LP 1 Image Encoder 
+
+LP 2 Text Encoder 
+
+“The London Eye is a can-tilevered...” 
+
+Lookup Table London Eye (Q160659) London(Q84) Wheel(Q446)  
+
+> Align. Loss Proxy Loss KE Loss
+
+Image Emb. Text Emb. Fused Emb. Node Emb. Trainable Frozen Attraction Figure 2: Framework Overview . Given an input image and text query (left), CLIP encoders extract image and text features. LP 1 and LP 2 present linear project layers for fine-tuning. A fuser module combines these to represent the intended entity. On the right, prior knowledge of the entity (Q160659 – London Eye)—including sample images, textual descriptions, and knowledge graph structure—is embedded using CLIP’s image and text encoders, as well as knowledge graph embedding (KGE) method. A proxy loss function is employed to align the semantic space (KGEs), visual space (image embeddings), and textual space (text embeddings). Additionally, a knowledge embedding (KE) loss is applied to learn KGEs from the structured knowledge. Finally, an alignment loss is used to align the different input representation with the corresponding entity embedding. where fθ is represented by a deep neural network with pa-rameters θ. Here, we leverage the pretrained frozen CLIP image encoder plus a trainable linear project layer to be fθ .
+
+Text Embeddings Let L be the linguistic (text) space of input text descriptions. We define a text mapping function: 
+
+fλ : L → Z ,where fλ is represented by a deep neural network with pa-rameters λ. We leverage the pretrained frozen CLIP text en-coder plus a trainable linear project layer to be fλ.We employ a dual-encoder approach to align the semantic representation of the input image and text query with that of the corresponding entity, which includes its lead image(s) and textual description. We structure our discussion into two parts: (1) encoding the input image and text query, and (2) encoding the multi-modal information of entities from the knowledge graph. 
+
+Input Image and Text Query Encoding To fuse the in-formation of the input image xp and the text query xt, we employ an extra encoder 
+
+fγ : ( Z, Z) → Z 
+
+with parameters γ to fuse the image embedding fθ (xp) and text embedding fλ(xt). The fused embedding can be written as 
+
+zinput = fγ (fθ (xp), f λ(xt)) (3) 
+
+Entity’s Multi-modal Information Encoding For each entity e, te and Ie represent its text description and set of lead image(s), respectively. The entity text embedding can be written as 
+
+zentityText = fλ(te), (4) and the image embedding can be written as 
+
+zentityImage =
+
+( 1
+
+> |Ie|
+
+P 
+
+> a∈Ie
+
+fθ (a) if Ie̸ = ∅
+
+zentityText if Ie = ∅ . (5) If no lead image is available for a given entity, we assign 
+
+zentityText to zentityImage . This ensures a smooth fusion of visual and textual information, as discussed in the next section. 
+
+Knowledge-guided Contrastive Learning 
+
+For given input batch {(xpi , x ti)}Nb
+
+> i=1
+
+, where xpi and xti are the 
+
+i-th input images and its corresponding text query, Nb is the batch size, the corresponding ground truth label set is de-noted as {ei}Nb
+
+> i=1
+
+. We define three losses, namely alignment loss, proxy loss, and knowledge graph loss, for the training process. Figure 3 shows the learning visualization. 
+
+Alignment Loss The alignment loss aims to align the joint representation of input images and text queries {zinput  
+
+> i
+
+}Nb
+
+> i=1
+
+with their corresponding entity representations {ϕ(ei)}Nb
+
+> i=1
+
+.Specifically, we define the alignment loss using a con-trastive objective that pulls matched embeddings closer to-gether while pushing unmatched embeddings among the batch apart. It can be defined as 
+
+La = ℓsym 
+
+
+
+{zinput  
+
+> i
+
+}Nb
+
+> i=1
+
+, {ϕ(ei)}Nb
+
+> i=1
+
+
+
+, (6) where ℓsym (·, ·) represents the contrastive loss function de-fine in Equation 2. 
+
+Proxy Loss The proxy loss is defined to align the node em-beddings {ϕ(ei)}Nb 
+
+> i=1
+
+with their corresponding multi-modal representations {zentity  
+
+> i
+
+}Nb
+
+> i=1
+
+. This objective ensures that the 13641 Encoder  “London Eye...” 
+
+“Wheel is a...” Step 0 
+
+> Q160659 Q446 P31
+
+Step N ... Q160659 Q446 P31 
+
+Image Emb. Text Emb. Node Emb. Rel. Emb. Figure 3: Node embeddings act as proxies, aligned with their corresponding image and text embeddings. Knowledge (from the KG) is captured through relational embeddings, connecting node embeddings in the latent space. Q160659, Q446, P31 represent London Eye , Wheel , and Instance of .node embeddings capture semantic information from both image and text modalities. It can be defined as 
+
+Lp = 12 ℓsym 
+
+
+
+{ϕ(ei)}Nb
+
+> i=1
+
+, {zentityText  
+
+> i
+
+}Nb
+
+> i=1
+
+
+
++12 ℓsym 
+
+
+
+{ϕ(ei)}Nb
+
+> i=1
+
+, {zentityImage  
+
+> i
+
+}Nb
+
+> i=1
+
+ (7) We refer to this as the proxy loss because the node embed-dings serve as proxies for capturing the multi-modal seman-tic information of the entities. Figure 3 shows that the proxy loss gathers image and text embeddings with their corre-sponding node embeddings. 
+
+Knowledge Graph Embedding Loss (KE Loss) The knowledge graph loss aims to capture the structural knowl-edge associated with entity ei. We first extract the triplet set associated with the entity ei by Tei = {(h, r, t ) ∈ T | h =
+
+ei ∨t = ei}. For each triplet (h, r, t ) ∈ T ei , we define T(h,r,t )
+
+as the set of negative samples generated by corrupting either the head or tail entity in the positive triplet: 
+
+T(h,r,t) = {(h′, r, t ) | h′ ∈ E \{ h}}∪{ (h, r, t ′) | t′ ∈ E \{ t}} .(8) Based on that, the knowledge graph loss can be defined as 
+
+LKE =
+
+> Nb
+
+X
+
+> i=1
+
+1
+
+|T ei |
+
+X
+
+> (h,r,t )∈T ei
+
+1
+
+|T (h,r,t )|
+
+"
+
+− log exp( fs(h, r, t )/τ )
+
+P 
+
+> (h′,r,t ′)∈T (h,r,t )
+
+exp( fs(h′, r, t ′)/τ )
+
+#
+
+,(9) where τ is a temperature and fs(·) is the score function 
+
+fs(h, r, t ) = (ϕ(h) + ψ(r)) ⊤ϕ(t)
+
+∥ϕ(h) + ψ(r)∥2 ∥ϕ(t)∥2
+
+, (10) which is the cosine similarity between ϕ(h)+ ψ(r) and ϕ(t).Here, we follow a translation-based KGE approach with a cosine similarity distance metric. The final loss for optimiza-tion can be defined as 
+
+L = La + β1Lp + β2LKE , (11) where β1 and β2 are two hyperparameters for balancing. 
+
+Inference 
+
+Given an input image xp and a text query xt, we first ob-tain the input embedding zinput as defined in Equation 3. The corresponding entity answer e∗ is then identified through the following inference step: 
+
+e∗ = arg max   
+
+> ej∈E
+
+sim 
+
+
+
+zinput , 12
+
+
+
+zentityText  
+
+> j
+
++ zentityImage 
+
+> j
+
+
+
+,(12) where zentityText  
+
+> j
+
+and zentityImage  
+
+> j
+
+denote the textual and visual embeddings of entity ej in Equations 4 and 5. 
+
+# Experiments 
+
+In our experiments, we investigate whether incorporating knowledge from large-scale KGs and Knowledge Base (KB) can enhance open-domain visual entity recognition. We ana-lyze the impact of different types of prior knowledge, fusion methods, and KGE techniques. In addition, ablation studies on various hyperparameter values are also provided. 
+
+Experiment Settings 
+
+OVEN Dataset The OVEN dataset contains 6,063,945 training samples, which combines 14 image recognition datasets. Models are evaluated on the test splits, and perfor-mance is reported using the harmonic mean (HM) of top-1 accuracy for two types of entities: seen entities, which ap-pear in the OVEN training set, and unseen entities, which are not present during training. Specifically, the test split in-cludes 15,888 entities (8,355 seen and 7,533 unseen). Our evaluation is conducted on the OVEN benchmark, compris-ing 14 diverse image recognition datasets, thus indicating the generalizability of our approach. 
+
+Training details We extract a subgraph from Wikidata containing 32,122 entities and 501 relation types. For train-ing, we use the AdamW optimizer with a learning rate of 0.001, batch size of 4096, and weight decay of 0.0001. Our approach includes three model variants based on different OpenCLIP image encoders: ViT-L/14, ViT-H/14, and ViT-bigG/14. The temperature τ for contrastive learning is fixed at 0.07 during fine-tuning. The hyperparameters β1 and β2
+
+are both set to 1. We fuse information from the input image and text query (Equation (3)), using a simple addition oper-ation. More details are in the extended version (Appendix). 
+
+Baselines 
+
+Dual Encoders Dual-encoder approaches consist of two encoders, each encoding a dedicated modality (e.g., images and text) into the same latent space. The visual recognition is conducted by searching the nearest neighbors of prototypes in the latent space for a given input image. Representative models include CLIP, CLIPfusion, and CLIP2CLIP. 
+
+Auto-regressive Captioning Another approach uses auto-regressive models to generate captions for the given im-ages. Representative vision-language models (VLMs) such as PaLI, GIT-Large, GER-ALD, and Auto-VER follow this paradigm. These models generate a descriptive caption or name for the visual entity and then match it to the closest label in the predefined label space for final prediction. 13642 Paradigm Model Venues Parameters (B) Pre-train Dataset Seen Unseen HM Dual-Encoder CLIP (Radford et al. 2021) ICML2021 0.4 OpenAI 5.6 4.9 5.2 CLIPFusion (Hu et al. 2023) ICCV2023 0.9 OpenAI 33.6 4.8 8.4 CLIP2CLIP (Hu et al. 2023) ICCV2023 0.9 OpenAI 12.6 10.5 11.4 Two-Step Generative BLIP-v2 (Li et al. 2023a) ICML2023 12.2 - 8.6 3.4 4.9 PaLI-3B (Hu et al. 2023) ICCV2023 3.0 WebLI 19.1 6.0 9.1 PaLI-17B (Hu et al. 2023) ICCV2023 17.0 WebLI 28.3 11.2 16.0 GIT-Large (Caron et al. 2024) CVPR2024 0.4 WebLI 17.6 4.3 7.0 GER-ALD (Caron et al. 2024) CVPR2024 0.4 LAION 29.1 16.3 20.9 Auto-VER-7B (Xiao et al. 2024) ECCV2024 7.0 - 62.8 16.0 25.5 Auto-VER-14B (Xiao et al. 2024) ECCV2024 14.0 - 65.0 18.6 28.9 Knowledge-Guided Dual-Encoder KnowCoL-bigG(ours) - 2.0 LAION 41.8 36.1 38.8 
+
+Table 1: Comparison with current state-of-the-art approaches on OVEN entity test split. We evaluate the harmonic mean (HM) of the seen and unseen splits (top1 accuracy) after fine tuning on OVEN training set. It serves as our main metric. The numbers of baselines are taken from papers (Caron et al. 2024; Hu et al. 2023; Xiao et al. 2024). The total parameters and pre-training datasets of the models are given for comparison. 
+
+Comparison with the state of the art We compare our proposed KnowCoL model with both dual-encoder and auto-regressive captioning baselines. As shown in Table 1, our model achieves significantly stronger performance on both seen and unseen entities. KnowCoL-bigG achieves the highest harmonic mean (HM) of 38.8%, outperforming large-scale generative models such as Auto-VER-14B and PaLI-17B despite using 7 × fewer parameters. We identify that the Auto-VER achieves impressive results for seen enti-ties, but the performance significantly drops for unseen enti-ties, indicating overfitting. Compared to theirs, KnowCoL achieves a balanced result on both seen and unseen enti-ties, representing a strong generalization ability by including structure, textual, and visual prior knowledge. 
+
+Analysis and Ablation Studies 
+
+Here, we analyse the impact of model size, prior knowl-edge types, fusion strategy of the text query and input image, various KGE methods, and hyperparameters - β1, β2, latent space dimension de, and temperature τ . The detailed setting can be found in the Appendix section, experiment setting.                                    
+
+> Model Backbone Para.(B) Seen Unseen HM CLIP ViT-L-14 0.4 5.6 4.9 5.2 CLIPFusion ViT-L-14 0.9 33.6 4.8 8.4 CLIP2CLIP ViT-L-14 0.9 12.6 10.5 11.4 KnowCoL-L ViT-L-14 0.4 34.3 29.1 31.5
+> KnowCoL-H ViT-H-14 0.9 38.5 33.4 35.8 KnowCoL-bigG ViT-bigG-14 2.0 41.8 36.1 38.8
+
+Table 2: Comparison of model sizes. ViT-H-14 and ViT-bigG-14 are used for our KnowCoL-H and KnowCoL-bigG models. ViT-L-14 is used for CLIP, CLIPFusion, CLIP2CLIP, and KnowCoL-L. Note that CLIPFusion and CLIP2CLIP utilize two ViT-L-14 backbones. 
+
+Impact of Model Size As Table 2 demonstrates, we eval-uate our model with different CLIP backbones. The back-bones ViT-L-14, ViT-H-14, and ViT-bigG-14 are used for KnowCoL-L, KnowCoL-H, and KnowCoL-bigG, respec-tively. The performance across both seen and unseen entities consistently improves as model size increases. We highlight that KnowCoL-L, CLIP, CLIPFusion, and CLIP2CLIP use the same backbone ViT-L-14, but KnowCoL-L significantly outperforms all. While CLIPFu-sion and CLIP2CLIP achieve harmonic means of 8.4% and 11.4%, respectively, KnowCoL-L reaches 31.5%, showing about 2.8 times improvement. This demonstrates that exter-nal knowledge significantly improves zero-shot generaliza-tion without increasing model size. Model Seen Unseen HM KnowCoL-L (ViT-L-14) 34.3 29.1 31.5 
+
+w/o Lead images 32.5 27.9 30.0 w/o KG Hierarchical Knowledge 32.1 25.3 28.3 Table 3: Impact of different types of knowledge. We investi-gate the impact of structural knowledge, namely the sample images in the KB and the hierarchical relations in the KG 
+
+Comparison of Knowledge Types Table 3 demon-strates the importance of different knowledge types in the KnowCoL-L model. The complete KnowCoL-L model achieves the best score of 31.5% HM. Removing lead im-ages (w/o Lead images) reduces performance to 32.5% (seen), 27.9% (unseen), and 30.0% (HM), highlighting the role of visual context. Omitting hierarchical KG knowledge of ‘Instance of’, ‘subclass of’, and ‘parent taxon’ further lowers scores to 32.1% (seen), 25.3% (unseen), and 28.3% (HM), significantly impairing unseen entity recognition. 13643 0.1 0.5 130 35 40  
+
+> HM
+> KnowCoL-L KnowCoL-H
+> (a) Hyperparameter β1
+
+0.1 0.5 130 35 40  
+
+> HM
+> KnowCoL-L KnowCoL-H
+> (b) Hyperparameter β2
+
+512 768 1024 30 35 40  
+
+> HM
+> KnowCoL-L KnowCoL-H
+> (c) Latent Space Dim de
+
+0.05 0.07 0.130 35 40  
+
+> HM
+> KnowCoL-L KnowCoL-H
+> (d) Temperature τ
+
+Figure 4: Ablation Studies for hyperparameter β1, β2, latent space dimension de, and temperature τ . HM indicates the harmonic mean of accuracies of seen and unseen entities. - represents the default setting of KnowCoL approach. Fusion Method Layer Number Seen Unseen HM Addition - 34.3 29.1 31.5 
+
+Concat. + MLP 1 37.5 26.8 31.2 Concat. + MLP 2 45.4 21.0 28.7 TE 2 54.4 16.6 25.5 TE + IP 2 56.7 17.9 27.2 Table 4: Comparison of fusion functions for combining im-age and text embeddings of KnowCoL-L. Our default fusion method is addition. ‘TE’ refers to the Transformer Encoder used in (Hu et al. 2023). ‘TE + IP’ is inspired by LLaVA (Liu et al. 2023) which incorporates local ViT patch tokens into the fusion process. 
+
+Comparison of Fusion Functions As Table 4 shows, the default Addition method provides balanced performance, achieving the best harmonic mean 31.5%. By using the multi-layer perceptron (MLP) method, the performance for seen entities improves up to 37.5%, while for unseen en-tities decreases to 26.8%. Using transformer encoder (TE) methods with or without local image patch embeddings sig-nificantly boost the accuracy on seen entities (54.4% and 56.7%), but degrade unseen entity recognition (16.6% and 17.9%). The trend shows that more complex fusion methods, containing more layers or a more complex structure, lead to overfitting on seen entities and sacrificing zero-shot general-ization to unseen entities. Additionally, by introducing local image patch tokens (TE + IP), performance on both seen (56.7%) and unseen entities (17.9%) improves compared to the TE-only method. This improvement likely occurs be-cause local image patch tokens provide fine-grained visual details and enhance recognition ability. 
+
+Comparison of KGE Methods Table 5 compares vari-ous knowledge graph embedding methods and distance mea-sures. Our default choice, TransE (Bordes et al. 2013) with cosine similarity, achieves the best overall performance. This setup aligns well with CLIP, which also uses cosine similarity in its contrastive learning. When replacing the co-sine similarity with Euclidean distance, the HM drops from 31.5% to 31.0%. TransH (Wang et al. 2014) introduces more representational flexibility by allowing entity embeddings to vary across different relations. This additional modeling ca-KGE Methods Distance Measure Seen Unseen HM TransE Cosine Similarity 34.3 29.1 31.5 
+
+TransE Euclidean Dis. 33.7 28.5 31.0 TransH Cosine Similarity 34.4 28.6 31.2 DistMult - 33.8 28.5 30.9 Table 5: Comparison of KGE methods for incorporating structural knowledge. Our default approach uses TransE combined with a cosine similarity metric. We compare this against alternative configurations, including TransE with Euclidean distance, TransH, and DistMult. pacity slightly improved the seen performance to 34.4% but comes at the cost of lower unseen accuracy 28.6%. The Dist-Mult method (Yang et al. 2015) shows the lowest perfor-mance, suggesting it is less effective for integrating struc-tural knowledge from the KG into the visual-textual space. 
+
+Hyperparameters As Figure 4 shows, we conduct exper-iments varying the hyperparameters β1, β2, latent space di-mension de, and contrastive learning temperature τ . Fig-ure 4a shows that increasing the weight of the proxy loss β1,aligning node embeddings with multi-modal prior knowl-edge, enhances model performance. Figure 4b demonstrates that increasing β2, the weight of KE loss incorporating struc-tured prior knowledge from Wikidata, also improves per-formance. Additionally, we identify that the larger model (KnowCoL-H) with more prior knowledge can benefit more from the inclusion of structured prior knowledge. Figure 4c illustrates that larger models require higher-dimensional la-tent spaces to represent richer features. The temperature 0.07 performs best in our task, as shown in Figure 4d. 
+
+# Conclusion and Future Work 
+
+We propose KnowCoL, a novel approach to improve open-domain visual entity recognition by incorporating multi-modal prior knowledge, namely structured knowledge, tex-tual, and visual priors. KnowCoL significantly enhances vi-sual entity recognition performance, especially for zero-shot recognition of unseen entities. Future work includes explor-ing non-Euclidean spaces like hyperbolic and hyperspheri-cal spaces to better capture the hierarchical relationships and semantic structures inherent in knowledge graphs. 13644 Acknowledgments 
+
+The authors thank the International Max Planck Re-search School for Intelligent Systems (IMPRS-IS) for sup-porting Hongkuan Zhou, Yuqicheng Zhu, and Jingcheng Wu. This work was partially funded by the European Union’s Horizon RIA research and innovation programme under grant agreement No. 101092908 (SMARTEDGE). Jingcheng Wu has been funded by the Deutsche Forschungs-gemeinschaft (DFG, German Research Foundation) - SFB 1574 - Project number 471687386. The authors also grate-fully acknowledge the computing time provided on the high-performance computer HoreKa by the National High-Performance Computing Center at KIT (NHR@KIT). This center is jointly supported by the Federal Ministry of Edu-cation and Research and the Ministry of Science, Research, and the Arts of Baden-W¨ urttemberg, as part of the National High-Performance Computing (NHR) joint funding pro-gram (https://www.nhr-verein.de/en/our-partners). HoreKa is partly funded by the German Research Foundation (DFG). 
+
+# References 
+
+Biten, A. F.; G´ omez, L.; Rusi˜ nol, M.; and Karatzas, D. 2019. Good News, Everyone! Context Driven Entity-Aware Cap-tioning for News Images. In CVPR , 12466–12475. Com-puter Vision Foundation / IEEE. Bordes, A.; Usunier, N.; Garc´ ıa-Dur´ an, A.; Weston, J.; and Yakhnenko, O. 2013. Translating Embeddings for Modeling Multi-relational Data. In NIPS , 2787–2795. Bouarroudj, W.; Boufa¨ ıda, Z.; and Bellatreche, L. 2022. Named entity disambiguation in short texts over knowledge graphs. Knowl. Inf. Syst. , 64(2): 325–351. Caron, M.; Iscen, A.; Fathi, A.; and Schmid, C. 2024. A Generative Approach for Wikipedia-Scale Visual Entity Recognition. In CVPR , 17313–17322. IEEE. Chang, Y.; Cao, G.; Narang, M.; Gao, J.; Suzuki, H.; and Bisk, Y. 2022. WebQA: Multihop and Multimodal QA. In 
+
+CVPR , 16474–16483. IEEE. Chen, X.; Wang, X.; Changpinyo, S.; Piergiovanni, A. J.; Padlewski, P.; Salz, D.; Goodman, S.; Grycner, A.; Mustafa, B.; Beyer, L.; Kolesnikov, A.; Puigcerver, J.; Ding, N.; Rong, K.; Akbari, H.; Mishra, G.; Xue, L.; Thapliyal, A. V.; Bradbury, J.; and Kuo, W. 2023. PaLI: A Jointly-Scaled Multilingual Language-Image Model. In ICLR . OpenRe-view.net. Chen, Z.; Chen, J.; Geng, Y.; Pan, J. Z.; Yuan, Z.; and Chen, H. 2021. Zero-Shot Visual Question Answering Us-ing Knowledge Graph. In ISWC , volume 12922 of Lecture Notes in Computer Science , 146–162. Springer. Farhadi, A.; Endres, I.; Hoiem, D.; and Forsyth, D. A. 2009. Describing objects by their attributes. In CVPR , 1778–1785. IEEE Computer Society. Frome, A.; Corrado, G. S.; Shlens, J.; Bengio, S.; Dean, J.; Ranzato, M.; and Mikolov, T. 2013. DeViSE: A Deep Visual-Semantic Embedding Model. In NIPS , 2121–2129. Hu, H.; Luan, Y.; Chen, Y.; Khandelwal, U.; Joshi, M.; Lee, K.; Toutanova, K.; and Chang, M. 2023. Open-domain Vi-sual Entity Recognition: Towards Recognizing Millions of Wikipedia Entities. In ICCV , 12031–12041. IEEE. Jeong, J.; Zou, Y.; Kim, T.; Zhang, D.; Ravichandran, A.; and Dabeer, O. 2023. Winclip: Zero-/few-shot anomaly classification and segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 19606–19616. Kampffmeyer, M.; Chen, Y.; Liang, X.; Wang, H.; Zhang, Y.; and Xing, E. P. 2019. Rethinking Knowledge Graph Propagation for Zero-Shot Learning. In CVPR , 11487– 11496. Computer Vision Foundation / IEEE. Lampert, C. H.; Nickisch, H.; and Harmeling, S. 2009. Learning to detect unseen object classes by between-class attribute transfer. In CVPR , 951–958. IEEE Computer Soci-ety. Li, J.; Li, D.; Savarese, S.; and Hoi, S. C. H. 2023a. BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models. In ICML ,volume 202 of Proceedings of Machine Learning Research ,19730–19742. PMLR. Li, Z.; Tang, H.; Peng, Z.; Qi, G.-J.; and Tang, J. 2023b. Knowledge-Guided Semantic Transfer Network for Few-Shot Image Recognition. IEEE Transactions on Neural Net-works and Learning Systems , 1–15. Liu, H.; Li, C.; Wu, Q.; and Lee, Y. J. 2023. Visual Instruc-tion Tuning. arXiv:2304.08485. Monka, S.; Halilaj, L.; and Rettinger, A. 2022. A survey on visual transfer learning using knowledge graphs. Semantic Web , 13(3): 477–510. Monka, S.; Halilaj, L.; Schmid, S.; and Rettinger, A. 2021. Learning Visual Models Using a Knowledge Graph as a Trainer. In Hotho, A.; Blomqvist, E.; Dietze, S.; Fokoue, A.; Ding, Y.; Barnaghi, P. M.; Haller, A.; Dragoni, M.; and Alani, H., eds., The Semantic Web - ISWC 2021 - 20th In-ternational Semantic Web Conference, ISWC 2021, Virtual Event, October 24-28, 2021, Proceedings , volume 12922 of 
+
+Lecture Notes in Computer Science , 357–373. Springer. Norouzi, M.; Mikolov, T.; Bengio, S.; Singer, Y.; Shlens, J.; Frome, A.; Corrado, G.; and Dean, J. 2014. Zero-Shot Learning by Convex Combination of Semantic Embeddings. In ICLR .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; Krueger, G.; and Sutskever, I. 2021. Learning Transfer-able Visual Models From Natural Language Supervision. In 
+
+ICML , volume 139 of Proceedings of Machine Learning Re-search , 8748–8763. PMLR. Robertson, S. E.; Walker, S.; and Hancock-Beaulieu, M. 1995. Large Test Collection Experiments on an Operational, Interactive System: Okapi at TREC. Inf. Process. Manag. ,31(3): 345–360. Sadikaj, Y.; Zhou, H.; Halilaj, L.; Schmid, S.; Staab, S.; and Plant, C. 2025. MultiADS: Defect-aware Supervision for Multi-type Anomaly Detection and Segmentation in Zero-Shot Learning. CoRR , abs/2504.06740. 13645 Sevgili, ¨ O.; Shelmanov, A.; Arkhipov, M. Y.; Panchenko, A.; and Biemann, C. 2022. Neural entity linking: A survey of models based on deep learning. Semantic Web , 13(3): 527– 570. Socher, R.; Ganjoo, M.; Manning, C. D.; and Ng, A. Y. 2013. Zero-Shot Learning Through Cross-Modal Transfer. In NIPS , 935–943. Wang, J.; Yang, Z.; Hu, X.; Li, L.; Lin, K.; Gan, Z.; Liu, Z.; Liu, C.; and Wang, L. 2022. GIT: A Generative Image-to-text Transformer for Vision and Language. Trans. Mach. Learn. Res. , 2022. Wang, X.; Ye, Y.; and Gupta, A. 2018. Zero-Shot Recog-nition via Semantic Embeddings and Knowledge Graphs. In CVPR , 6857–6866. Computer Vision Foundation / IEEE Computer Society. Wang, Z.; Zhang, J.; Feng, J.; and Chen, Z. 2014. Knowl-edge Graph Embedding by Translating on Hyperplanes. In 
+
+AAAI , 1112–1119. AAAI Press. Xiao, Z.; Gong, M.; Cascante-Bonilla, P.; Zhang, X.; Wu, J.; and Ordonez, V. 2024. Grounding Language Models for Visual Entity Recognition. In ECCV (11) , volume 15069 of 
+
+Lecture Notes in Computer Science , 393–411. Springer. Yang, B.; Yih, W.; He, X.; Gao, J.; and Deng, L. 2015. Em-bedding Entities and Relations for Learning and Inference in Knowledge Bases. In ICLR (Poster) .Yao, X.; Blei, T.; Meng, Y.; Zhang, Y.; Zhou, H.; Bing, Z.; Huang, K.; Sun, F.; and Knoll, A. 2025. Long-Horizon Language-Conditioned Imitation Learning for Robotic Ma-nipulation. IEEE/ASME Transactions on Mechatronics , 1– 12. Zheng, L.; Chiang, W.; Sheng, Y.; Zhuang, S.; Wu, Z.; Zhuang, Y.; Lin, Z.; Li, Z.; Li, D.; Xing, E. P.; Zhang, H.; Gonzalez, J. E.; and Stoica, I. 2023. Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. In NeurIPS .Zhou, H.; Bing, Z.; Yao, X.; Su, X.; Yang, C.; Huang, K.; and Knoll, A. 2024a. Language-Conditioned Imitation Learning With Base Skill Priors Under Unstructured Data. 
+
+IEEE Robotics and Automation Letters , 9(11): 9805–9812. Zhou, H.; Halilaj, L.; Monka, S.; Schmid, S.; Zhu, Y.; Xiong, B.; and Staab, S. 2024b. Visual Representation Learning Guided By Multi-modal Prior Knowledge. CoRR ,abs/2410.15981. Zhou, H.; Yao, X.; Mees, O.; Meng, Y.; Xiao, T.; Bisk, Y.; Oh, J.; Johns, E.; Shridhar, M.; Shah, D.; Thomason, J.; Huang, K.; Chai, J.; Bing, Z.; and Knoll, A. 2023. Bridging Language and Action: A Survey of Language-Conditioned Robot Manipulation. CoRR , abs/2312.10807. 13646

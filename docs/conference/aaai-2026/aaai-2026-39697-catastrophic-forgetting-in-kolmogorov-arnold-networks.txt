@@ -1,0 +1,506 @@
+Title: Catastrophic Forgetting in Kolmogorov-Arnold Networks
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39697/43658
+
+Number of Pages: 8
+
+Markdown Content:
+# Catastrophic Forgetting in Kolmogorov-Arnold Networks 
+
+## Mohammad Marufur Rahman 1, Guanchu Wang 2, Kaixiong Zhou 3, Minghan Chen 1, Fan Yang 1
+
+> 1
+
+Department of Computer Science, Wake Forest University 
+
+> 2
+
+Department of Computer Science, University of North Carolina at Charlotte 
+
+> 3
+
+Department of Electrical and Computer Engineering, North Carolina State University rahmm224@wfu.edu, gwang16@charlotte.edu, kzhou22@ncsu.edu, chenm@wfu.edu, yangfan@wfu.edu 
+
+Abstract    
+
+> Catastrophic forgetting is a longstanding challenge in contin-ual learning, where models lose knowledge from earlier tasks when learning new ones. While various mitigation strategies have been proposed for Multi-Layer Perceptrons (MLPs), recent architectural advances like Kolmogorov-Arnold Net-works (KANs) have been suggested to offer intrinsic resis-tance to forgetting by leveraging localized spline-based acti-vations. However, the practical behavior of KANs under con-tinual learning remains unclear, and their limitations are not well understood. To address this, we present a comprehen-sive study of catastrophic forgetting in KANs and develop a theoretical framework that links forgetting to activation support overlap and intrinsic data dimension . We validate these analyses through systematic experiments on synthetic and vision tasks, measuring forgetting dynamics under vary-ing model configurations and data complexity. Further, we introduce KAN-LoRA, a novel adapter design for parameter-efficient continual fine-tuning of language models, and evalu-ate its effectiveness in knowledge editing tasks. Our findings reveal that while KANs exhibit promising retention in low-dimensional algorithmic settings, they remain vulnerable to forgetting in high-dimensional domains such as image clas-sification and language modeling. These results advance the understanding of KANs’ strengths and limitations, offering practical insights for continual learning system design.
+
+Code — https://github.com/marufur-cs/AAAI26 
+
+Full version — https://arxiv.org/abs/2511.12828 
+
+## Introduction 
+
+Catastrophic forgetting, also known as catastrophic inter-ference (McCloskey and Cohen 1989), a fundamental chal-lenge in machine learning, occurs when a neural network loses previously acquired information while learning from new data. This phenomenon is central to the field of contin-ual learning, where models are trained incrementally on non-stationary data distributions (Ven, Soures, and Kudithipudi 2024; Kemker et al. 2017). Moreover, it is prevalent in a wide range of research fields such as meta-learning (Spigler 2020), domain adaptation (Xu et al. 2020), foundation mod-els (Luo et al. 2025), and reinforcement learning (Zhang 
+
+> Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+et al. 2023), where the retention of prior knowledge is criti-cal for generalization and stability. Multi-Layer Perceptrons (MLPs) are inherently prone to catastrophic forgetting (Zenke, Poole, and Ganguli 2017). Several techniques have been proposed to overcome catas-trophic forgetting in MLPs (Wang et al. 2025; De Lange et al. 2022). Regularization-based techniques (Kirkpatrick et al. 2017; Kong et al. 2024) impose restrictions on the network’s weight adjustments, hence reducing the likeli-hood of interference with previously acquired knowledge. Architecture-based methods (Yoon et al. 2018; Mirzadeh et al. 2022) mitigate forgetting by modifying the network’s architecture to accommodate new information. Rehearsal-based methods (Buzzega et al. 2020; Riemer et al. 2019) aim to preserve prior information by including data samples from earlier learning sessions during the current session. Although catastrophic forgetting has been extensively stud-ied in MLPs, it remains relatively underexplored in emerg-ing fundamental neural architectures such as Kolmogorov-Arnold Networks (KANs) (Liu et al. 2025). KANs, inspired by the Kolmogorov-Arnold represen-tation theorem (Kolmogorov 1961), have emerged as a promising alternative neural network architecture to tradi-tional MLPs. KANs were introduced to address several fun-damental limitations of MLPs. Unlike MLPs, which rely on fixed activation functions, KANs utilize learnable one-dimensional activation functions (spline) along the edges of the network. Splines can be easily adjusted locally and are accurate for low-dimensional functions, giving KANs the potential to avoid forgetting. As spline bases are local, a data sample affects only a few related spline coefficients, leav-ing other coefficients unaltered. This unique architecture en-ables KANs to learn non-linear relations more effectively and to be more robust against catastrophic forgetting in con-tinual learning scenarios (Lee et al. 2025). KANs have been successfully applied in various domains (Yang and Wang 2025; Abd Elaziz, Ahmed Fares, and Aseeri 2024), yet stud-ies around their effectiveness in mitigating catastrophic for-getting in continual learning are still quite limited. Only a few pioneer works have studied the catastrophic forgetting phenomenon in KANs under the continual learn-ing settings. Lee et al. recently proposed a simple and heuristic strategy, WiseKAN, which allocates distinct pa-rameter subspaces to different tasks to mitigate catastrophic The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 25082
+
+forgetting in KANs. Liu et al. demonstrated robustness of KANs against catastrophic forgetting using synthetic data on regression tasks. Furthermore, studies proposed modi-fied KANs to gain robust retention in specific domains, such as classification (Hu et al. 2025) and face forgery detection (Zhang et al. 2025). Despite these initial efforts, a compre-hensive understanding of forgetting in KANs remains elu-sive, particularly in terms of theoretical characterization and empirical evaluation on practical real-world tasks. To bridge the gap, we first develop a theoretical frame-work for understanding catastrophic forgetting in KANs by formulating several key factors such as activation support overlap and intrinsic data dimension . Our analysis reveals that forgetting in KANs scales linearly with activation sup-port overlap and grows exponentially with the intrinsic di-mensionality of the task manifold, offering a principled ex-planation for KANs’ robustness in simple tasks and vul-nerability in complex domains. Building on these insights, we then conduct extensive empirical experiments compar-ing KANs with MLPs across a spectrum of tasks, includ-ing the low-dimensional synthetic addition and the high-dimensional image classification. Furthermore, we design a novel LoRA (Hu et al. 2022) adapter based on KAN, termed KAN-LoRA, to enable continual fine-tuning of language models (LMs) for sequential knowledge editing. Across all experimental settings, our results consistently corroborate the theoretical analysis, illustrating that while KANs achieve strong retention in structured and low-dimensional tasks, they remain susceptible to forgetting in high-dimensional domains, thereby highlighting both the strengths and lim-itations of KANs in practical continual learning scenarios. Our main contributions are summarized as below: • We develop a theoretical framework for catastrophic for-getting in KANs, deriving formal retention bounds based on activation support overlap and intrinsic data dimen-sion, and characterizing how forgetting evolves; • We validate the theoretical analysis through empirical ex-periments on synthetic and image data, demonstrating strong alignment between the support overlap, task com-plexity, and the observed forgetting behavior; • We introduce KAN-LoRA, a novel KAN-based adapter for continual fine-tuning of LMs, and evaluate its per-formance in sequential knowledge editing, highlighting both the strengths and limitations of KANs in practice. 
+
+## Preliminary 
+
+Catastrophic Interference 
+
+Neural networks learn the non-linear mapping between in-put and output spaces by finding a region in the param-eter space where the network achieves expected behav-ior (Bishop 1994). When the neural network is trained on new data, the network’s parameter space shifts accordingly to capture the mapping between new input and output space. As a result, performance degrades on prior data. This phe-nomenon was termed as catastrophic interference by Mc-Closkey and Cohen. It was observed in many machine learn-ing models such as support vector machine (Ayad 2014), but is particularly pronounced in connectionist models (e.g., MLPs) due to their dense and globally updated parame-terizations (French 1999). Standard neural training algo-rithms typically lack the capacity to progressively learn new tasks without overwriting previous knowledge (Aleixo et al. 2023), making them especially vulnerable to catastrophic in-terference. Such limitation has motivated continual learning studies (De Lange et al. 2022) to develop algorithms and ar-chitectures that enable models to acquire new knowledge in-crementally while preserving performance on learned tasks. 
+
+Kolmogorov-Arnold Networks 
+
+KANs are inspired by the Kolmogorov-Arnold representa-tion theorem, which states that a finite sum of continuous univariate functions and the binary addition operation can represent any multivariate continuous function f (x) in a specified bounded domain (Kolmogorov 1961). Based on the theorem, function f (x) can be represented as 
+
+f (x) = f (x1, x 2, ..., x n) = 
+
+> 2n+1
+
+X
+
+> q=1
+
+Ψq (
+
+> n
+
+X
+
+> p=1
+
+ψp,q (xp)) ,
+
+where n is the number of input variables, ψp,q : [0 , 1] −→ R,and Ψq : R −→ R. This equation indicates that a 2-layer network with n inputs and (2 n + 1) outputs is sufficient to represent f (x) by the sums of univariate functions. How-ever, 1-D function ψ can be fractal and non-smooth, making it unlearnable (Girosi and Poggio 1989) in practice. KANs solve this issue by generalizing the theorem to multiple lay-ers with arbitrary width. Formally, KANs consisting L lay-ers can be indicated by 
+
+f (x) = (Φ L−1 ◦ ΦL−2 ◦ · · · ◦ Φ1 ◦ Φ0)( x),
+
+Φℓ =
+
+
+
+ϕℓ, 1,1 ϕℓ, 2,1 · · · ϕℓ,d ℓ,1
+
+ϕℓ, 1,2 ϕℓ, 2,2 · · · ϕℓ,d ℓ,2
+
+... ... . . . ...
+
+ϕℓ, 1,N ℓ ϕℓ, 2,N ℓ · · · ϕℓ,d ℓ,N ℓ
+
+ ,
+
+where ◦ indicates matrix multiplication, Φℓ is the function matrix that corresponds to the ℓ-th layer, dℓ and Nℓ are the number of input coordinates and univariate branches respec-tively. The univariate function ϕ is defined as the weighted sum of a base and a spline function (Liu et al. 2025). 
+
+## Forgetting Analysis 
+
+We first introduce a formal measure of forgetting and the notation needed to analyze how KAN’s local activations give rise to both perfect retention and task interference. Let f (t)
+
+denote the KAN obtained after sequentially training on tasks 
+
+1, 2, . . . , t , and define 
+
+Fi = L f (T ), Di
+
+ − L f (i), Di
+
+
+
+as the forgetting on task i, where L(f, D) is the expected loss under data distribution D. We index layers by ℓ ∈{1, . . . , L }, and within each layer we number the input co-ordinates (pre-activations) by p ∈ { 1, . . . , d ℓ} and the indi-vidual univariate branches by q ∈ { 1, . . . , N ℓ}.25083 To capture where each unit actually “turns on”, we define the activation support of branch ϕℓ,p,q for task i as 
+
+S(i) 
+
+> ℓ,p,q
+
+= { z ∈ R : ϕℓ,p,q (z)̸ = 0 },
+
+the subset of real inputs on which that branch con-tributes non-zero output. We measure the size of these one-dimensional sets by the Lebesgue measure μ(·)1. With these setups, we can represent the maximum one-dimensional overlap between any single activation for tasks i and j as 
+
+∆i,j = max  
+
+> ℓ,p,q
+
+μ S(i) 
+
+> ℓ,p,q
+
+∩ S(j)
+
+> ℓ,p,q
+
+,
+
+which will serve as the key link between KAN’s architec-tural locality and the bounds on catastrophic forgetting. 2
+
+Bounded Retention 
+
+We now precisely characterize when KAN achieves per-fect retention and how any residual overlap translates into bounded forgetting. Overall, we demonstrate that KAN’s local-support activations act as task-specific feature detec-tors: if their “on” regions never coincide across tasks, earlier knowledge remains untouched, and when they do overlap, forgetting grows in direct proportion to that overlap. 
+
+Lemma 1 (Zero-Overlap Retention) . Suppose for an ear-lier task i and every later task j > i the maximal support-overlap satisfies ∆i,j = 0 . Then 
+
+Fi = L f (T ), Di
+
+ − L f (i), Di
+
+ = 0 .
+
+Remark on Lemma 1 When no branch ever activates on both tasks, gradi-ent updates for new tasks cannot affect the parame-ters responsible for task i, guaranteeing exact reten-tion. This lemma formalizes the intuition that truly disjoint representations cannot interfere .
+
+Theorem 1 (Retention Bound via Overlap) . Under the addi-tional assumptions that each branch ϕℓ,p,q is Lℓ-Lipschitz 3
+
+and the loss is bounded by C, for any j > i we have 
+
+Fi ≤ C
+
+> L
+
+X
+
+> ℓ=1
+
+Nℓ Lℓ ∆i,j .
+
+Remark on Theorem 1 This bound reveals that any forgetting in KANs 
+
+scales linearly with the one-dimensional overlap 
+
+∆i,j and the network’s size parameters. Importantly, when ∆i,j = 0 , it collapses to Fi ≤ 0, recovering exact retention as a special case and shows that small overlaps incur proportionally small forgetting.                
+
+> 1Lebesgue measure generalizes the length to a broader class of sets. Here, it corresponds to the total length of the activation region.
+> 2Detailed derivations for all theorems are in the full version.
+> 3ϕis L-Lipschitz if |ϕ(z1)−ϕ(z2)|≤L|z1−z2|for all
+> z1, z 2∈R. Here, Lℓquantifies the spline smoothness in layer ℓ.
+
+Cumulative Forgetting 
+
+While Theorem 1 guarantees zero or bounded forgetting on a per-task basis, real continual learning involves sequences of overlapping tasks whose supports may intersect in com-plex ways. To capture the deeper dynamics of forgetting in KANs, we further analyze at the branch level and consider cumulative contributions and effects. 
+
+Theorem 2 (Branch-wise Cumulative Forgetting) . Under the Lipschitz and bounded-loss assumptions of Theorem 1, the forgetting on task i after training on all subsequent tasks 
+
+i + 1 , . . . , T can be decomposed as 
+
+Fi ≤ C
+
+> L
+
+X
+
+> ℓ=1
+> dℓ
+
+X
+
+> p=1
+> Nℓ
+
+X
+
+> q=1
+
+Lℓ
+
+h TX
+
+> j=i+1
+
+μ S(i) 
+
+> ℓ,p,q
+
+∩ S(j)
+
+> ℓ,p,q
+
+i
+
+.
+
+Remark on Theorem 2 Forgetting in KANs is driven not only by the largest single overlap but also by the total overlap each branch experiences across tasks . Branches with frequent cross-task activation contribute dispropor-tionately to forgetting, suggesting that sparsifying or diversifying supports could mitigate interference. 
+
+Corollary 1 (Expected Forgetting under Random Supports) .
+
+If each branch’s supports for task j are independently drawn as length-sj intervals in [0 , 1] , then in expectation 
+
+E[Fi] ≤ C XLℓ=1 NℓLℓ
+
+XTj=i+1 si sj .
+
+Remark on Corollary 1 Forgetting in KANs grows with the pairwise prod-ucts of support sizes: a difficult task (with large sj )can retroactively erode performance on earlier tasks, and longer task sequences amplify this effect. 
+
+Corollary 2 (Saturation via Union-Bound) . Let 
+
+U (i) 
+
+> ℓ,p,q
+
+=
+
+> T
+
+[
+
+> j=i+1
+
+ S(i) 
+
+> ℓ,p,q
+
+∩ S(j)
+
+> ℓ,p,q
+
+
+
+be the union of all overlaps for branch (ℓ, p, q ). Then 
+
+Fi ≤ C
+
+> L
+
+X
+
+> ℓ=1
+> dℓ
+
+X
+
+> p=1
+> Nℓ
+
+X
+
+> q=1
+
+Lℓ μ U (i)
+
+> ℓ,p,q
+
+,
+
+with μ(U (i) 
+
+> ℓ,p,q
+
+) ≤ min  P Tj=i+1 ∆i,j , μ (S(i) 
+
+> ℓ,p,q
+
+).
+
+Remark on Corollary 2 Forgetting in KANs will saturate , once a branch’s 
+
+full activation support is covered by overlaps . Af-ter enough highly overlapping tasks, further tasks cannot increase forgetting beyond that support size. 25084 Complexity-Induced Forgetting 
+
+Beyond mere pairwise overlap, we further conduct theo-retical analysis by examining how intrinsic task complex-ity drives forgetting in KANs. In particular, we show that when tasks live on data manifolds of differing intrinsic di-mensions, the degree of forgetting can change dramatically. This complements our earlier results by linking forgetting directly to geometric measures of task difficulty. 
+
+Theorem 3 (Intrinsic-Dimension Forgetting Rate) . Suppose task t generates data concentrated on a compact submani-fold Mt ⊂ [0 , 1] n of intrinsic dimension dt, and each uni-variate branch’s activation support can be enclosed within an r-ball in the pre-activation domain. Then, for any earlier task i and later task j, the expected support overlap satisfies 
+
+Eμ(S(i) 
+
+> ℓ,p,q
+
+∩S(j) 
+
+> ℓ,p,q
+
+) = O r di+dj ,
+
+and hence the forgetting on task i obeys 
+
+Fi = O
+
+ TX
+
+> j=i+1
+
+Ntot ¯L r di+dj
+
+
+
+,
+
+where Ntot = P 
+
+> ℓ
+
+Nℓ counts the total number of univariate branches and ¯L is an average Lipschitz constant. 
+
+Remark on Theorem 3 Tasks with higher intrinsic dimension produce ex-ponentially smaller “gaps” in their activation par-titions, so even modest support radius r could incur large overlaps and thus substantial forgetting. Con-versely, low-dimensional tasks enjoy near-zero over-lap and stable retention in continuous learning. 
+
+Corollary 3 (Retention for Low-Dimensional Tasks) . If ev-ery subsequent task j has intrinsic dimension dj ≤ D, then 
+
+Fi = O T N tot ¯L r di+D ,
+
+which becomes negligible when di + D is sufficiently small. 
+
+Remark on Corollary 3 When both the original task and all new tasks inhabit 
+
+low-dimensional manifolds , their activation over-laps shrink exponentially in dimension, protecting against forgetting even over long task sequences. 
+
+Corollary 4 (Fragmentation Mitigates Complexity) . If each branch’s support for task t is split into kt disjoint intervals (effective radius r/k t), then Theorem 3’s rate improves to 
+
+Fi = O
+
+ TX
+
+> j=i+1
+
+Ntot ¯L  r/k i
+
+di  r/k j
+
+dj
+
+
+
+.     
+
+> 010 20 30 40 50
+> −2
+> −1.5
+> −1
+> −0.50
+> Epochs MSE Loss (Log) One’s addition Two’s addition Three’s addition Four’s addition Five’s addition
+
+Figure 1: MSE loss in logarithmic scale for five different binary addition tasks during training on one’s addition task. Remark on Corollary 4 KANs can sharply reduce forgetting on high-dimensional tasks by increasing support fragmen-tation , which effectively refines each branch’s re-ceptive field and trades off coarser representation granularity for higher retention fidelity. Overall, Theorem 3 and its corollaries illuminate how KAN’s forgetting depends on the deeper geometric com-plexity of task data and the combinatorial structure of activa-tion supports. This perspective provides actionable guidance for designing KAN architectures and pruning strategies. 
+
+## Experiments 
+
+We conduct a series of experiments to empirically val-idate our theoretical findings and assess KANs’ forget-ting behavior across diverse settings. Starting with low-dimensional synthetic tasks, we analyze retention under bi-nary and decimal addition. We then evaluate KANs on high-dimensional image classification benchmarks and finally test KAN-LoRA for continual knowledge editing in LMs. These experiments effectively illustrate how model architecture and task complexity shape the forgetting in KANs. 4
+
+Binary and Decimal Addition 
+
+Experimental Setup We construct five synthetic tasks un-der a continual setting. Each task is defined by fixing one of the operands in a two-digit addition problem. Specifically, Task 1 involves one’s addition , where the digit 1 is added to every digit from 1 to 9. Task 2 is two’s addition , and so forth up to five’s addition in Task 5. We apply this construction for both binary and decimal representations of digits. This setup enables us to systematically evaluate forgetting across increasingly overlapping arithmetic patterns. 
+
+Model Configuration Our KAN model is configured with three input nodes, two hidden neurons, and two output neu-rons to perform addition of two 4-bit binary numbers. At each step, the model receives two input bits (one from each number) along with a carry bit, and outputs the correspond-ing sum bit and the carry bit for the next step. The univariate functions in KANs are modeled using B-splines (Prautzsch, Boehm, and Paluszny 2002), where the grid size determines the number of intervals in the spline. A larger grid size pro-vides greater flexibility, allowing the splines to capture more                         
+
+> 4More details on the experiments are in the full version. 25085 01234500.04 0.08 0.12 0.16 Trained Task MSE Loss  Grid Size = 5
+> 012345Trained Task Grid Size = 10
+> 012345Trained Task Grid Size = 15
+> 012345Trained Task Grid Size = 20 One’s addition Two’s addition Three’s addition Four’s addition Five’s addition
+
+Figure 2: MSE loss during sequential training on five different decimal addition tasks, from one’s to five’s addition facts. complex functions (Liu et al. 2025). For binary addition tasks, we use a grid size of 5. For decimal addition tasks, we evaluate KANs with grid sizes of 5, 10, 15, and 20. As a baseline, we compare the KAN’s performance on binary ad-dition to a specialized MLP architecture (Ruiz-Garcia 2022) designed to learn binary addition rules in a continual learn-ing setting without catastrophic forgetting. 
+
+Evaluation Results. The KAN model is sequentially trained on five binary addition tasks. Figure 1 shows the Mean Squared Error (MSE) loss (log scale) for all five tasks during training on the one’s addition task. Notably, even dur-ing training on the first task, the losses for subsequent tasks also decrease significantly, indicating strong positive corre-lation. As training progresses, the model maintains stable performance on earlier tasks, with overall forgetting remain-ing below 1 × 10 −6 after all five sessions, showing a strong resilience to catastrophic forgetting. The KAN outperforms the specialized MLP model designed for binary addition. While the MLP requires sequential training on both one’s 
+
+and two’s addition tasks to succeed, the KAN model gener-alizes effectively after learning just the one’s addition task. Similarly, for the decimal addition, the KAN is trained sequentially over five tasks. Unlike the binary setting, the model does not fully learn subsequent tasks during train-ing on the first one. As training progresses, clear signs of catastrophic forgetting emerge. Figure 2 shows that learning a new task leads to a noticeable decline in performance on previous tasks. However, the severity of forgetting decreases as the grid size increases, suggesting that finer spline reso-lution improves retention. After completing all five tasks, a clear forgetting pattern appears: performance deteriorates more significantly for tasks that are farther in time from the most recent training, indicating that earlier tasks suffer more from forgetting. These observations empirically support our analysis in Corollary 1. On one hand, increasing the grid size reduces each spline’s support length, thereby decreas-ing pairwise overlaps and mitigating the forgetting. On the other hand, later tasks, which have larger effective support sizes due to increased digit variability, lead to greater cumu-lative interference, consistent with the sisj dependence. Tables 1 and 2 further present empirical evidences sup-porting Theorems 1 and 2. In Table 1, for each pair of tasks selected from the five decimal addition tasks, the ra-tio Fi/∆i,j remains approximately constant , suggesting that the forgetting Fi scales linearly with the support overlap 
+
+∆i,j between tasks i and j. Similarly, Table 2 shows that the ratio between the observed forgetting and the cumulative support overlap 5 PTi+1 μ(S(i)∩S(j)) is also nearly constant ,indicating a linear dependence. Additionally, this ratio be-comes more stable (i.e., exhibits lower variance) as the grid size of KANs increases, revealing that finer-grained spline meshes promote more consistent forgetting behavior.                                      
+
+> Task ( i)Task ( j)Grid 10 Grid 15 Grid 20
+> FiFi
+> ∆i,j FiFi
+> ∆i,j FiFi
+> ∆i,j
+> 120.46 0.74 0.45 0.74 0.32 0.61
+> 230.45 0.73 0.40 0.67 0.34 0.64
+> 340.52 0.77 0.46 0.74 0.32 0.63
+> 450.44 0.72 0.42 0.68 0.32 0.64
+
+Table 1: Retention bounds across KANs and tasks.                                         
+
+> Task ( i)Task ( j)Grid 10 Grid 15 Grid 20
+> FiFiPμij FiFiPμij FiFiPμij
+> 12, 3, 4, 5 0.68 0.15 0.62 0.15 0.57 0.16
+> 23, 4, 5 0.67 0.16 0.51 0.15 0.44 0.16
+> 34, 5 0.39 0.16 0.39 0.16 0.29 0.16
+> 450.25 0.18 0.19 0.17 0.16 0.17
+
+Table 2: Cumulative bounds across KANs and tasks. 
+
+Image Classification 
+
+Experimental Setup To evaluate KANs in real-world settings, we assess their forgetting behavior with contin-ual learning using CIFAR-10, Tiny-ImageNet, and MNIST datasets. CIFAR-10 consists (32 ∗ 32) -pixel images of 10 evenly distributed classes. To simulate a class-incremental continual-learning scenario, the dataset is divided into five sequential tasks, each containing images from two differ-ent classes. A similar five-task setup is constructed for Tiny-ImageNet dataset, by selecting 10 classes from 200 different classes of (64 ∗ 64) -pixel images. MNIST, (28 ∗ 28) pix-els, is likewise divided into five sequential tasks. These three datasets vary in intrinsic dimensionality, where MNIST has the lowest while Tiny-ImageNet has the highest dimension. 
+
+Model Configuration We adopt a Transformer-based ar-chitecture for image classification, in which all MLP lay-ers are replaced with KAN layers, resulting in the KAN-Transformer model (Yang and Wang 2025). This modifica-tion intends to utilize the adaptive capacity of KANs within 
+
+> 5
+
+Simplify to P μij in Table 2 notations. 25086 2 4 6 8 10 12 14 16 18 20 Number of Samples/Task                  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0 Accuracy on Task 1 (a)
+> 246810 12 14 16 18 20 Number of Samples/Task
+> (b) 1-1-1 1-1-2 1-1-4 1-2-1 1-2-2 1-5-1 1-5-2 1-5-4 2-1-4
+
+Figure 3: Task 1 accuracy after sequential training on task 1 and 2 from CIFAR-10, comparing (a) KAN-Transformer and (b) MLP-Transformer. Model configuration is labeled as (#classification layers – #encoder blocks – #attention heads ). the Transformer framework for continual learning scenar-ios. To provide a fair and competitive baseline, we also de-sign an MLP-based transformer model augmented with the EWC (Kirkpatrick et al. 2017) regularization technique. 
+
+Evaluation Results. Figure 3 illustrates the accuracy on task 1 after sequential training of the KAN (with grid size 
+
+10 ) and the MLP model on tasks 1 and 2 from CIFAR-10, evaluated across various model configurations and increas-ing sample sizes per task. Both architectures retain high accuracy in shallow settings with a single encoder block, attention head, and classification layer. Notably, the KAN model demonstrates superior retention, maintaining 100% accuracy on task 1 up to 8 samples per task, whereas the MLP model drops to around 80%. As the number of encoder blocks and classification layers increases, performance de-clines sharply, particularly in MLPs, which suggests deeper networks are more susceptible to catastrophic forgetting. Figure 4 summarizes the impact of varying the number of samples per task during continual learning, evaluated across different task counts (ranging from 2 to 5) for both CIFAR-10 and Tiny-ImageNet. All models use one single encoder block, attention head, and classification layer. On CIFAR-10, KAN models exhibit better retention than their MLP counterparts, particularly when trained on a smaller num-ber of tasks. In contrast, MLP models outperform KANs on the more challenging Tiny-ImageNet dataset. These re-sults underscore the increasing difficulty of continual learn-ing in KANs as both the number of tasks and the underlying data complexity grow. Moreover, the performance curves in Figure 4a suggest a clear saturation effect: after a cer-tain number of highly overlapping tasks, additional training yields diminishing increases in forgetting, consistent with the bounded cumulative interference described in Corol-lary 2, where support unions eventually stabilize. Table 3 further presents empirical evidence supporting Theorem 3. Forgetting Fi is measured on task 1 after sequen-tial training on all five tasks from MNIST, CIFAR-10, and Tiny-ImageNet. To vary the intrinsic dimension di, the im-ages are quantized using different label sets ( Q) and resized to different spatial resolutions ( S), where di = log 2(Q × S).Across datasets and configurations, the ratio log( Fi)/d i re-mains approximately constant , providing strong support for the exponential relationship between forgetting and task complexity as captured by intrinsic dimension. This behav-ior reflects a geometric constraint where increasing intrinsic 2 4 6 8 10 12 14 16 18 20 Number of Samples/Task          
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0 Mean Accuracy on Prior Tasks (a)
+> 246810 12 14 16 18 20 Number of Samples/Task
+> (b) 2 Tasks (CIFAR-10) 2 Tasks (ImageNet) 3 Tasks (CIFAR-10) 3 Tasks (ImageNet) 4 Tasks (CIFAR-10) 4 Tasks (ImageNet) 5 Tasks (CIFAR-10) 5 Tasks (ImageNet)
+
+Figure 4: Average accuracy on previously learned tasks af-ter training on 2 to 5 tasks with varying sample sizes from CIFAR-10 and Tiny-ImageNet datasets. Sub-figures show results for (a) KAN-Transformer and (b) MLP-Transformer.                                                              
+
+> MNIST CIFAR-10 Tiny-ImageNet Quantize label ( Q) Shape ( S)log( Fi)
+> di
+> Quantize label ( Q) Shape ( S)log( Fi)
+> di
+> Quantize label ( Q) Shape ( S)log( Fi)
+> di
+> 28×80.074 88×80.046 816 ×16 0.052
+> 216 ×16 0.071 816 ×16 0.053 832 ×32 0.054
+> 228 ×28 0.074 832 ×32 0.046 864 ×64 0.052
+> 428 ×28 0.071 16 32 ×32 0.053 16 64 ×64 0.051
+> 828 ×28 0.075 32 32 ×32 0.050 32 64 ×64 0.049
+> 16 28 ×28 0.073 64 32 ×32 0.048 64 64 ×64 0.048
+> 32 28 ×28 0.075 128 32 ×32 0.047 128 64 ×64 0.047
+
+Table 3: Forgetting rate for varied intrinsic dimensions. dimension entangles KANs’ localized supports, highlighting the need for dimensionality-aware tuning or support frag-mentation (as in Corollary 4) to sustain better retention. 
+
+Knowledge Editing for LMs 
+
+Experimental Setup LMs require continual knowledge editing to replace outdated information and integrate new facts. To evaluate the forgetting behavior of KANs and MLPs in such high-dimensional editing scenarios, five con-secutive tasks are curated from the CounterFact (Meng et al. 2023) and ZsRE (Levy et al. 2017) benchmarks. 
+
+Model Configuration LoRA (Hu et al. 2022) is aparameter-efficient fine-tuning technique that adapts LMs by freezing pre-trained weights and training lightweight adapters, substantially reducing memory usage and compu-tational cost compared to full fine-tuning (Biderman et al. 2024). To explore the use of KAN as a LoRA adapter for continual fine-tuning, we design a modified adapter archi-tecture. In the standard LoRA setup, the frozen weight ma-trix W0 ∈ Ra×b is augmented by a trainable low-rank resid-ual matrix ∆W ∈ Ra×b, factorized as ∆W = BA with 
+
+B ∈ Ra×c and A ∈ Rc×b, where rank c ≪ min( a, b ). The adapter’s output is h = W0x + BAx . In our design, both 
+
+A and B are parameterized using KANs. This KAN-based variant, referred as KAN-LoRA, is integrated into the final two layers of Llama2-7B and Llama2-13B (Touvron et al. 2023). We apply EWC regularization during continual fine-tuning, using the preceding task as memory. For a fair com-parison, we develop an MLP-LoRA adapter with identical EWC settings. For all KAN-LoRA experiments, we use a grid size of 5 to balance capacity and efficiency. 25087 Model Dataset Samples per Task KAN LoRA MLP LoRA # Trained tasks # Trained tasks                                                                                                                                        
+
+> 23452345Llama 2-7B CounterFact 2100 65 50 45 100 85 57 60 3100 93 80 48 100 90 67 57 4100 88 78 53 100 90 65 42 5100 88 80 57 100 98 77 66 ZsRE 2100 80 67 60 100 95 97 87 3100 87 71 58 100 100 91 78 4100 85 70 55 100 82 63 46 5100 76 64 60 100 86 73 57 Llama 2-13B CounterFact 2100 75 60 50 100 70 50 43 3100 93 71 60 100 93 62 53 4100 97 60 44 100 97 77 56 5100 76 73 57 100 84 83 63 ZsRE 2100 100 83 72 100 80 53 52 3100 97 78 75 100 89 62 60 4100 75 66 58 100 92 81 55 5100 85 80 67 100 83 73 59
+
+(a) KAN-LoRA and MLP-LoRA adapters with rank 8.                                                                                                                                            
+
+> Model Dataset Samples per Task KAN LoRA MLP LoRA # Trained tasks # Trained tasks
+> 23452345Llama 2-7B CounterFact 2100 75 47 45 100 55 30 43 3100 77 62 55 100 80 53 45 4100 85 57 41 100 75 60 43 5100 70 60 49 100 76 59 51 ZsRE 2100 90 50 45 100 55 43 37 3100 77 58 57 100 70 49 27 4100 70 65 48 100 70 58 39 5100 74 63 49 100 86 59 39 Llama 2-13B CounterFact 2100 65 50 60 100 55 43 40 3100 80 69 57 100 77 56 45 4100 88 62 39 100 85 50 34 5100 64 61 48 100 84 65 45 ZsRE 2100 70 53 45 100 55 47 40 3100 80 60 57 100 73 47 40 4100 70 63 41 100 82 62 48 5100 72 59 50 100 76 63 44
+
+(b) KAN-LoRA and MLP-LoRA adapters with rank 16. 
+
+Table 4: Mean accuracy (%) on previously edited tasks during continual fine-tuning of Llama 2-7B and Llama 2-13B models equipped with KAN-LoRA and MLP-LoRA adapters. Performance is reported across five consecutive tasks for each dataset.                 
+
+> Model Adapter Trainable parameters Training time (s/epoch) Inference time (s/sample)
+> Llama 2-7B KAN LoRA 2.6M 0.57 0.13 MLP LoRA 0.28M 0.54 0.12 Llama 2-13B KAN LoRA 3.2M 1.05 0.23 MLP LoRA 0.35M 1.01 0.21
+
+Table 5: Comparison of trainable parameters, training, and inference time for KAN-LoRA and MLP-LoRA adapters. 
+
+Evaluation Results The modified Llama models equipped with KAN-LoRA and MLP-LoRA adapters are continually fine-tuned across multiple tasks. Tables 4a and 4b report the mean accuracy on previously edited tasks after sequential edits of varying lengths, for adapter ranks 8 and 16 respectively, highlighting the extent of forgetting during the continual fine-tuning process. In-creasing the adapter rank leads to greater forgetting in both KAN and MLP variants. However, KAN adapters consistently outperform their MLP counterparts at rank 16 and in low-sample (per task) regimes. Notably, the KAN adapter shows reduced forgetting in Llama2-13B, while the MLP adapter displays the opposite trend. In small-sample settings, KAN achieves consistently higher retention in Llama2-13B compared to MLP. These results suggest that KAN adapters are more resilient to forgetting in large-scale LMs, especially at higher ranks and under limited task supervision. Table 5 further compares the computational and parame-ter efficiency of KAN-LoRA and MLP-LoRA adapters, us-ing a grid size of 5 and an adapter rank at 8. KAN introduces significantly more trainable parameters than MLP, approx-imately 10 × more for both Llama2-7B and Llama2-13B models. Training and inference times are measured on the CounterFact dataset with 5 samples per task. While the KAN adapter incurs higher computational cost than the MLP vari-ant, the overhead remains moderate relative to the observed gain in model capacity and retention performance. 
+
+## Conclusion & Discussion 
+
+In this work, we present the first comprehensive study of catastrophic forgetting in KANs under continual learning settings. We develop a theoretical framework that connects forgetting dynamics to the architectural locality of spline ac-tivations and the intrinsic dimensionality of task data. Our analysis yields formal retention bounds and characterizes the cumulative and geometry-driven nature of forgetting in KANs. To validate these insights, we conduct systematic ex-periments across synthetic arithmetic tasks and real-world image classification benchmarks. Empirical results strongly corroborate the our analysis, revealing a clear linear relation-ship between forgetting and activation overlap, and an expo-nential increase in forgetting as task dimensionality rises. We further introduce KAN-LoRA, a novel adapter design for continual fine-tuning of LMs in model editing tasks, and demonstrate its retention superiority compared to MLP-based alternatives. Our findings establish both the strengths and limitations of KANs for continual learning. Stepping further, we believe this work opens up several unconventional directions for advancing KANs in contin-ual learning. First, the evolution of spline activations across tasks suggests a new dynamic view of learning, where forget-ting reflects adaptation pressures on local function regions. Designing KANs with mechanisms that support controlled specialization or even lifecycle-based pruning of splines may enhance long-term retention. Second, our analysis of support overlap points to the possibility of distributed mem-ory encoding . Rather than eliminating interference, future models could intentionally overlap supports to store multi-ple tasks in a compressed fashion that allows task-specific retrieval through decoding strategies. Third, forgetting itself may also function as a beneficial inductive bias . Selective decay in high-dimensional regions could suppress redundant or unstable features, reduce overfitting, and improve gener-alization. These visions can largely reframe forgetting not as a flaw to be eliminated, but as a property to be shaped, posi-tioning KANs as a flexible and interpretable foundation for memory-aware continual learning systems. 25088 Acknowledgements 
+
+The authors thank the anonymous reviewers for comments. This research was supported by the NSF IIS2451480. 
+
+## References 
+
+Abd Elaziz, M.; Ahmed Fares, I.; and Aseeri, A. O. 2024. CKAN: Convolutional Kolmogorov–Arnold Net-works Model for Intrusion Detection in IoT Environment. 
+
+IEEE Access , 12: 134837–134851. Aleixo, E. L.; Colonna, J. G.; Cristo, M.; and Fernandes, E. 2023. Catastrophic Forgetting in Deep Learning: A Com-prehensive Taxonomy. Ayad, O. 2014. Learning under Concept Drift with Support Vector Machines. In Artificial Neural Networks and Ma-chine Learning – ICANN 2014 , 587–594. Cham: Springer International Publishing. Biderman, D.; Portes, J.; Ortiz, J. J. G.; Paul, M.; Greengard, P.; et al. 2024. LoRA Learns Less and Forgets Less. Bishop, C. M. 1994. Neural networks and their applications. 
+
+Review of scientific instruments , 65(6): 1803–1832. Buzzega, P.; Boschini, M.; Porrello, A.; Abati, D.; and Calderara, S. 2020. Dark Experience for General Contin-ual Learning: a Strong, Simple Baseline. De Lange, M.; Aljundi, R.; Masana, M.; Parisot, S.; et al. 2022. A Continual Learning Survey: Defying Forgetting in Classification Tasks. IEEE Transactions on Pattern Analysis and Machine Intelligence , 44(7): 3366–3385. French, R. M. 1999. Catastrophic forgetting in connectionist networks. Trends in Cognitive Sciences , 3(4): 128–135. Girosi, F.; and Poggio, T. 1989. Representation Properties of Networks: Kolmogorov’s Theorem Is Irrelevant. Neural Computation , 1(4): 465–469. Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; Chen, W.; et al. 2022. Lora: Low-rank adapta-tion of large language models. ICLR , 1(2): 3. Hu, Y.; Liang, Z.; Yang, F.; Hou, Q.; et al. 2025. KAC: Kolmogorov-Arnold Classifier for Continual Learning. Kemker, R.; McClure, M.; Abitino, A.; et al. 2017. Measur-ing Catastrophic Forgetting in Neural Networks. Kirkpatrick, J.; Pascanu, R.; Rabinowitz, N.; Veness, J.; Des-jardins, G.; Rusu, A. A.; Milan, K.; Quan, J.; Ramalho, T.; Grabska-Barwinska, A.; Hassabis, D.; et al. 2017. Overcom-ing catastrophic forgetting in neural networks. Proceedings of the National Academy of Sciences , 114(13): 3521–3526. Kolmogorov, A. N. 1961. On the Representation of Con-tinuous Functions of Several Variables by Superpositions of Continuous Functions of a Smaller Number of Variables. 
+
+American Mathematical Society .Kong, Y.; Liu, L.; Chen, H.; Kacprzyk, J.; and Tao, D. 2024. Overcoming Catastrophic Forgetting in Continual Learning by Exploring Eigenvalues of Hessian Matrix. IEEE Trans-actions on Neural Networks and Learning Systems , 35(11). Lee, A.; Gomes, H. M.; Zhang, Y.; and Kleijn, W. B. 2025. Kolmogorov-Arnold Networks Still Catastrophically Forget but Differently from MLP. Proceedings of the AAAI Confer-ence on Artificial Intelligence , 39(17): 18053–18061. Levy, O.; Seo, M.; Choi, E.; and Zettlemoyer, L. 2017. Zero-Shot Relation Extraction via Reading Comprehension. In 
+
+Proceedings of the 21st Conference on Computational Nat-ural Language Learning , 333–342. Association for Compu-tational Linguistics. Liu, Z.; Wang, Y.; Vaidya, S.; Ruehle, F.; Halverson, J.; Soljaˇ ci´ c, M.; Hou, T. Y.; and Tegmark, M. 2025. KAN: Kolmogorov-Arnold Networks. Luo, Y.; Yang, Z.; Meng, F.; Li, Y.; Zhou, J.; and Zhang, Y. 2025. An Empirical Study of Catastrophic Forgetting in Large Language Models During Continual Fine-tuning. McCloskey, M.; and Cohen, N. J. 1989. Catastrophic Inter-ference in Connectionist Networks: The Sequential Learn-ing Problem. In Psychology of Learning and Motivation ,volume 24, 109–165. Academic Press. Meng, K.; Bau, D.; Andonian, A.; and Belinkov, Y. 2023. Locating and Editing Factual Associations in GPT. Mirzadeh, S. I.; Chaudhry, A.; Yin, D.; et al. 2022. Archi-tecture Matters in Continual Learning. Prautzsch, H.; Boehm, W.; and Paluszny, M. 2002. B´ ezier and B-spline techniques . Springer Science Business Media. Riemer, M.; Cases, I.; Ajemian, R.; Liu, M.; Rish, I.; Tu, Y.; and Tesauro, G. 2019. Learning to Learn without Forgetting by Maximizing Transfer and Minimizing Interference. Ruiz-Garcia, M. 2022. Model architecture can transform catastrophic forgetting into positive transfer. Spigler, G. 2020. Meta-learnt priors slow down catastrophic forgetting in neural networks. Touvron, H.; Lavril, T.; Izacard, G.; et al. 2023. LLaMA: Open and Efficient Foundation Language Models. Ven, G. M. V. D.; Soures, N.; and Kudithipudi, D. 2024. Continual Learning and Catastrophic Forgetting. Wang, Z.; Yang, E.; Shen, L.; and Huang, H. 2025. A Com-prehensive Survey of Forgetting in Deep Learning Beyond Continual Learning. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(3): 1464–1483. Xu, Y.; Zhong, X.; Yepes, A. J. J.; and Lau, J. H. 2020. For-get Me Not: Reducing Catastrophic Forgetting for Domain Adaptation in Reading Comprehension. Yang, X.; and Wang, X. 2025. Kolmogorov-Arnold Trans-former. In The Thirteenth International Conference on Learning Representations .Yoon, J.; Yang, E.; Lee, J.; and Hwang, S. J. 2018. Lifelong Learning with Dynamically Expandable Networks. Zenke, F.; Poole, B.; and Ganguli, S. 2017. Continual Learn-ing Through Synaptic Intelligence. Proceedings of machine learning research , 70: 3987—3995. Zhang, T.; Peng, S.; Gao, L.; et al. 2025. Unifying Local-ity of KANs and Feature Drift Compensation Projection for Data-free Replay based Continual Face Forgery Detection. Zhang, T.; Wang, X.; Liang, B.; and Yuan, B. 2023. Catas-trophic Interference in Reinforcement Learning: A Solu-tion Based on Context Division and Knowledge Distillation. 
+
+IEEE Transactions on Neural Networks and Learning Sys-tems , 34(12): 9925–9939. 25089

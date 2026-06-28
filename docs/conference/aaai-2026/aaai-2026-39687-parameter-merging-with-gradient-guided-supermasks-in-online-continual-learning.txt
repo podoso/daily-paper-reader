@@ -1,0 +1,677 @@
+Title: Parameter Merging with Gradient-Guided Supermasks in Online Continual Learning
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39687/43648
+
+Number of Pages: 9
+
+Markdown Content:
+# Parameter Merging with Gradient-Guided Supermasks in Online Continual Learning 
+
+## Benliu Qiu, Heqian Qiu *, Lanxiao Wang *, Taijin Zhao, Yu Dai, Lili Pan, Hongliang Li *
+
+University of Electronic Science and Technology of China qbenliu@std.uestc.edu.cn, {hqqiu, lanxiaowang }@uestc.edu.cn, {zhtjww, ydai }@std.uestc.edu.cn, lilipan@uestc.edu.cn, hlli@uestc.edu.cn 
+
+Abstract 
+
+> Online continual learning (OCL) aims at learning a non-stationary data stream in a way of reading each data sam-ple only once, and hence suffers from the trade-off of catas-trophic forgetting and insufficient learning. In this work, we firstly analytically establish relationship between loss func-tions and model parameters from the Bayesian perspective. Based on our analysis, we subsequently propose a parame-ter merging method with gradient-guided supermasks. Our method leverages 1-order and 2-order gradient information to construct supermasks that determine the merging weights between the old and new models. Our method performs di-rect arithmetic operations on parameters to update models, beyond traditional gradient descent. We further discover that a widely-used premise that 1-order gradients can be negligi-ble is invalid in OCL, due to slow convergence incurred by insufficient learning. Additionally, we utilize a dual-model dual-view distillation strategy that can align output distribu-tions of the new and merged models for each sample, fur-ther enhancing model performance. Extensive experiments are conducted on four benchmarks in OCL settings, including CIFAR-10, CIFAR-100, Tiny-ImageNet, and ImageNet-100. Experimental results demonstrate that our method is effec-tive, and achieves a substantial boost over previous methods.
+
+## 1 Introduction 
+
+Continual learning (CL) empowers machines with human-like capability of learning and memorizing knowledge from a gradually observed data stream. Therefore, it has exten-sive prospects in real-world applications, e.g. autonomous driving (Ma et al. 2024), embodied AI (Gao et al. 2024), etc. According to availability of task identity and overlap of classes between different tasks, continual learning can be further divided into task-incremental, domain-incremental and class-incremental scenarios (van de Ven, Tuytelaars, and Tolias 2022). Currently, most CL methods learn a model on training data for multiple epochs, i.e. offline training, and hence usually suffer more from forgetting learned knowl-edge. However, online training is more common and practi-cal in realistic applications, in which data arrive sequentially and each sample is accessed for training only once, posing great challenge for continual learning. For online continual 
+
+> *Corresponding authors Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+learning (OCL), both retaining past knowledge and assimi-lating new knowledge are necessitated to achieve strong per-formance on all observed tasks. In this work, we focus on the most challenging online class-incremental learning scenario. Existing literatures mostly address OCL from the per-spective of rehearsing exemplars of past tasks (Chaudhry et al. 2019; Caccia et al. 2022). This rehearsal strategy se-lects a subset of training exemplars to be stored in memory, and adopts them during the learning process of a new task. Apart from exemplars, intermediate representations and pro-totypes can also be buffered for rehearsal (Buzzega et al. 2020; Wei et al. 2023). Some works leverage knowledge distillation (Gou et al. 2021) to alleviate imbalance prob-lem (Guo, Liu, and Zhao 2023) or maximize mutual infor-mation (Guo, Liu, and Zhao 2022). Data augmentation com-bined with contrastive learning is also adopted to learn rep-resentative features, and new augmentation techniques (Zhu et al. 2021; Guo, Liu, and Zhao 2022) are proposed specially for sufficiently exploiting information contained in exem-plars. To enhance the informativeness of each exemplar, Gu et al. (2024) made use of dataset condensation (Yu, Liu, and Wang 2024) that can reduce the number of stored exemplars. However, these prior methods focus on utilizing data or rep-resentations to indirectly affect parameter update while ig-nore the direct use of model parameters, although knowl-edge is intuitively stored in parameters. A natural question is: Is there an intuitive way to incorporate knowledge via di-rectly integrating parameters in OCL? Furthermore, due to the reliance on data or representations, the prior methods im-plicitly require multi-step local gradient descent to recover from the transient forgetting (Lange, Ven, and Tuytelaars 2022), facing more challenge in restricted online scenarios. In this paper, we explore direct parameter merging to in-corporate old and new knowledge, which are respectively stored in parameters of the old and new models. Specifi-cally, we firstly derive the posterior probability of model pa-rameters from the perspective of Bayes’ optimization, and further establish an optimization objective of OCL, which is minimizing a cumulative loss that is calculated based on data and parameters. Next, we make use of the Taylor ex-pansion of parameters to approximate the cumulative loss, since the cumulative loss of OCL can be viewed as a func-tion of model parameters. This expansion decomposes the cumulative loss into more fine-grained terms, and reveals The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 24991
+
+the underlying relationship between model parameters and the cumulative loss, which will guide our design of parame-ter merging operations. Subsequently, based on the loss ex-pansion, we propose a method of parameter merging that infuses 1-order and 2-order gradient information via super-masks, i.e. masks on top of parameters. Our parameter merg-ing is implemented by twice linear interpolations accord-ing to the relationship between parameters and loss func-tions built by the cross-task linearity. In prior works on continual learning, the 1-order gradients are usually neg-ligible because model parameters lie in a stable state af-ter multi-epoch training. However, we discover that 1-order gradients cannot be ignored in OCL because of their larger norm values than 2-order gradients, and omitting them will make obvious adverse effect on model capacity of learn-ing new knowledge. Furthermore, for the optimization ob-jective, apart from a commonly-used cross-entropy loss, we leverage a dual-model dual-view distillation strategy to align output distributions of the new and merged models over original and augmented image pairs. Extensive experiments are conducted on CIFAR-10, CIFAR-100, Tiny-ImageNet, and ImageNet-100 with various memory sizes. Results in-dicate that the performance of our method surpasses com-pared methods by a substantial margin, and further analyses demonstrate the effectiveness of the proposed method. The contributions of this work are summarized as follows: • A theoretical analysis on OCL is provided from the per-spective of Bayesian learning to establish the relationship between loss functions and model parameters, guiding the design of our method for OCL. • We propose a parameter merging method for OCL, which incorporates old and new models on the parameter-wise level, with gradient-guided supermasks that inherit infor-mation contained on 1-order and 2-order gradients. • We discover that a common practice in continual learning that omitting 1-order gradients of loss over parameters is not valid under online setting, because of slower conver-gence speed arising from insufficient one-pass training. • Extensive experiments on four widely-used OCL bench-marks validate that the proposed method is effective and achieves significant improvement over the prior methods. 
+
+## 2 Related Works 
+
+Continual Learning 
+
+Continual learning (Delange et al. 2022) enables a model to learn gradually from a sequence of tasks. The main-stream CL methods can be categorised into three strate-gies: rehearsal, regularization and dynamic architecture. Re-hearsal strategy stores a portion of exemplars from previous tasks in a memory buffer or a generative model, and reuses them in the training process of a current task (Rolnick et al. 2019). Regularization strategy constrains variation of impor-tant model parameters or intermediate outputs in order to re-tain previous knowledge (Kirkpatrick et al. 2017). Dynamic architecture strategy expands or isolates network parameters for each task (Wortsman et al. 2020). Among them, rehearsal strategy is the most popular one due to its simplicity and effectiveness. Recently, a series of works about mode con-nectivity (Garipov et al. 2018; Mirzadeh et al. 2021; Zhou et al. 2024) provides new possibility of fusing multiple mod-els trained from different tasks. Matena and Raffel (2022) proposed to weight parameters of multiple models via fisher information and average them, to obtain a unified multi-task model. Li et al. (2025) explored a closed-form optimal model merging in continual learning, which adaptively bal-ances stability and plasticity. 
+
+Online Continual Learning 
+
+Online continual learning is a more practical setting in re-alistic applications, where each sample is learned for just one pass. This online setting satisfies the demand of privacy protection and real-time processing. Most continual learn-ing methods are devised for multi-epoch training, i.e. of-fline setting, and hence have inferior performance for ad-dressing OCL. Existing OCL methods primarily adopt the rehearsal and regularization strategies, and achieve notice-able performance. ER (Rolnick et al. 2019) pointed out that storing a few samples of previous tasks and rehearsing them in the current task can achieve favorable performance. On the basis of ER, DER++ (Buzzega et al. 2020) saved ex-tra logits for regularizing training loss when learning a new task. OCM (Guo, Liu, and Zhao 2022) learned more holis-tic features and preserved the previously learned knowledge via maximizing mutual information. DVC (Gu et al. 2022) replayed samples interfered most by new samples, and ob-tained consistent representations by maximizing mutual in-formation between dual views of each image. ERACE (Cac-cia et al. 2022) modified the conventional cross-entropy loss by separating losses on the incoming stream and the stored data in memory. GSA (Guo, Liu, and Zhao 2023) recognized the gradient imbalance on logits, and proposed a gradient-based self-adaptive loss to mitigate it. PCR (Lin et al. 2023) replayed old samples and calculated contrastive loss us-ing proxies instead of anchors. CCLDC (Wang et al. 2024) utilized collaborative learning and distillation chain to im-prove model plasticity. MOSE (Yan et al. 2024) expanded the network architecture with auxiliary branches, and lever-aged multi-level supervision and reverse self-distillation to address the overfitting-underfitting dilemma. S6MOD (Liu et al. 2025) was built on selective state space model and class-conditional mixture of discretization, and developed a class-conditional routing strategy to balance model stability and plasticity. Recently, multi-objective optimization (Wu et al. 2024) and equiangular tight frame (He et al. 2024; Seo et al. 2024; Liu et al. 2025) were also explored in OCL. 
+
+## 3 Methodology 
+
+Preliminary 
+
+Our OCL protocol adopts the class-incremental scenario. The training data D = {D t}Tt=1 contain a sequence of T
+
+tasks, each of which owns data Dt = {(xti, y ti )}Nt 
+
+> i=1
+
+where 
+
+xti is an image, yti is the corresponding label, and Nt is the number of samples. We use Ct to represent the task-specific classes, and yti ∈ C t. Due to no class overlap among tasks in class-incremental scenario, we have Ci ∩ C j = ∅.24992 Our model is denoted as F (x; θ) with parameter set θ.A rehearsal-based method usually utilizes a memory buffer 
+
+M to store a few samples of seen classes. During the train-ing process of the current task, a small batch of data Bm
+
+is sampled from M, and another small batch of new data 
+
+Bs is fetched from the data stream. The model is trained jointly with data Bs ∪ B m for each update step. The data stream of all learned tasks up to the task t is denoted as 
+
+D1: t = Sti=1 Di. Note that each sample is trained for one pass, i.e. one-epoch training, to satisfy the requirement of online setting. We hence have D1: t = {B s}st 
+
+> s=1
+
+= B1: st ,where st is the total number of batches for the entire learning process with t tasks. The ultimate optimization objective of OCL is to minimize the cumulative loss on all learned tasks: 
+
+θ∗ 
+
+> st
+
+= arg min  
+
+> θ
+
+L1: t(θ; D1: t) = arg min  
+
+> θ
+
+L1: st (θ; B1: st )= arg min 
+
+> θ
+> st
+
+X
+
+> i=1
+
+Li(θ; Bi). (1) All data B1: st are not accessible arbitrarily, but seen one by one, to meet the limitation of continual learning. 
+
+Parameter Merging via Supermasks 
+
+In this section, we will analytically derive the proposed method for OCL from the perspective of Bayesian learning. Online continual learning methods aim to achieve model parameters which can maximize the posterior p(θ|B 1: s) af-ter learning s batches. According to the Bayes’ rule, the pos-terior probability is expressed as 
+
+p(θ|B 1: s) = p(B1: s|θ)p(θ)
+
+p(B1: s) , (2) where p(θ) and p(B1: s) are the prior probabilities over the parameters and all data learned so far, respectively, and 
+
+p(B1: s|θ) is the likelihood probability. After several steps of derivation, we finally can obtain 
+
+p(θ|B 1: s) = p(Bs|θ)p(θ|B 1: s−1)
+
+p(Bs|B 1: s−1) . (3) The detailed derivation is described in Sec. A of supplemen-tary material. This equation establishes a recursive relation between p(θ|B 1: s) and p(θ|B 1: s−1). According to this equa-tion, the posterior probability p(θ|B 1: s) is also formulated as 
+
+p(θ|B 1: s) ∝ p(Bs|θ)p(θ|B 1: s−1) (4) 
+
+∝
+
+> s
+
+Y
+
+> i=1
+
+p(Bi|θ)p(θ), (5) where the denominator p(Bs|B 1: s−1) in Eq. 3 is omitted since it is a constant and has no effect on optimization of 
+
+θ. The optimal parameters θ∗ 
+
+> s
+
+are expected to maximize the posterior probability p(θ|B 1: s). Therefore, we can derive: 
+
+θ∗ 
+
+> s
+
+= arg max  
+
+> θ
+
+log p(θ|B 1: s) (6) 
+
+= arg max  
+
+> θ
+
+log 
+
+> s
+
+Y
+
+> i=1
+
+p(Bi|θ)p(θ)
+
+!
+
+(7) 
+
+= arg max 
+
+> θ
+> s
+
+X
+
+> i=1
+
+log p(Bi|θ) + log p(θ) (8) 
+
+= arg min 
+
+> θ
+> s
+
+X
+
+> i=1
+
+Li(θ) = arg min  
+
+> θ
+
+L1: s(θ). (9) The second last equation is satisfied due to a loss func-tion is commonly expressed as the negative likelihood 
+
+− log p(Bi|θ), and log p(θ) has negligible effect on the optimization process because of the randomized initializa-tion. During the optimization process, model parameters are evolved along the advent of data stream as θ0
+
+> B1
+
+−→ 
+
+θ1 · · · Bs
+
+−→ θs. Eq. 9 validates the rationality of Eq. 1 from the perspective of Bayesian learning. In the following, we will revisit the cumulative loss 
+
+L1: s(θ), and based on its decomposition and the mode con-nectivity theory (Garipov et al. 2018), we will derive the up-date approach of model parameters. According to the Taylor expansion of the loss function, we can express L1: s(θs) as 
+
+L1: s(θs) ≈ L1: s(θ∗
+
+> s−1
+
+) + ( θs − θ∗
+
+> s−1
+
+)⊤∇θ L1: s(θ∗
+
+> s−1
+
+)+ 12 (θs − θ∗
+
+> s−1
+
+)⊤∇2 
+
+> θ
+
+L1: s(θ∗
+
+> s−1
+
+)( θs − θ∗
+
+> s−1
+
+)+ O  (θs − θ∗
+
+> s−1
+
+)2 , (10) where O  (θs − θ∗
+
+> s−1
+
+)2 denotes the terms with higher order than the second, ∇2 
+
+> θ
+
+L1: s(θ∗
+
+> s−1
+
+) and ∇θ L1: s(θ∗
+
+> s−1
+
+)
+
+are simplified expressions of the corresponding values of 
+
+∇2 
+
+> θ
+
+L1: s(θ) and ∇θ L1: s(θ) when θ = θ∗
+
+> s−1
+
+.In recent years, researchers establish a theory of mode connectivity that describes relationships of model parame-ters in the loss landscape (Garipov et al. 2018; Mirzadeh et al. 2021; Zhou et al. 2024). Zhou et al. (2024) proposed the cross-task linearity among model parameters, and con-firmed that it often occurs for the finetuned models, which is described as follows: 
+
+Definition (Cross-Task Linearity) . Given a pair of finetuned models (θi, θj ) ∈ Θ2 and downstream tasks Di and Dj , we say them satisfy Cross-Task Linearity (CTL) on Di ∪ D j , if 
+
+∀l ∈ [L], ∀α ∈ [0 , 1] ,
+
+f (l)(αθi +(1 −α)θj ) ≈ αf (l)(θi)+(1 −α)f (l)(θj ). (11) Since the loss is deterministically calculated according to the output of last layer of neural networks, i.e. f (L), the CTL can further lead to the following relation of loss functions: 
+
+L(αθi + (1 − α)θj ) ≈ αL(θi) + (1 − α)L(θj ). (12) The CTL tells us that the linearity of loss functions can be transmitted to the model parameters in the same way. Con-sequently, from the Taylor expansion of L1: s(θs), we can establish a corresponding relationship of model parameters, which is similar to the one of loss functions. In other words, we can now decompose a complete neural network into sev-eral subnetworks. The decomposition is implemented with the help of supermasks that incorporate information of first-order gradients and second-order gradients. Specifically, we discover that the relationship of model parameters can be 24993 constructed via applying twice the linear interpolation oper-ation that is implied in the cross-task linearity, as follows: 
+
+θ∗ 
+
+> s
+
+=  (1 − αm′′ ) ⊙ θ∗ 
+
+> s−1
+
++ αm′′ ⊙ θs
+
+
+
+⊙(1 − αm′) + αm′ ⊙ θs
+
+= (1 − αm′′ ) ⊙ θ∗ 
+
+> s−1
+
+⊙ (1 − αm′)+αm′′ ⊙ θs ⊙ (1 − αm′) + αm′ ⊙ θs
+
+= θ∗ 
+
+> s−1
+
++ αm′ ⊙ (θs − θ∗
+
+> s−1
+
+)+α(1 − αm′) ⊙ m′′ ⊙ (θs − θ∗
+
+> s−1
+
+), (13) where ⊙ is the Hadamard product, and m′ and m′′ are parameter-wise supermasks that incorporate information of 1-order and 2-order gradients, respectively. These two su-permasks are calculated as below: 
+
+m′ = σ
+
+ ∇θ L1: s(θ∗
+
+> s−1
+
+)
+
+∥θ∗
+
+> s−1
+
+∥1
+
+
+
+, (14) 
+
+m′′ = σ
+
+ ∇2 
+
+> θ
+
+L1: s(θ∗
+
+> s−1
+
+)
+
+∥θ∗
+
+> s−1
+
+∥2
+
+
+
+, (15) where σ(·) is the sigmoid function. Comparing Eq. 10 and Eq. 13, we can intuitively observe their connection that 1-order and 2-order gradients correspond to 1-order and 2-order supermasks. Prior works are usually built upon a basic premise that the 1-order gradients are near zero and hence can be omitted. In Figure 1, we plot the norm values of 1-order and 2-order gradients of layer-wise model parameters. As shown in Figure 1, the norm values of 1-order gradients are even larger than those of 2-order gradients, indicating that the 1-order gradients are non-trivial for OCL, presum-ably because of the slow convergence speed caused by one-pass training. Through elementary arithmetic derivation, we can further find that applying Eq. 13 is equivalent to firstly calculating ˆα as follows: 
+
+ˆα ← αm′ + αm′′ − α2m′ ⊙ m′′ , (16) and then performing the linear interpolation operation once, which is proved as the following: 
+
+θ∗ 
+
+> s
+
+= (1 − ˆα)θ∗ 
+
+> s−1
+
++ ˆ αθs = θ∗ 
+
+> s−1
+
+− ˆα(θ∗ 
+
+> s−1
+
+− θs)= θ∗ 
+
+> s−1
+
+− α(m′ + m′′ − αm′ ⊙ m′′ ) ⊙ (θ∗ 
+
+> s−1
+
+− θs)= θ∗ 
+
+> s−1
+
++ αm′ ⊙ (θs − θ∗
+
+> s−1
+
+)+α(1 − αm′) ⊙ m′′ ⊙ (θs − θ∗
+
+> s−1
+
+).
+
+In regarding to Eq. 15, computing the Hessian matrix 
+
+∇2 
+
+> θ
+
+L1: s can be formidable due to the large scale of model parameters. To alleviate the computation cost, we approxi-mate the Hessian matrix using the Fisher information ma-trix (Kirkpatrick et al. 2017), which is constructed by 
+
+F1: s(θ) = E
+
+h
+
+∇θ log p(B1: s|θ) ( ∇θ log p(B1: s|θ)) ⊤i
+
+.
+
+(17) Furthermore, F1: s(θ) can be empirically simplified as 
+
+˜F1: s(θ) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(∇θ log p(xi, y i|θ)) 2 , (18) where each sample (xi, y i) belongs to B1: s in the implemen-tation of our method. 0 10 20 30 40 50 60 
+
+> Parameter Index
+> 10 −4
+> 10 −3
+> 10 −2
+> 10 −1
+> 10 0
+> 10 1
+> Norm of Gradients
+> 1-order 2-order
+
+Figure 1: Norm of 1-order and 2-order gradients on parame-ters in OCL. l2-norm is used as measure in this experiment. 
+
+Optimization Objective 
+
+The optimization loss of our method is composed of two parts. One is a common cross-entropy loss computed as: 
+
+Lce = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+log eFyi (xi;θ)
+
+P 
+
+> y
+
+eFy (xi;θ)
+
+!
+
+, (19) where Fyi (xi; θ) denotes the output logit of class yi for the input image xi. Additionally, Wang et al. (2024) and Michel et al. (2024) validated the effectiveness of multi-model and multi-view distillation. In our method, there are two models 
+
+θs and θ∗ 
+
+> s
+
+whose knowledge can be mutually exchanged, because the former captures new knowledge while the latter mainly memorizes past knowledge. Therefore, we utilize the dual-model dual-view distillation strategy to further boost model performance, which is formulated as the other loss term: 
+
+Lkd = 12N
+
+> N
+
+X
+
+> i=1
+
+
+
+F (xi; θ∗ 
+
+> s
+
+) log F (xi; θ∗ 
+
+> s
+
+)
+
+F ( ˆ xi; θs)+ F ( ˆ xi; θ∗ 
+
+> s
+
+) log F ( ˆ xi; θ∗ 
+
+> s
+
+)
+
+F ( ˆ xi; θs)
+
+
+
+, (20) where ˆxi = DataAug( xi). Our final loss is a weighted sum of these two losses with a balance coefficient λ:
+
+Ltotal = Lce + λLkd . (21) Our complete method is summarized in Algorithm 1. 
+
+## 4 Experiments 
+
+Experimental Setup 
+
+Baselines. We primarily compare the proposed method with ER (Chaudhry et al. 2019), DER++ (Buzzega et al. 2020), ERACE (Caccia et al. 2022), GSA (Guo, Liu, and Zhao 2023), OnPro (Wei et al. 2023), OCM (Guo, Liu, and Zhao 2022), CCLDC (Wang et al. 2024), MOSE (Yan et al. 2024), and S6MOD (Liu et al. 2025). Among them, ER and DER++ can tackle both online and offline CL settings, while the rest are specifically devised for OCL. CCLDC and S6MOD are 24994 Dataset CIFAR-10 CIFAR-100 Tiny-ImageNet Memory 500 1000 1000 2000 5000 2000 5000 10000 ER 55.73 ±2.04 62.99 ±2.10 23.00 ±0.80 31.55 ±1.27 38.05 ±1.08 11.39 ±0.75 18.97 ±1.16 21.52 ±3.37 
+
+DER++ 55.53 ±1.05 58.51 ±0.68 22.80 ±1.80 25.89 ±1.46 25.71 ±2.40 3.89 ±0.64 4.28 ±0.51 4.16 ±0.32 
+
+ERACE 52.65 ±1.37 61.45 ±1.47 27.40 ±0.60 32.88 ±0.63 39.61 ±0.53 14.79 ±0.95 22.25 ±1.69 26.64 ±0.91 
+
+GSA 61.45 ±1.95 67.63 ±1.24 29.68 ±1.54 36.96 ±0.79 45.86 ±1.89 15.77 ±0.72 22.48 ±0.4 28.46 ±1.85 
+
+PCR 60.61 ±2.23 61.66 ±1.39 30.68 ±0.81 38.63 ±1.01 45.27 ±0.78 12.47 ±3.56 20.41 ±2.84 23.85 ±4.21 
+
+OCM 68.46 ±0.79 72.79 ±2.36 29.30 ±1.55 36.70 ±0.58 41.87 ±1.52 19.58 ±0.63 27.85 ±1.03 32.56 ±1.37 
+
+CCLDC 66.43 ±2.48 74.10 ±1.71 33.43 ±1.06 44.45 ±1.04 53.81 ±1.16 16.56 ±1.63 29.39 ±1.23 37.73 ±0.85 
+
+MOSE 61.02 ±1.47 70.74 ±1.18 35.05 ±0.34 45.06 ±0.32 54.53 ±0.78 18.23 ±0.73 30.98 ±0.63 38.71 ±0.44 
+
+S6MOD 57.88 ±3.30 65.80 ±2.16 26.50 ±2.23 34.55 ±1.66 39.61 ±3.16 10.94 ±1.47 19.67 ±1.36 25.62 ±1.73 
+
+Ours 67.71 ±1.29 74.12 ±0.38 38.35 ±0.43 45.56 ±0.42 52.19 ±0.66 23.59 ±0.63 31.82 ±0.25 37.86 ±0.35 
+
+Table 1: Average end accuracy (%) on CIFAR-10, CIFAR-100, and Tiny-ImageNet datasets with varied memory sizes. The best results are bold while the second best results are underlined. Algorithm 1: Parameter Merging via Supermasks 
+
+Input : stream data D = {D t}Tt=1 = {B s}sT
+
+> s=1
+
+, initialized parameters θ0, balance coefficient λ, learning rate η
+
+Output : updated parameters θ∗ 
+
+> s
+> 1:
+
+Initialize memory M ← ∅ , and parameters θ∗ 
+
+> 0
+
+← ∅  
+
+> 2:
+
+for t ∈ { 1, · · · , T } do  
+
+> 3:
+
+for Bs ∼ D t do  
+
+> 4:
+
+Sample a mini-batch B = Bs ∪ B m, Bm ∼ M  
+
+> 5:
+
+Compute Lce and Lkd based on Eq. 19 and 20  
+
+> 6:
+
+Backpropagate and Update parameters: 
+
+θs ← θs−1 − η · ∇ θ [Lce + λ · L kd ] 
+
+> 7:
+
+Compute supermasks m′ and m′′ by Eq. 14 and 15  
+
+> 8:
+
+Compute parameters θ∗ 
+
+> s
+
+according to Eq. 13  
+
+> 9:
+
+Update memory: M ← Update( M, Bs) 
+
+> 10:
+
+end for  
+
+> 11:
+
+end for  
+
+> 12:
+
+return Updated parameters θ∗
+
+> s
+
+implemented based on ER. Our method is also built upon ER and follows its memory update strategy. 
+
+Datasets. The performance of our method is evaluated on popular image classification datasets, including CIFAR-10 (Krizhevsky and Hinton 2009), CIFAR-100 (Krizhevsky and Hinton 2009), Tiny-ImageNet (Le and Yang 2015), and ImageNet-100 (Deng et al. 2009). We split CIFAR-10 into 5 disjoint tasks with 2 classes per task, CIFAR-100 into 10 disjoint tasks with 10 classes per task, Tiny-ImageNet into 100 disjoint tasks with 2 classes per task, and ImageNet-100 into 20 disjoint tasks with 5 classes per task. 
+
+Implementation details. For fair comparison, we follow (Guo, Liu, and Zhao 2022) and use full ResNet18 (He et al. 2016) as the feature extractor and a linear layer as the clas-sifier on all four datasets. Our model is trained from scratch with the Adam optimizer and the learning rate is set to 
+
+0.0005 . The batch size of Bs is set to 10 and that of Bm is fixed as 64 , following the guidelines of (Guo, Liu, and Zhao 2022). Data augmentations of our method include random crop, random horizontal flip, color jitter and grayscale, and the baselines retain their original data augmentations. The coefficient λ in Eq. 21 is set to 5.5, and α in Eq. 13 is set to 
+
+0.01 by default. 
+
+Metrics. In our experiments, we use the average end ac-curacy (EndACC) to measure the overall performance, the learning accuracy (LACC) to evaluate model capability of fastly learning a new seen task, and the average forget-ting measure (FM) to capture the maximal performance de-cline on previous tasks. Reported results of our method is averaged over 5 runs with different random seeds set to 
+
+0, 1, 2, 3, 4. More specifications of experimental setup are provided in Sec. B of supplementary material. 
+
+Main Results 
+
+The proposed method is compared with a few typical and state-of-the-art methods in various settings of OCL. Exper-imental results on CIFAR-10, CIFAR-100, Tiny-ImageNet and ImageNet-100 are reported in Table 1, Table 2 and Ta-ble 7 (in Sec.C of supplementary material). Table 1 shows the average end accuracy of multiple meth-ods with varied memory sizes. As can be observed, our method achieves five best and two second best average end accuracies under the total eight settings. For example, on Tiny-ImageNet, our method surpasses the second best methods by 4.01% and 2.43% with memory size 2000 and 5000, respectively. From the results, we find that MOSE has strong performance due to its expanded structure, and achieves two best performance on CIFAR-100 (M=5000) and Tiny-ImageNet (M=10000). Nevertheless, our method outperforms it on the remaining six settings with gains rang-ing from 0.5% to 6.69%. Moreover, the reported results in Table 1 suggest that our method can achieve better perfor-mance when the memory size is small, indicating that our method does not rely on a sufficient large memory buffer compared to the remaining methods. For example, when the memory size decreases from 2000 to 1000 on CIFAR-100, the performance gap between our method and the second best method MOSE increases from 0.5% to 3.3%. The sim-ilar phenomena can also be found on CIFAR-10 and Tiny-ImageNet. This is because our method endows the vision 24995 Dataset CIFAR-10 CIFAR-100 Tiny-ImageNet Memory 500 1000 1000 2000 5000 2000 5000 10000 ER 33.16 ±3.50 20.94 ±6.79 32.65 ±1.78 22.20 ±2.26 13.29 ±1.98 58.38 ±1.69 46.87 ±1.60 40.77 ±2.45 
+
+DER++ 26.79 ±4.21 18.21 ±6.32 33.21 ±4.77 30.86 ±3.42 30.28 ±3.90 29.31 ±1.97 26.98 ±1.31 26.48 ±1.79 
+
+ERACE 15.25 ±0.99 11.73 ±2.71 15.33 ±0.63 11.13 ±1.57 6.26 ±1.50 20.66 ±0.29 18.93 ±0.58 16.53 ±0.52 
+
+GSA 21.10 ±2.17 16.09 ±0.76 30.24 ±0.90 19.97 ±1.66 9.02 ±0.90 29.03 ±0.65 25.05 ±0.68 22.48 ±0.90 
+
+PCR 27.88 ±4.97 26.53 ±14.52 34.34 ±1.03 25.88 ±0.49 16.09 ±1.03 38.23 ±6.45 28.43 ±4.88 26.40 ±8.60 
+
+OCM 13.68 ±4.25 11.63 ±2.62 14.99 ±1.55 9.16 ±1.75 3.76 ±1.16 26.12 ±1.63 19.74 ±1.30 15.92 ±1.47 
+
+CCLDC 30.22 ±3.75 19.85 ±2.55 43.28 ±1.67 29.35 ±1.50 16.88 ±1.99 69.56 ±1.54 53.13 ±0.85 42.63 ±0.80 
+
+MOSE 30.36 ±1.69 20.27 ±1.27 37.54 ±0.43 25.89 ±0.45 13.60 ±0.59 47.16 ±1.41 24.96 ±0.62 15.51 ±0.33 
+
+S6MOD 31.25 ±3.44 16.71 ±2.86 30.96 ±2.07 19.02 ±2.13 12.97 ±2.61 58.03 ±2.19 45.83 ±1.49 37.62 ±1.53 
+
+Ours 22.33 ±1.67 11.88 ±1.52 16.83 ±1.15 11.02 ±0.52 5.65 ±1.24 23.78 ±0.41 17.83 ±0.35 12.27 ±0.49 
+
+Table 2: Average forgetting measure (%) on CIFAR-10, CIFAR-100, and Tiny-ImageNet datasets with varied memory sizes. Method Components CIFAR-10 (M=500) CIFAR-100 (M=1000) Base 1-order 2-order KD EndACC LACC Avg. EndACC LACC Avg. 
+
+✓ 56.71 ±2.65 83.20 ±2.54 69.96 23.35 ±1.25 54.81 ±1.16 39.08 
+
+✓ ✓ ✓ 60.98 ±0.64 86.21 ±0.88 73.60 28.43 ±0.32 57.36 ±0.75 42.90 
+
+✓ ✓ ✓ 68.04 ±0.86 78.29 ±0.59 73.17 38.34 ±0.31 26.08 ±1.69 32.21 
+
+✓ ✓ ✓ 68.41 ±1.15 79.69 ±1.25 74.05 38.64 ±0.39 26.06 ±1.60 32.35 
+
+✓ ✓ ✓ ✓ 67.71 ±1.29 85.34 ±0.65 76.53 38.35 ±0.43 49.57 ±1.14 43.96 
+
+Table 3: Ablation study on different components of our method. “Base” is the baseline method - ER; “1-order” and “2-order” represent using supermasks built on 1-order and 2-order gradients, respectively; “KD” denotes the dual-model dual-view distil-lation strategy. “Avg.” denotes the average of EndAcc and LACC. model with the capacity of memorizing knowledge partially via direct parameter operations, beyond repetitive use of old data stored in memory. In addition, we also conduct experi-ments on a large-scale dataset ImageNet-100, of which im-ages have higher resolution, as reported in Table 7 of supple-mentary material. Our method consistently surpasses com-pared ones with varied memory sizes by 28.70% at most. Table 2 reports the average forgetting of different meth-ods. This metric reflects the model capacity of retaining past knowledge. Although OCM achieves the lowest average for-getting in most settings, its capacity of learning new knowl-edge is compromised as revealed in Table 1. Our method ob-tains the top three best average forgetting on CIFAR-10 and CIFAR-100, primarily behind ERACE and OCM. Neverthe-less, our method still performs best on a larger scale dataset Tiny-ImageNet. From Table 2, we observe that the average forgetting of MOSE is particularly severe, nearly double of ours, reflecting that its high average end accuracies benefit more from the ability of learning new knowledge. The sim-ilar phenomenon occurs on CCLDC as well. These results validate that our method achieves better balance between re-taining past knowledge and learning new knowledge. 
+
+In-Depth Studies 
+
+In this section, we delve deep into several studies to ana-lyze the effectiveness and contributions of different compo-nents and choices made in our method. In addition, we visu-alize loss landscape and detailed accuracy curve to provide more intuitive comparisons between our method and others. We also study performance of our method in more restricted and realistic conditions, e.g. smaller memory size and blurry boundary between tasks. Some results are reported in Sec. C of supplementary material, due to excess of page limit. 
+
+Component analysis. To validate the effectiveness of each component, we conduct an ablation study on CIFAR-10 and CIFAR-100, and the related results are presented in Table 3. It is observed that only adding our supermasks of 1-order and 2-order gradients on the baseline will improve the aver-age end accuracy and simultaneously bring large gain on the learning accuracy, revealing that they improve model capac-ity of learning new knowledge. On this basis, applying dual-model dual-view distillation can further improve the aver-age end accuracy. This distillation strategy mainly focuses on anti-forgetting, and hence slightly weakens learning ca-pacity. Despite this, applying these components together can achieve a relatively better balance between anti-forgetting and learning new knowledge. These results demonstrate the effectiveness of each component of our method. 
+
+Significance of two types of supermasks. To verify that the 1-order and 2-order supermasks are both indispensable, we compare the accuracy matrices on CIFAR-100 in Fig-ure 2. We can observe that using only 1-order or 2-order supermasks will result in compromised accuracies on cur-rent new tasks, indicating the model’s weak capability of learning new knowledge. However, applying both 1-order and 2-order supermasks will eliminate this negative effect. 24996 λ 0.0 4.0 4.5 5.0 5.5 6.0 6.5 7.0 Ours 28.43 ±0.32 38.21 ±0.32 38.14 ±0.62 38.32 ±0.27 38.35 ±0.43 38.26 ±0.24 38.58 ±0.20 38.36 ±0.54 
+
+Table 4: Sensitivity analysis on the balance coefficient λ of our method. The experiments are conducted on 10-Split CIFAR-100 with memory size 1000. Average end accuracy is reported as mean ±std, which is computed over 5 runs with different seeds. 0 1 2 3 4 5 6 7 8 901234567890.4 0.6 0.3 0.5 0.6 0.3 0.5 0.6 0.6 0.3 0.5 0.5 0.6 0.5 0.3 0.5 0.5 0.6 0.5 0.5 0.3 0.4 0.5 0.6 0.4 0.5 0.5 0.2 0.4 0.4 0.5 0.4 0.5 0.5 0.4 0.3 0.4 0.4 0.5 0.4 0.5 0.4 0.4 0.5 0.2 0.4 0.4 0.5 0.4 0.4 0.4 0.3 0.4 0.5 0.2                   
+
+> (a) Using 1-order gradients
+> 012345678901234567890.4 0.6 0.3 0.6 0.6 0.3 0.5 0.6 0.6 0.2 0.5 0.5 0.6 0.5 0.3 0.5 0.5 0.5 0.5 0.5 0.3 0.4 0.5 0.6 0.4 0.5 0.5 0.2 0.4 0.4 0.5 0.4 0.5 0.5 0.4 0.3 0.4 0.4 0.5 0.4 0.5 0.4 0.3 0.5 0.3 0.3 0.4 0.5 0.4 0.4 0.4 0.3 0.5 0.5 0.2
+> (b) Using 2-order gradients
+> 012345678901234567890.6 0.6 0.5 0.5 0.6 0.5 0.5 0.5 0.6 0.5 0.4 0.5 0.6 0.5 0.5 0.4 0.5 0.5 0.4 0.6 0.5 0.4 0.4 0.5 0.4 0.5 0.5 0.4 0.4 0.4 0.5 0.4 0.4 0.4 0.4 0.5 0.3 0.4 0.5 0.4 0.4 0.4 0.3 0.5 0.5 0.3 0.3 0.5 0.4 0.4 0.3 0.3 0.5 0.5 0.4
+> (c) Using 1-order and 2-order gradients
+> 0.25 0.30 0.35 0.40 0.45 0.50 0.55
+> 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60
+> 0.30 0.35 0.40 0.45 0.50 0.55 0.60
+
+Figure 2: Effect of 1-order and 2-order gradients on accuracies of each task over 10-Split CIFAR-100. The abscissa represents the task step while the ordinate describes the task identifier. −0.50−0.25 0.00 0.25 0.50 0.75 1.00 1.25 1.50 012345
+
+> Loss
+> 020 40 60 80 100
+> Accuracy
+
+Figure 3: Loss curve and accuracy curve along a linear path between two models separately trained by ER and our method under the OCL setting. The two models are trained on CIFAR-10 with memory size 1000. This is because both 1-order and 2-order gradients are non-negligible in OCL as revealed by Figure 1, and play an im-portant role in correctly capturing influence of loss on up-dating model parameters. More results and analyses are re-ported in Sec. C of supplementary material. 
+
+Sensitivity to balance coefficient. In order to analyze the sensitivity to the balance coefficient λ in Eq. 21, we vary its value to record the variation of average end accuracy. This experiment is conducted on CIFAR-100 (M=1000), and the results are reported in Table 4. We can find that setting λ
+
+to 0, i.e. no use of dual-model dual-view distillation, will vastly decrease the average end accuracy. Nonetheless, the slight perturbation around our pre-defined value ( λ = 5 .5)has negligible effect on model performance, indicating that our method is insensitive to the value of balance coefficient. 
+
+Visualizing loss landscape. To study generalization and ro-bustness (Foret et al. 2021), we plot a loss curve and an accu-racy curve of a model with the parameters that are obtained by linear interpolation between the baseline model and ours. The curves are depicted in Figure 3, where our model lies at 1.00 whereas the baseline model lies at 0.00 . We can ob-serve that the path linearly connecting them will undergo an increase of loss and a prominent drop of accuracy, revealing that the two models are not located in a small local region. Moreover, we visualize loss landscapes of these two models with random perturbed directions in Figure 6 of supplemen-tary material. The loss landscape of our model is flatter than that of the baseline model, implying that the model obtained by our method has greater generalization and robustness. These results indicate that our method substantially achieves a more generalizable and robust solution. 
+
+## 5 Conclusions 
+
+In this paper, we study the online continual learning (OCL). We firstly formulate the optimization objective of OCL based on the Bayesian perspective, and then derive the rela-tionship between loss functions and parameters. Built upon our theoretical analysis, we subsequently propose a param-eter merging approach that leverages supermasks guided by 1-order and 2-order gradient information. We further point out that a widely-used premise that 1-order gradients are negligible is invalid in the context of OCL. This is because the model does not converge to a stable state due to insuf-ficient training. Moreover, we utilize an extra dual-model dual-view distillation to enable the entire learning process of our method. Extensive experiments validate that our method is effective and shows superior performance over prior ad-vanced methods. Our method uncovers a theory-grounded approach to decompose neural networks. Benefitting from the constructed relationship between loss and parameters, the basic operations on loss can be transmitted to parameters in an analogous manner. We think it is a promising avenue to explore wider implications of mode connectivity theory. 24997 Acknowledgements 
+
+This work was supported by the National Science and Tech-nology Major Project under Grant 2021ZD0112001, the Na-tional Natural Science Foundation of China under Grant U23A20286 and Grant 62301121, and the Postdoctoral Fel-lowship Program (Grade B) of China Postdoctoral Science Foundation under Grant GZB20240120. 
+
+## References 
+
+Buzzega, P.; Boschini, M.; Porrello, A.; Abati, D.; and CALDERARA, S. 2020. Dark Experience for General Con-tinual Learning: a Strong, Simple Baseline. In Advances in Neural Information Processing Systems , volume 33, 15920– 15930. Caccia, L.; Aljundi, R.; Asadi, N.; Tuytelaars, T.; Pineau, J.; and Belilovsky, E. 2022. New Insights on Reducing Abrupt Representation Change in Online Continual Learning. In 
+
+International Conference on Learning Representations .Chaudhry, A.; Rohrbach, M.; Elhoseiny, M.; Ajanthan, T.; Dokania, P. K.; Torr, P. H. S.; and Ranzato, M. 2019. On Tiny Episodic Memories in Continual Learning. In Proceed-ings of the International Conference on Machine Learning .Delange, M.; Aljundi, R.; Masana, M.; Parisot, S.; Jia, X.; Leonardis, A.; Slabaugh, G.; and Tuytelaars, T. 2022. Acontinual learning survey: Defying forgetting in classifica-tion tasks. IEEE Transactions on Pattern Analysis and Ma-chine Intelligence , 44(7): 3366–3385. Deng, J.; Dong, W.; Socher, R.; Li, L.-J.; Li, K.; and Fei-Fei, L. 2009. ImageNet: A large-scale hierarchical image database. In 2009 IEEE Conference on Computer Vision and Pattern Recognition , 248–255. Foret, P.; Kleiner, A.; Mobahi, H.; and Neyshabur, B. 2021. Sharpness-aware Minimization for Efficiently Improving Generalization. In International Conference on Learning Representations .Gao, C.; Liu, S.; Chen, J.; Wang, L.; Wu, Q.; Li, B.; and Tian, Q. 2024. Room-Object Entity Prompting and Reason-ing for Embodied Referring Expression. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(2): 994– 1010. Garipov, T.; Izmailov, P.; Podoprikhin, D.; Vetrov, D. P.; and Wilson, A. G. 2018. Loss Surfaces, Mode Connectivity, and Fast Ensembling of DNNs. In Advances in Neural Informa-tion Processing Systems , volume 31. Gou, J.; Yu, B.; Maybank, S. J.; and Tao, D. 2021. Knowl-edge Distillation: A Survey. International Journal of Com-puter Vision , 129(6): 1789–1819. Gu, J.; Wang, K.; Jiang, W.; and You, Y. 2024. Summariz-ing Stream Data for Memory-Constrained Online Continual Learning. In Proceedings of the AAAI Conference on Artifi-cial Intelligence , 12217–12225. Gu, Y.; Yang, X.; Wei, K.; and Deng, C. 2022. Not Just Se-lection, but Exploration: Online Class-Incremental Contin-ual Learning via Dual View Consistency. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 7442–7451. Guo, Y.; Liu, B.; and Zhao, D. 2022. Online Continual Learning through Mutual Information Maximization. In 
+
+Proceedings of the International Conference on Machine Learning , 8109–8126. PMLR. Guo, Y.; Liu, B.; and Zhao, D. 2023. Dealing With Cross-Task Class Discrimination in Online Continual Learning. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 11878–11887. He, K.; Zhang, X.; Ren, S.; and Sun, J. 2016. Deep Residual Learning for Image Recognition. In 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 770– 778. He, Y.; Chen, Y.; Jin, Y.; Dong, S.; Wei, X.; and Gong, Y. 2024. DYSON: Dynamic Feature Space Self-Organization for Online Task-Free Class Incremental Learning. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23741–23751. Kirkpatrick, J.; Pascanu, R.; Rabinowitz, N.; Veness, J.; Des-jardins, G.; Rusu, A. A.; Milan, K.; Quan, J.; Ramalho, T.; Grabska-Barwinska, A.; Hassabis, D.; Clopath, C.; Ku-maran, D.; and Hadsell, R. 2017. Overcoming catastrophic forgetting in neural networks. Proceedings of the Na-tional Academy of Sciences of the United States of America ,114(13): 3521–3526. Krizhevsky, A.; and Hinton, G. 2009. Learning Multiple Layers of Features from Tiny Images. Technical Report TR-2009, University of Toronto, Toronto. Lange, M. D.; Ven, G. M. v. d.; and Tuytelaars, T. 2022. Continual evaluation for lifelong learning: Identifying the stability gap. In International Conference on Learning Rep-resentations .Le, Y.; and Yang, X. 2015. Tiny ImageNet Visual Recogni-tion Challenge. CS 231N. Li, M.; Lu, Y.; Dai, Q.; Huang, S.; Ding, Y.; and Lu, H. 2025. BECAME: Bayesian Continual Learning with Adap-tive Model Merging. In Proceedings of the International Conference on Machine Learning .Lin, H.; Zhang, B.; Feng, S.; Li, X.; and Ye, Y. 2023. PCR: Proxy-Based Contrastive Replay for Online Class-Incremental Continual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 24246–24255. Liu, S.; Yang, Y.; Li, X.; Clifton, D. A.; and Ghanem, B. 2025. Enhancing Online Continual Learning with Plug-and-Play State Space Model and Class-Conditional Mixture of Discretization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 20502–20511. Ma, X.; Ouyang, W.; Simonelli, A.; and Ricci, E. 2024. 3D Object Detection From Images for Autonomous Driving: A Survey. IEEE Transactions on Pattern Analysis and Ma-chine Intelligence , 46(5): 3537–3556. Matena, M. S.; and Raffel, C. 2022. Merging Models with Fisher-Weighted Averaging. In Advances in Neural Infor-mation Processing Systems .24998 Michel, N.; Wang, M.; Xiao, L.; and Yamasaki, T. 2024. Re-thinking Momentum Knowledge Distillation in Online Con-tinual Learning. In Proceedings of the International Confer-ence on Machine Learning , 35607–35622. Mirzadeh, S. I.; Farajtabar, M.; Gorur, D.; Pascanu, R.; and Ghasemzadeh, H. 2021. Linear Mode Connectivity in Mul-titask and Continual Learning. In International Conference on Learning Representations .Rolnick, D.; Ahuja, A.; Schwarz, J.; Lillicrap, T.; and Wayne, G. 2019. Experience Replay for Continual Learning. In Advances in Neural Information Processing Systems .Seo, M.; Koh, H.; Jeung, W.; Lee, M.; Kim, S.; Lee, H.; Cho, S.; Choi, S.; Kim, H.; and Choi, J. 2024. Learning Equi-angular Representations for Online Continual Learning. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 23933–23942. van de Ven, G. M.; Tuytelaars, T.; and Tolias, A. S. 2022. Three types of incremental learning. Nature Machine Intel-ligence , 1–13. Wang, M.; Michel, N.; Xiao, L.; and Yamasaki, T. 2024. Im-proving Plasticity in Online Continual Learning via Collab-orative Learning. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , 23460– 23469. Wei, Y.; Ye, J.; Huang, Z.; Zhang, J.; and Shan, H. 2023. Online Prototype Learning for Online Continual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision , 18764–18774. Wortsman, M.; Ramanujan, V.; Liu, R.; Kembhavi, A.; Rastegari, M.; Yosinski, J.; and Farhadi, A. 2020. Super-masks in superposition. In Advances in Neural Information Processing Systems .Wu, Y.; Wang, H.; Zhao, P.; Zheng, Y.; Wei, Y.; and Huang, L.-K. 2024. Mitigating Catastrophic Forgetting in Online Continual Learning by Modeling Previous Task Interrela-tions via Pareto Optimization. In Proceedings of the Inter-national Conference on Machine Learning , 53892–53908. Yan, H.; Wang, L.; Ma, K.; and Zhong, Y. 2024. Orchestrate Latent Expertise: Advancing Online Continual Learning with Multi-Level Supervision and Reverse Self-Distillation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .Yu, R.; Liu, S.; and Wang, X. 2024. Dataset Distillation: A Comprehensive Review. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(1): 150–170. Zhou, Z.; Chen, Z.; Chen, Y.; Zhang, B.; and Yan, J. 2024. On the Emergence of Cross-Task Linearity in Pretraining-Finetuning Paradigm. In Proceedings of the International Conference on Machine Learning .Zhu, F.; Cheng, Z.; Zhang, X.-y.; and Liu, C.-l. 2021. Class-Incremental Learning via Dual Augmentation. In Advances in Neural Information Processing Systems .24999

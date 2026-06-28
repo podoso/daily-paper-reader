@@ -1,0 +1,436 @@
+Title: SegMem-RAG: Adaptive Memory for Retrieval-Augmented Generation in Open-Ended Knowledge Environments
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40320/44281
+
+Number of Pages: 9
+
+Markdown Content:
+# SEG MEM -RAG: Adaptive Memory for Retrieval-Augmented Generation in Open-Ended Knowledge Environments 
+
+# Xuanbo Fan 1, 2, 3 , Tianqi Zhao 3, Yi Cheng 3, Chi Xiu 3, Jiaxin Guo 1, 2 , Boci Peng 1, 2 , Bingjing Xu 3,Jessica Zhang 3, Feng Sun 3, Yan Zhang 1, 2*  
+
+> 1
+
+School of Intelligence Science and Technology, Peking University, Beijing, China  
+
+> 2
+
+State Key Laboratory of General Artificial Intelligence, Peking University, Beijing, China  
+
+> 3
+
+Microsoft Corporation, Beijing, China 
+
+{xuanbo.fan,guojiaxin,bcpeng }@stu.pku.edu.cn, 
+
+{tiazhao,chengyi, chxiu, mirrorxu,jessicaz,sunfeng }@microsoft.com, zhyzhy001@pku.edu.cn 
+
+Abstract 
+
+Retrieval-Augmented Generation (RAG) improves the fac-tual accuracy of large language models by grounding re-sponses in external content. However, most RAG systems assume access to static and well-organized corpora with fixed retrieval logic. In practice, real-world sources are het-erogeneous and unlabeled, including user-uploaded docu-ments, manuals, and datasets. Effective access in such set-tings requires adaptive and self-directed retrieval behavior. We present S EG MEM -RAG, a memory-augmented RAG framework that learns to route queries across multiple unla-beled corpora based on experience. It incrementally updates a structured memory and uses self-reflection to guide retrieval over time without supervision. Experimental results demon-strate that S EG MEM -RAG significantly outperforms recent baselines in generation quality on multi-corpus QA tasks. 
+
+# Introduction 
+
+Retrieval-Augmented Generation (RAG) has emerged as a compelling strategy to improve the factual accuracy of large language models (LLMs) by grounding outputs in external sources(Touvron et al. 2023; Zhao et al. 2023). By retriev-ing relevant, up-to-date information, RAG reduces halluci-nations and enhances response quality across both open-domain and specialized tasks(Arslan et al. 2024). While RAG systems have seen wide adoption(Fan et al. 2024; Leng et al. 2024), they are typically designed for static and organized corpora with well-defined retrieval con-figurations. In contrast, real-world environments present a more volatile and loosely structured landscape, where con-tent changes frequently and supervision—such as annota-tions or metadata—is sparse or outdated. Figure 1 illus-trates a typical failure: the system selects an outdated manual while overlooking a more relevant changelog, resulting in a factually incorrect answer. This scenario poses three fundamental challenges: First ,users typically interact with a single unified interface, such as a chatbot or enterprise search portal, without specifying 
+
+> *
+
+Corresponding author Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. User             
+
+> Import Knowledge LLM
+> Missed
+> Why does the config command fail on version 2.3 ?
+> Manual Forum
+> Changelog Doc Archive
+> Notes
+> Presentations
+> FAQ
+> Selected
+> Try using config --init. (Incorrect )
+> Config was removed in 2.3
+> You can use config --init.
+
+# 😢 
+
+# ❌
+
+Figure 1: Illustration of incorrect retrieval in open-ended en-vironments: the LLM selects a suboptimal source, resulting in a factually incorrect answer. which knowledge source to query. The system must there-fore autonomously determine where to retrieve from, what to retrieve, and how to organize the results into coherent out-puts. Second , knowledge sources vary widely in structure, granularity, and style, and new content may be introduced or deprecated over time. Retrieval pipelines with static corpus configurations or hand-crafted source selection rules lack the flexibility to adapt to such heterogeneity. Third , as knowl-edge sources evolve and expand over time, labeled data and query logs quickly become outdated or unavailable. This makes it infeasible to rely on static supervision or hand-crafted retrieval logic. Prior works has tackled aspects of this problem. Retrieval planners such as ResLLM (Wang et al. 2025) and Omni-RAG (Chen et al. 2025) learn corpus selection over multi-ple sources, but require retraining when knowledge changes. In-session agents like ReAct (Yao et al. 2023) and Reflex-ion (Shinn et al. 2023) use step-by-step reasoning, yet lack mechanisms to carry learning across sessions or corpora. Interface-based methods like EasyTool (Yuan et al. 2024) and DRAFT (Qu et al. 2025) rely on tool descriptions or APIs, cannot generalize to open-ended, non-programmatic sources, unfortunately sometimes. These limitations point to the need for a self-guided RAG 
+
+paradigm, where the system actively plans, monitors, and The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+30647 adjusts its own retrieval and generation process—without re-lying on fixed rules or external supervision. Specifically, a effective self-guided RAG system demands three key cogni-tive capabilities: (1) Localized Planning : the ability to iso-late each retrieval decision from distracting or misleading associations, enabling the system to reason clearly over the relevant decision space. (2) Retrieval Awareness : the ca-pacity to reflect on whether the retrieved content genuinely fulfills the intended information need, rather than treating re-trieval as a blind, one-shot operation. (3) Adaptive Learn-ing : the ability to revise retrieval behavior over time by ac-cumulating feedback from past interactions, gradually pro-moting reliable sources and suppressing ineffective ones. To realize these, we introduce S EG MEM -RAG, a mod-ular framework designed for continual adaptation in open-ended knowledge environments. It is carefully designed to support robust, self-guided reasoning through three tightly integrated components: 
+
+Segment Planner. Inspired by Event Segmentation The-ory in cognitive science, this component decomposes the overall reasoning process into localized segments , each han-dling a focused decision step such as selecting a source or composing a subquery. Segment wise reasoning allows the system to operate in bounded contexts, reduce noise from ir-relevant memory, and maintain attention on the most salient retrieval decisions. 
+
+Feedback Evaluator. Drawing on principles of genera-tive learning , this component monitors the outcome of each retrieval segment and generates natural language feedback that reflects success or failure. Rather than relying on ex-ternal supervision, it performs lightweight self evaluation by contrasting retrieved content with intended information needs, producing signals that inform future planning. 
+
+Memory Controller. To support adaptation over time, SEG MEM RAG maintains a symbolic, multi level memory architecture spanning procedural, semantic, and episodic layers. This structured memory encodes retrieval behaviors, source characteristics, and historical outcomes. During in-ference, it is queried symbolically to guide source selection and strategy refinement, enabling the system to learn from experience without retraining. Together, these components enable S EG MEM -RAG to plan, reflect, and adapt its own retrieval process—supporting continual self-improvement in dynamic, unlabeled knowl-edge environments. We validate S EG MEM -RAG on multi-corpus question answering tasks under weak supervi-sion, demonstrating consistent gains over strong retrieval-augmented baselines. Our main contributions are: • We formalize the problem of retrieval in dynamic, unlabeled knowledge environments where sources are volatile, heterogeneous, and unsupervised sources, and construct a benchmark by composing existing corpora. • We introduce SEG MEM -RAG, a self-guided RAG framework that integrates segment-wise planning, sym-bolic feedback, and structured memory. • We demonstrate that S EG MEM -RAG improves retrieval accuracy and QA quality under weak supervision across diverse multi-corpus benchmarks. 
+
+# Related Work 
+
+Retrieval-Augmented Generation with Multiple Sources 
+
+Retrieval-Augmented Generation (RAG) improves the fac-tual grounding of LLMs by retrieving context from exter-nal sources (Gao et al. 2023; Fan et al. 2024). However, most RAG systems are designed for static, labeled corpora and struggle in real-world environments where knowledge sources are dynamic, noisy, and unlabeled. Existing approaches to multi-source RAG typically fall into three categories: 
+
+Retrieval planners train corpus selection policies (Wang et al. 2025; Chen et al. 2025), enabling RAG models to se-lect among multiple corpora. While effective in controlled settings, these approaches require retraining when corpora change, limiting scalability in dynamic environments. 
+
+In-session agents , such as ReAct and Reflexion (Yao et al. 2023; Shinn et al. 2023), use step-by-step reasoning and tool use within a session. While flexible, they lack mech-anisms for cross-session learning or memory, preventing the accumulation of long-term corpus-level knowledge. 
+
+Interface-based methods (Yuan et al. 2024; Qu et al. 2025) rely on structured tool or API descriptions to guide retrieval. These systems assume clean, labeled access pat-terns, which do not generalize to open-ended text corpora without predefined schemas. In contrast, S EG MEM -RAG treats retrieval as a self-guided process : rather than relying on fixed policies, super-vision, or structure, it incrementally plans, evaluates, adapts its own retrieval behavior based on feedback—enabling con-tinual adaptation to evolving, unlabeled corpora. 
+
+Memory-Augmented Reasoning 
+
+A parallel line of work augments LLMs with memory to support long-term reasoning and learning. Some systems perform in-context reflection , allowing the model to cri-tique and revise its own outputs (Shinn et al. 2023; Liang et al. 2025; Zhao et al. 2024). Others use persistent memory 
+
+to retain and reuse interaction history across episodes (Xu et al. 2025; Packer et al. 2023; Zhong et al. 2024). These methods primarily target task-level feedback or dialogue consistency. In contrast, S EG MEM -RAG focuses on memory for retrieval-level adaptation —tracking sym-bolic summaries of retrieval behavior, source utility, and failure patterns over time. Rather than storing past outputs, it maintains a structured memory to shape future planning in volatile, multi-source environments—without supervision or parameter updates. 
+
+# Preliminaries 
+
+We formalize the problem of retrieval-augmented generation in open-ended, multi-source knowledge environments. Let q
+
+denote a user query, and let K = {K1, K 2, . . . , K N } rep-resent a collection of heterogeneous, unlabeled knowledge sources (e.g., documents, manuals, changelogs). These cor-pora are diverse in structure, format, and granularity, and lack consistent metadata, interfaces, or annotations. 30648 Select 
+
+> Action
+
+# 🎛 Plan 
+
+> Retrieval
+
+## 🧭 Generate 
+
+> Answer
+
+## ✍ Finish 
+
+## ✅ 
+
+> Retrieve
+> (𝒒 𝒊 ,𝒌 𝒊 )
+
+## 📂 
+
+> Respond
+
+## 💬 
+
+> Select
+> Action
+
+# 🎛 …
+
+> User
+
+(2) Segmented Reasoning 
+
+Why does the config command fail on version 2.3?   
+
+> !𝑨𝑫𝑫
+> !𝑬𝑫𝑰𝑻
+
+# ⚖
+
+Feedback 
+
+Evaluator 
+
+# 🗂 
+
+Memory 
+
+Controller  
+
+> Planner
+> Finish(Answer)
+> Search( CorpusID , Query)
+> Action Template
+> Action(Parameters)
+> Knowledge Environment
+
+(1) Segment Graph Compilation 
+
+# 𝐼 ! 𝐸 !
+
+## 𝐶 !
+
+## [𝑞 ", 𝑘 ", 𝑟 "]
+
+## [A#$%& , A!'( , A'#"! ]       
+
+> Generative Feedback Knowledge Environment
+> Preference Adaptation
+> #failure +1
+> !𝑨𝑫𝑫
+> !𝑬𝑫𝑰𝑻
+> !𝑨𝑫𝑫
+
+M!"#$ 
+
+M%!&' 
+
+M'%( 
+
+# 🛠 
+
+# 📚 
+
+# 📝  
+
+> Paired Evaluation
+> Select Action
+
+## 🎛  
+
+> Plan Retrieval
+
+## 🧭 
+
+> Retrieve
+
+## 📂 Respond 💬 
+
+> Segment
+> Graph
+
+## ✍Generate Answer 
+
+> ✅
+
+# 🗺 
+
+# 🗺 Figure 2: System overview of S EG MEM -RAG. The top shows the compilation of structured action schemas into a segment graph, enabling modular control over retrieval planning. The bottom illustrates segment-wise reasoning in execution: at each step, the agent operates over localized memory, generates symbolic feedback, and updates a structured memory hierarchy. Together, these components support self-guided retrieval and continual adaptation without retraining. The agent A must generate an answer to q by planning and executing a sequence of retrieval steps over K. At each step 
+
+i, the agent selects a source index ki ∈ { 1, . . . , N }, formu-lates a sub-query qi, and retrieves content from the selected source: 
+
+ri = Retrieve (qi, K ki ), (1) where ri denotes the top-ranked passages retrieved. Based on the accumulated retrievals r≤i, the agent generates an in-termediate result ai, which may represent a reasoning step, partial answer, or subgoal resolution. This interaction produces a trajectory of retrieval and rea-soning steps: 
+
+τ = {(qi, k i, r i, a i)}Ti=1 . (2) Unlike traditional systems operating over static or labeled corpora, the agent A must continually adapt its retrieval planning to maximize answer quality under uncertainty. This includes learning to select relevant sources, avoid redundant retrievals, and structure responses based on evolving query context and prior retrieval outcomes. 
+
+# Method 
+
+Overview 
+
+SEG MEM -RAG is a self-guided retrieval-augmented gen-eration framework designed for dynamic, unlabeled knowl-edge environments. The system integrates planning, reflec-tion, and memory to continually adapt its retrieval behav-ior—without relying on supervision or static corpus config-urations. The framework consists of three tightly coupled components: 
+
+Segment Planner. Inspired by event segmentation theory, this component decomposes the reasoning process into mod-ular segments, each focused on a localized decision (e.g., source selection or subquery composition). Segment-wise reasoning allows the system to isolate retrieval steps from irrelevant context, improving precision and enabling sym-bolic planning over a structured decision graph. 
+
+Feedback Evaluator. After each retrieval segment, the system reflects on the outcome by comparing the retrieved content with its intended purpose. It produces natural lan-guage feedback and binary success signals, which serve as internal supervision for future planning. This enables the agent to learn from its outcomes without external labels. 
+
+Memory Controller. To accumulate experience over time, SEG MEM -RAG maintains a structured symbolic memory with procedural, semantic, and episodic layers. This memory stores interpretable summaries of past retrieval behavior and corpus utility, which are queried during infer-ence to guide source selection and strategy adaptation. To ensure broad coverage across unfamiliar or under-explored sources, the system includes a lightweight Cold-start Explorer , which proactively issues probe queries to bootstrap initial memory signals, facilitating informed planning from the earliest stages of deployment. Together, these components enable S EG MEM -RAG to operate as a 30649 self-monitoring, self-adaptive system capable of navigating open-ended knowledge environments without retraining or supervision. We next detail each component of the system. 
+
+Segment Planner 
+
+To address the challenges of multi-source retrieval in dy-namic environments, S EG MEM -RAG adopts a form of segment-wise reasoning, inspired by Event Segmentation Theory (Zacks and Swallow 2007), which suggests that hu-mans naturally partition continuous experience into discrete, meaningful units. The system structures the overall reason-ing process into localized decision steps, each executed in an isolated context with access to targeted memory and short-term signals. This modular structure improves focus, reduces contextual interference, and facilitates fine-grained feedback and memory alignment. 
+
+Segment Graph Compilation We define a segment as a semantically coherent reasoning unit that completes one de-cision step in a structured task schema. Each segment may operate over one or more arguments, depending on whether those arguments form a tightly coupled reasoning subgoal. For example, selecting both a knowledge source and a re-trieval query may be treated as a single segment if they are specified jointly. To support modular control and symbolic planning, SEG MEM -RAG compiles the agent’s structured action schemas into a directed segment graph. This graph repre-sents a finite-state abstraction of the reasoning space, where each node corresponds to a segment state, and edges define valid transitions between segments. The compilation is gov-erned by schema-driven rules that reflect the internal struc-ture and ordering dependencies of available actions. This construction process is training-free and easily ex-tensible: new tools, corpora, or actions can be introduced by updating the action schema without requiring model retrain-ing or manual rule design. The resulting graph enables local-ized planning, interpretable trajectories, and context-isolated inference, laying the structural foundation for downstream memory and feedback components. 
+
+Segmented Reasoning The agent performs reasoning by traversing the compiled segment graph, making localized decisions at each segment node. During inference, the agent traverses the compiled segment graph by executing one seg-ment at a time. At each segment state s, the system retrieves a micro-instruction Is, recalls relevant long-term memory entries Es = M.recall (s), and extracts localized context 
+
+Cs = S. relevant (s) from short-term memory S. These inputs are passed to the base model M to compute a deci-sion: 
+
+os = M. infer (Is, E s, C s) (3) The output os is stored in memory and may include struc-tured decisions (e.g., source selection), rationales, or confi-dence scores. When all required components for an action are available, the agent executes the action (e.g., retrieval), observes the result, and appends it to memory. Segment transitions are managed by a finite-state machine defined over the action schema, which deterministically ad-Algorithm 1: Segment-wise Reasoning in S EG MEM -RAG 
+
+Input : Query q, corpora K, agent A (base model M ), memory module M
+
+Output : Final answer ˆa with reasoning his-tory  
+
+> 1:
+
+Initialize short-term memory S ← ∅  
+
+> 2:
+
+Initialize current state s ← select action  
+
+> 3:
+
+Set step counter t ← 0 
+
+> 4:
+
+while s̸ = end and t < max steps do  
+
+> 5:
+
+t ← t + 1  
+
+> 6:
+
+Retrieve micro-instruction Is for state s 
+
+> 7:
+
+Recall structured memory Es ← M .recall (s) 
+
+> 8:
+
+Extract working-memory context Cs ←
+
+S. relevant (s) 
+
+> 9:
+
+Infer local decision o ← M. infer (Is, E s, C s) 
+
+> 10:
+
+Update S ← S ∪ { o} 
+
+> 11:
+
+if action parameters are complete then  
+
+> 12:
+
+Execute action (e.g., Retrieve (qi, K ki )) and ob-serve result r 
+
+> 13:
+
+Append r to S 
+
+> 14:
+
+end if  
+
+> 15:
+
+Update state s ← next (S) 
+
+> 16:
+
+end while  
+
+> 17:
+
+return final answer ˆa extracted from S
+
+vances the planner to the next segment based on filled argu-ments and observed outcomes. The process continues until an end state is reached or a stopping criterion is met. This segment-wise execution strategy enables precise control over the reasoning trajectory, limits the working memory scope per step, and supports integration with sym-bolic memory and feedback evaluators at the segment level. 
+
+Feedback Evaluator 
+
+Generative Feedback After each retrieval segment, SEG MEM -RAG performs a localized self-evaluation to as-sess whether the retrieved content satisfies the intended pur-pose of the current sub-query. Instead of modifying model parameters, the system generates symbolic feedback in nat-ural language, which is stored in memory and used to guide subsequent planning decisions. At step i, the agent issues a sub-query qi to a se-lected source Kki , yielding retrieved content ri =
+
+Retrieve (qi, K ki ). The Feedback Evaluator compares this outcome against the segment’s retrieval intent and produces two outputs: • a binary success label yi ∈ { 0, 1} indicating whether the retrieved passages contain relevant or actionable evi-dence; • a descriptive reflection summarizing alignment or mis-match between expectation and observed content. These signals are asynchronously appended to structured memory M, where they accumulate over time to support long-term utility modeling. Segment-level evaluation en-sures timely and localized feedback while avoiding the cost of full-trajectory reflection. 30650 Preference Adaptation To enable retrieval strategies that evolve with experience, S EG MEM -RAG maintains corpus-level failure statistics. For each source Kc, a failure counter 
+
+fc is updated whenever a segment involving Kc yields an un-successful retrieval ( yi = 0 ). These statistics serve as sym-bolic priors that bias future source selection—penalizing persistently uninformative corpora while promoting explo-ration of more reliable alternatives. This experience-based adaptation mechanism allows the agent to dynamically reweight source preferences without explicit supervision or retraining, improving retrieval ro-bustness in environments with heterogeneous and evolving corpora. 
+
+Memory Controller 
+
+To support long-term adaptation, S EG MEM -RAG maintains a structured, symbolic memory system M comprising three cognitively inspired components: Procedural Memory , Se-mantic Memory , and Episodic Memory (Matthews 2015). Each component stores interpretable natural language sum-maries derived from prior retrieval episodes and provides symbolic signals to guide future decisions. 
+
+Unified Access via Symbolic Similarity. During infer-ence, the Segment Planner queries all memory components in parallel using token-level symbolic similarity between the current sub-query qi and stored memory entries. This lightweight mechanism supports multilingual usage (e.g., English and Chinese) and avoids reliance on dense embed-dings or retraining. Retrieved signals are fused to inform corpus selection and retrieval planning. 
+
+Procedural Memory (Mproc ) captures retrieval heuris-tics by linking recurring query patterns with preferred sources. For example, “queries about version conflicts typ-ically succeed in technical manuals (K1, K3).” Multiple heuristics may be recalled and aggregated per query. New rules are added when novel behaviors emerge, while exist-ing ones are revised in response to feedback. 
+
+Semantic Memory (Msem ) maintains corpus-level de-scriptors summarizing strengths and limitations across query types—such as “strong on configuration troubleshooting,” “uses CLI-style expressions,” or “frequently omits version identifiers.” Each corpus may have multiple descriptors, but only the most similar one is retained per query to estimate source relevance. Reliability statistics (e.g., failure counts) are also maintained to support adaptive planning. 
+
+Episodic Memory (Mepis ) logs symbolic traces of in-dividual retrieval episodes. Each entry records the issued query qi, selected source Kki , and a natural language sum-mary of the retrieval outcome. These immutable entries cap-ture concrete precedents—e.g., “query about X version mis-match failed on K2 due to lack of version evidence”—that support case-based reasoning during future segments. 
+
+Asynchronous Memory Updates. All memory compo-nents are updated in a training-free, heuristic manner based on feedback signals generated at the end of each seg-ment. Updates include rule edits, descriptor refinements, and episodic additions. Importantly, these updates are performed asynchronously after batch inference, ensuring that memory construction does not introduce latency during real-time in-teraction. This memory architecture enables S EG MEM -RAG to continually refine its retrieval strategies, model corpus utility under uncertainty, and adapt to emerging usage patterns—all without retraining or reliance on dense representations. 
+
+Coldstart Explorer 
+
+SEG MEM -RAG incorporates a coldstart mechanism to enable adaptation to under-explored corpora, particularly newly added or long-tail sources lacking sufficient interac-tion history. This component allows the system to proac-tively gather initial signals without requiring retraining or supervision. The routine is triggered when the number of interactions with a corpus Kc falls below a threshold Tmin . In such cases, the system launches probe segments —simulated reasoning steps that sample representative sub-queries from Procedu-ral Memory (Mproc ) and Episodic Memory (Mepis ). These probes are issued against Kc, and the outcomes are evaluated to produce binary success signals and descriptive feedback. Resulting signals are incorporated into the symbolic mem-ory M, allowing the system to build experience with under-utilized sources and improve planning over time. This pro-cess ensures that emerging corpora are actively integrated into the retrieval space, sustaining adaptability in dynamic knowledge environments. 
+
+# Experimental Setup 
+
+Knowledge Environment Setup 
+
+We construct a multi-corpus retrieval environment where each knowledge source is independent, unlabeled, and weakly structured. Corpora span diverse domains, lan-guages, and formats. Details are summarized in Table 1. To retain real-world imbalance, we do not normalize cor-pus size or coverage. Each corpus is independently indexed using multilingual-e5-large (Wang et al. 2024a), chosen for its cross-domain and multilingual robustness. At inference time, the system may retrieve from any source. For each corpus, the system receives only a numeric index and a brief natural language description automatically generated by GPT-4o (OpenAI 2024). The descriptions are derived from corpus content summaries and are identical across all methods. No downstream task information is used during their construction. 
+
+Tasks and Metrics 
+
+Unlike standard settings where each QA task is paired with a dedicated corpus, we evaluate in a unified multi-corpus en-vironment shared across all tasks. The system operates over a large pool of heterogeneous knowledge sources without knowing which ones are best suited for each task. 
+
+Open-domain QA We evaluate S EG MEM -RAG on mul-tiple datasets, including Natural Questions (Kwiatkowski et al. 2019)(NQ), TriviaQA (Joshi et al. 2017)(Trivia), PopQA (Mallen et al. 2023)(Pop), HotpotQA (Yang et al. 2018)(Hotp), and 2WikiMultiHopQA (Ho et al. 30651 2020)(2wiki). These datasets include both single-hop and multi-hop open-domain QA, requiring retrieval and reason-ing over Wikipedia and web documents. 
+
+Financial QA We use OmniEval (Wang et al. 2024b), a Chinese financial QA dataset, which consists of four tasks: Extractive QA(Extra), Long-form QA(Long), Multi-hop Reasoning(Multi), and Construct QA(Contr), each tar-geting different scenarios. 
+
+Biomedical QA We use the BioASQ (Tsatsaronis et al. 2015) (Bio) fact-based task, which focuses on retrieving rel-evant literature from a given question and generating precise entity answers and summary-type answers. 
+
+Metrics We use two evaluation metrics: token-level F1 
+
+and fact-level F1 . Token-level F1 is used on open-domain QA tasks and measures lexical overlap between predicted and reference answers (Jin et al. 2025; Sun et al. 2025). Fact-level F1 is used for financial and biomedical QA, where an-swers are longer and more varied. Following prior work on LLM-as-a-judge (Chen, Gao, and He 2023), we extract ver-ifiable claims from predictions and references using a large language model, and compute F1 based on their overlap. Prompts are fixed and temperature is set to 0 for consistency. 
+
+Baselines 
+
+We group baselines by capability: retrieval control, agentic reasoning, memory-based reflection, and oracle settings. 
+
+Retrieval Control. Prompting issues fixed natural-language prompts to the retriever without intermediate rea-soning or feedback. BlindRAG randomly selects a corpus (based only on its ID/description) and retrieves within it. 
+
+Agentic Reasoning. ResLLM (Wang et al. 2025) per-forms description-based corpus routing with a language model. ReAct (Yao et al. 2023) interleaves chain-of-thought reasoning with retrieval actions. 
+
+Memory and Reflection. Reflexion (Shinn et al. 2023) adds step-wise verbal self-feedback. DRAFT (Qu et al. 2025) leverages interaction history to refine guidance and inform subsequent actions. 
+
+Oracle. EnumRAG retrieves from all corpora for each query (enumeration) and aggregates evidence. Gold-RAG 
+
+queries only the single corpus that achieves the best overall performance (oracle choice), using it for all queries. 
+
+Implementation Details 
+
+We use Qwen2.5-7B-Instruct as the Reasoning Model , and Qwen2.5-32B-Instruct as the LLM Judge 
+
+for fact-level evaluation. For each query, the system pro-cesses up to 32 reasoning segments. Both Memory Retrieval 
+
+and Knowledge Retrieval select the top-5 entries from in-ternal memory and external corpora, respectively. We ran-domly sample 500 QA pairs from each dataset for testing. 
+
+# Experimental Results 
+
+Main Results 
+
+Table 2 summarizes the overall performance of all evaluated methods across open-domain, financial, and biomedical QA tasks. We highlight four key observations. 
+
+Corpus Domain/Type #Docs 
+
+arguana (Thakur et al. 2021) Arg / Snip 8.7k webis (Thakur et al. 2021) Arg / Snip 382.5k nfcorpus (Boteva et al. 2016) Bio / Docs 3.6k pubmedqa (Xiong et al. 2024) Bio / Abs 3.3k statpearls (Xiong et al. 2024) Bio / Art 9.6k textbooks (Xiong et al. 2024) Bio / Txtbk 125.8k bioasq (Tsatsaronis et al. 2015) Bio / Art 40.2k omnieval (Wang et al. 2024b) Fin / Rpt 364.8k dbpedia (Hasibi et al. 2017) KB / Trip 4.6M lexrag (Li et al. 2025) Legal / Law 5.5k barexam qa (Zheng et al. 2025) Legal / Law 1.2k housing qa (Zheng et al. 2025) Legal / Law 1.8M scidocs (Cohan et al. 2020) Sci / Docs 25.7k scifact (Wadden et al. 2020) Sci / Abs 5.2k trec-covid (Roberts et al. 2021) Sci / Art 171.3k msmarco (Nguyen et al. 2016) Web / Snip 8.8M hotpotqa (Yang et al. 2018) Wiki / Docs 5.2M nq (Kwiatkowski et al. 2019) Wiki / Docs 2.7M Table 1: Corpora used in the multi-source setup. Each corpus is indexed independently. Domain abbreviations: 
+
+Arg umentation, Bio medical, Fin ancial, Knowledge Base, 
+
+Legal Text, Sci entific, Web Text, Wiki pedia. Type abbrevi-ations: Passage Snip pets, Doc uments, Abs tracts, Art icles, 
+
+Textb ooks, Report s, Knowledge Trip les. 
+
+SEG MEM -RAG tends to outperform strong baselines and even oracle methods. Our method achieves the high-est average performance across all three domains, outper-forming strong baselines such as ReAct, Reflexion, and even oracle-style methods EnumRAG and Gold-RAG. In particular, S EG MEM -RAG excels on challenging multi-hop datasets (HotpotQA and 2WikiMultiHopQA), showing clear advantages in retrieving relevant evidence. Though certain individual tasks see competitive results from oracle meth-ods, S EG MEM -RAG consistently provides the best overall balance across diverse tasks and domains. 
+
+Accurate corpus selection is crucial in multi-source envi-ronments. EnumRAG significantly outperforms Prompt-ing, confirming that effective retrieval enhances perfor-mance. In contrast, BlindRAG, which randomly selects sources, consistently underperforms across tasks, demon-strating that naive corpus selection introduces harmful noise and disrupts reasoning. Robust corpus selection thus emerges as essential but challenging in heterogeneous knowledge environments. 
+
+Simple description-based retrieval is insufficient. 
+
+Methods relying solely on static corpus descriptions (e.g., ResLLM and BlindRAG) consistently perform poorly, with results substantially below Prompting. Even ReAct, which adds intermediate reasoning steps, achieves limited improvement. This suggests that static summaries and shallow interactions are inadequate for effective retrieval in complex multi-source environments. 30652 Open-Domain Financial Medical Type Method NQ Trivia Pop Hotp 2wiki Avg. Extra Long Multi Constr Avg. Bio Retrieval Control Prompting 25.6 44.2 31.4 23.0 26.3 30.1 12.4 12.6 14.5 9.2 12.2 21.0 BlindRAG 12.1 30.0 14.5 10.3 11.7 15.7 5.9 19.2 15.1 18.7 14.7 12.4 Agentic Reasoning ResLLM 19.2 29.0 3.2 11.5 9.3 14.4 21.2 26.0 27.3 25.5 25.0 15.5 React 15.2 34.4 14.3 11.2 9.9 17.0 19.4 20.9 22.7 22.6 21.4 36.4 Memory & Reflection Reflection 26.5 39.1 12.1 18.8 20.2 23.4 14.1 17.8 23.9 22.4 19.5 42.0 DRAFT 42.2 62.4 35.3 39.3 31.2 42.1 36.4 34.1 28.5 30.9 32.5 39.5 Oracle EnumRAG 47.1 61.3 64.2 32.7 23.7 45.8 33.3 31.1 30.3 29.9 31.1 31.4 GoldRAG 50.6 53.8 58.2 32.8 16.7 42.4 33.9 29.7 30.9 31.2 31.2 38.2 Self-Guide SEG MEM -RAG 47.8 64.2 54.2 40.0 31.4 47.5 35.9 35.1 33.9 31.4 34.1 44.0 
+
+Table 2: Overall comparison of S EG MEM -RAG with baseline methods across three task domains. Token-level F1 is reported for Open-domain QA, while Fact-level F1 (LLM-judged) is reported for Financial QA and Biomedical QA (Medical). Best-performing methods per task are highlighted in bold. 
+
+Feedback-driven retrieval surpasses exhaustive and gold-corpus strategies. Surprisingly, SEG MEM -RAG, leveraging segment-wise feedback and structured memory, outperforms oracle-style strategies such as exhaustive enu-meration (EnumRAG) and optimal single-corpus retrieval (Gold-RAG). This demonstrates the advantage of targeted feedback mechanisms over brute-force enumeration and fixed corpus selection constraints. 
+
+Ablation Study 
+
+To assess the contribution of each core module in S EG MEM -RAG, we conduct an ablation study by selectively disabling individual components while holding all other configura-tions constant. Table 3 reports token-level F1 scores on two representative datasets: NQ and PopQA. 
+
+Segment Planner provides essential structure for multi-step retrieval. Removing the Segment Planner leads to consistent performance degradation on both tasks, with a particularly large drop on PopQA (–30.6%). This confirms the importance of segment-wise control in decomposing rea-soning into manageable sub-decisions and maintaining con-textual focus across steps. Without segmentation, the agent is more prone to semantic drift and redundant retrievals. 
+
+Feedback Evaluator supports self-correction and signal alignment. Disabling the Feedback Evaluator reduces per-formance by 9.6% on NQ and 18.2% on PopQA. These re-sults highlight its role in assessing retrieval quality at each step and providing actionable feedback to guide subsequent planning. Without reflection, the system struggles to realign when intermediate retrievals diverge from query intent. 
+
+Memory Controller enables long-range adaptation. 
+
+The largest performance loss occurs when the Memory Con-troller is removed, with F1 scores dropping by 33.7% (NQ) and 40.4% (PopQA). This underscores the value of sym-bolic memory in capturing corpus-level utility patterns and informing future decisions. In its absence, the system reverts to short-sighted selection, failing to learn from prior retrieval outcomes. 
+
+Method NQ %↓ PopQA %↓
+
+SEG MEM -RAG 47.8 – 54.2 –w/o Segment Planner 45.4 5.0% 37.6 30.6% w/o Feedback Evaluator 43.2 9.6% 44.4 18.2% w/o Memory Controller 31.7 33.7% 32.3 40.4% 
+
+w/o Coldstart Explorer 43.3 9.3% 49.0 9.5% Table 3: Ablation study on S EG MEM -RAG based on NQ and PopQA. Scores reported as token-level F1. Percentages indicate performance drops compared to full system. 
+
+Coldstart Explorer improves coverage of low-usage sources. Eliminating the Coldstart Explorer results in a moderate drop on both datasets (–9.3% and –9.5%, respec-tively), indicating its contribution to bootstrapping memory for underexplored corpora. While less critical in balanced benchmark settings, this module is expected to yield greater gains in more dynamic environments, such as with newly added or long-tail sources. 
+
+# Conclusion 
+
+In this paper, we propose S EG MEM -RAG, a self-guided ap-proach to retrieval-augmented generation in dynamic, unla-beled knowledge environments. The system adapts its re-trieval behavior based on internal evaluation and prior in-teractions, without relying on supervision or retraining. Our approach supports three key capabilities for open-ended re-trieval: localized planning to reduce context interference, re-trieval awareness to assess evidence quality, and adaptive learning to improve decisions over time. Empirical results across multi-source benchmarks suggest that self-guided retrieval can enhance factual accuracy and contextual relevance. These findings highlight its potential as a foundation for more resilient and adaptive language sys-tems in evolving knowledge settings. 
+
+# Acknowledgments 
+
+This work is supported in part by Ucap Cloud. 30653 References 
+
+Arslan, M.; Ghanem, H.; Munawar, S.; and Cruz, C. 2024. A Survey on RAG with LLMs. Procedia computer science ,246: 3781–3790. Boteva, V.; Gholipour, D.; Sokolov, A.; and Riezler, S. 2016. A full-text learning to rank dataset for medical information retrieval. In European Conference on Information Retrieval ,716–722. Springer. Chen, S.; Gao, S.; and He, J. 2023. Evaluating Factual Consistency of Summaries with Large Language Models. arXiv:2305.14069. Chen, Z.; Liao, Y.; Jiang, S.; Wang, P.; Guo, Y.; Wang, Y.; and Wang, Y. 2025. Towards Omni-RAG: Compre-hensive Retrieval-Augmented Generation for Large Lan-guage Models in Medical Applications. arXiv preprint arXiv:2501.02460 .Cohan, A.; Feldman, S.; Beltagy, I.; Downey, D.; and Weld, D. S. 2020. SPECTER: Document-level Representation Learning using Citation-informed Transformers. In ACL .Fan, W.; Ding, Y.; Ning, L.; Wang, S.; Li, H.; Yin, D.; Chua, T.-S.; and Li, Q. 2024. A survey on rag meeting llms: To-wards retrieval-augmented large language models. In Pro-ceedings of the 30th ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining , 6491–6501. Gao, Y.; Xiong, Y.; Gao, X.; Jia, K.; Pan, J.; Bi, Y.; Dai, Y.; Sun, J.; Wang, H.; and Wang, H. 2023. Retrieval-augmented generation for large language models: A survey. arXiv preprint arXiv:2312.10997 , 2(1). Hasibi, F.; Nikolaev, F.; Xiong, C.; Balog, K.; Bratsberg, S. E.; Kotov, A.; and Callan, J. 2017. DBpedia-Entity V2: A Test Collection for Entity Search. In Proceedings of the 40th International ACM SIGIR Conference on Research and De-velopment in Information Retrieval , SIGIR ’17, 1265–1268. ACM. Ho, X.; Duong Nguyen, A.-K.; Sugawara, S.; and Aizawa, A. 2020. Constructing A Multi-hop QA Dataset for Com-prehensive Evaluation of Reasoning Steps. In Scott, D.; Bel, N.; and Zong, C., eds., Proceedings of the 28th Inter-national Conference on Computational Linguistics , 6609– 6625. Barcelona, Spain (Online): International Committee on Computational Linguistics. Jin, B.; Zeng, H.; Yue, Z.; Yoon, J.; Arik, S.; Wang, D.; Za-mani, H.; and Han, J. 2025. Search-r1: Training llms to rea-son and leverage search engines with reinforcement learn-ing. arXiv preprint arXiv:2503.09516 .Joshi, M.; Choi, E.; Weld, D.; and Zettlemoyer, L. 2017. TriviaQA: A Large Scale Distantly Supervised Challenge Dataset for Reading Comprehension. In Barzilay, R.; and Kan, M.-Y., eds., Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 1601–1611. Vancouver, Canada: Association for Computational Linguistics. Kwiatkowski, T.; Palomaki, J.; Redfield, O.; Collins, M.; Parikh, A.; Alberti, C.; Epstein, D.; Polosukhin, I.; Kelcey, M.; Devlin, J.; Lee, K.; Toutanova, K. N.; Jones, L.; Chang, M.-W.; Dai, A.; Uszkoreit, J.; Le, Q.; and Petrov, S. 2019. Natural Questions: a Benchmark for Question Answering Research. Transactions of the Association of Computational Linguistics .Leng, Q.; Portes, J.; Havens, S.; Zaharia, M.; and Carbin, M. 2024. Long context rag performance of large language models. arXiv preprint arXiv:2411.03538 .Li, H.; Chen, Y.; Hu, Y.; Ai, Q.; Chen, J.; Yang, X.; Yang, J.; Wu, Y.; Liu, Z.; and Liu, Y. 2025. LexRAG: Benchmarking Retrieval-Augmented Generation in Multi-Turn Legal Con-sultation Conversation. arXiv:2502.20640. Liang, X.; Tao, M.; Xia, Y.; Wang, J.; Li, K.; Wang, Y.; He, Y.; Yang, J.; Shi, T.; Wang, Y.; et al. 2025. SAGE: Self-evolving Agents with Reflective and Memory-augmented Abilities. Neurocomputing , 130470. Mallen, A.; Asai, A.; Zhong, V.; Das, R.; Khashabi, D.; and Hajishirzi, H. 2023. When Not to Trust Language Models: Investigating Effectiveness of Parametric and Non-Parametric Memories. In Rogers, A.; Boyd-Graber, J.; and Okazaki, N., eds., Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 9802–9822. Toronto, Canada: Association for Computational Linguistics. Matthews, B. R. 2015. Memory dysfunction. CONTIN-UUM: Lifelong Learning in Neurology , 21(3): 613–626. Nguyen, T.; Rosenberg, M.; Song, X.; Gao, J.; Tiwary, S.; Majumder, R.; and Deng, L. 2016. MS MARCO: A Hu-man Generated MAchine Reading COmprehension Dataset. 
+
+CoRR , abs/1611.09268. OpenAI. 2024. GPT-4o System Card. arXiv:2410.21276. Packer, C.; Fang, V.; Patil, S.; Lin, K.; Wooders, S.; and Gonzalez, J. 2023. MemGPT: Towards LLMs as Operating Systems. Qu, C.; Dai, S.; Wei, X.; Cai, H.; Wang, S.; Yin, D.; Xu, J.; and Wen, J.-R. 2025. From Exploration to Mastery: Enabling LLMs to Master Tools via Self-Driven Interac-tions. In The Thirteenth International Conference on Learn-ing Representations .Roberts, K.; Alam, T.; Bedrick, S.; Demner-Fushman, D.; Lo, K.; Soboroff, I.; Voorhees, E.; Wang, L. L.; and Hersh, W. R. 2021. Searching for Scientific Evidence in a Pan-demic: An Overview of TREC-COVID. arXiv:2104.09632. Shinn, N.; Cassano, F.; Gopinath, A.; Narasimhan, K. R.; and Yao, S. 2023. Reflexion: language agents with verbal re-inforcement learning. In Thirty-seventh Conference on Neu-ral Information Processing Systems .Sun, H.; Qiao, Z.; Guo, J.; Fan, X.; Hou, Y.; Jiang, Y.; Xie, P.; Huang, F.; and Zhang, Y. 2025. ZeroSearch: In-centivize the Search Capability of LLMs without Searching. arXiv:2505.04588. Thakur, N.; Reimers, N.; R¨ uckl´ e, A.; Srivastava, A.; and Gurevych, I. 2021. BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models. In Thirty-fifth Conference on Neural Information Process-ing Systems Datasets and Benchmarks Track (Round 2) .Touvron, H.; Lavril, T.; Izacard, G.; Martinet, X.; Lachaux, M.-A.; Lacroix, T.; Rozi` ere, B.; Goyal, N.; Hambro, E.; 30654 Azhar, F.; et al. 2023. Llama: Open and efficient founda-tion language models. arXiv preprint arXiv:2302.13971 .Tsatsaronis, G.; Balikas, G.; Malakasiotis, P.; Partalas, I.; Zschunke, M.; Alvers, M. R.; Weissenborn, D.; Krithara, A.; Petridis, S.; Polychronopoulos, D.; et al. 2015. An overview of the BIOASQ large-scale biomedical semantic indexing and question answering competition. BMC bioinformatics ,16: 1–28. Wadden, D.; Lin, S.; Lo, K.; Wang, L. L.; van Zuylen, M.; Cohan, A.; and Hajishirzi, H. 2020. Fact or Fiction: Verify-ing Scientific Claims. In Webber, B.; Cohn, T.; He, Y.; and Liu, Y., eds., Proceedings of the 2020 Conference on Em-pirical Methods in Natural Language Processing (EMNLP) ,7534–7550. Online: Association for Computational Linguis-tics. Wang, L.; Yang, N.; Huang, X.; Yang, L.; Majumder, R.; and Wei, F. 2024a. Multilingual e5 text embeddings: A technical report. arXiv preprint arXiv:2402.05672 .Wang, S.; Tan, J.; Dou, Z.; and Wen, J.-R. 2024b. OmniEval: An Omnidirectional and Automatic RAG Evaluation Bench-mark in Financial Domain. arXiv:2412.13018. Wang, S.; Zhuang, S.; Koopman, B.; and Zuccon, G. 2025. Resllm: Large language models are strong resource selectors for federated search. In Companion Proceedings of the ACM on Web Conference 2025 , 1360–1364. Xiong, G.; Jin, Q.; Lu, Z.; and Zhang, A. 2024. Bench-marking Retrieval-Augmented Generation for Medicine. In Ku, L.-W.; Martins, A.; and Srikumar, V., eds., Findings of the Association for Computational Linguistics: ACL 2024 ,6233–6251. Bangkok, Thailand: Association for Computa-tional Linguistics. Xu, W.; Liang, Z.; Mei, K.; Gao, H.; Tan, J.; and Zhang, Y. 2025. A-mem: Agentic memory for llm agents. arXiv preprint arXiv:2502.12110 .Yang, Z.; Qi, P.; Zhang, S.; Bengio, Y.; Cohen, W. W.; Salakhutdinov, R.; and Manning, C. D. 2018. HotpotQA: A dataset for diverse, explainable multi-hop question answer-ing. arXiv preprint arXiv:1809.09600 .Yao, S.; Zhao, J.; Yu, D.; Du, N.; Shafran, I.; Narasimhan, K. R.; and Cao, Y. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In The Eleventh International Conference on Learning Representations .Yuan, S.; Song, K.; Chen, J.; Tan, X.; Shen, Y.; Kan, R.; Li, D.; and Yang, D. 2024. Easytool: Enhancing llm-based agents with concise tool instruction. arXiv preprint arXiv:2401.06201 .Zacks, J. M.; and Swallow, K. M. 2007. Event segmentation. 
+
+Current directions in psychological science , 16(2): 80–84. Zhao, A.; Huang, D.; Xu, Q.; Lin, M.; Liu, Y.-J.; and Huang, G. 2024. Expel: Llm agents are experiential learners. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 38, 19632–19642. Zhao, W. X.; Zhou, K.; Li, J.; Tang, T.; Wang, X.; Hou, Y.; Min, Y.; Zhang, B.; Zhang, J.; Dong, Z.; et al. 2023. A survey of large language models. arXiv preprint arXiv:2303.18223 , 1(2). Zheng, L.; Guha, N.; Arifov, J.; Zhang, S.; Skreta, M.; Manning, C. D.; Henderson, P.; and Ho, D. E. 2025. AReasoning-Focused Legal Retrieval Benchmark. In Pro-ceedings of the Symposium on Computer Science and Law on ZZZ , CSLAW ’25, 169–193. ACM. Zhong, W.; Guo, L.; Gao, Q.; Ye, H.; and Wang, Y. 2024. Memorybank: Enhancing large language models with long-term memory. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, 19724–19731. 30655

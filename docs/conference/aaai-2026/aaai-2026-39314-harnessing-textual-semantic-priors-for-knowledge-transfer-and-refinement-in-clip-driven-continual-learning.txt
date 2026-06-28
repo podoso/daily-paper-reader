@@ -1,0 +1,513 @@
+Title: Harnessing Textual Semantic Priors for Knowledge Transfer and Refinement in CLIP-Driven Continual Learning
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39314/43275
+
+Number of Pages: 9
+
+Markdown Content:
+# Harnessing Textual Semantic Priors for Knowledge Transfer and Refinement in CLIP-Driven Continual Learning Lingfeng He 1, De Cheng 1, 2, , Di Xu 3, Huaijie Wang 1, Nannan Wang 11 Xidian University 2 National Engineering Laboratory for Integrated Aero-Space-Ground- Ocean Big Data Application Technology, China 3 Huawei Technologies Co. Ltd lingfenghe077@gmail.com, dcheng@xidian.edu.cn, xudi21@huawei.com, huaijie_wang@stu.xidian.edu.cn, nnwang@xidian.edu.cn 
+
+Abstract 
+
+Continual learning (CL) aims to equip models with the abil-ity to learn from a stream of tasks without forgetting previ-ous knowledge. With the progress of vision-language models like Contrastive Language-Image Pre-training (CLIP), their promise for CL has attracted increasing attention due to their strong generalizability. However, the potential of rich textual semantic priors in CLIP in addressing the stability–plasticity dilemma remains underexplored. During backbone training, most approaches transfer past knowledge without consider-ing semantic relevance, leading to interference from unrelated tasks that disrupt the balance between stability and plasticity. Besides, while text-based classifiers provide strong general-ization, they suffer from limited plasticity due to the inherent modality gap in CLIP. Visual classifiers help bridge this gap, but their prototypes lack rich and precise semantics. To address these challenges, we propose Semantic-Enriched Continual Adaptation (SECA), a unified framework that harnesses the anti-forgetting and structured nature of textual priors to guide semantic-aware knowledge transfer in the backbone and rein-force the semantic structure of the visual classifier. Specifically, a Semantic-Guided Adaptive Knowledge Transfer (SG-AKT) module is proposed to assess new images’ relevance to diverse historical visual knowledge via textual cues, and aggregate relevant knowledge in an instance-adaptive manner as distilla-tion signals. Moreover, a Semantic-Enhanced Visual Prototype Refinement (SE-VPR) module is introduced to refine visual prototypes using inter-class semantic relations captured in class-wise textual embeddings. Extensive experiments on mul-tiple benchmarks validate the effectiveness of our approach. 
+
+Code — https://github.com/HHHLF/SECA_master 
+
+## Introduction 
+
+Continual learning (CL) aims to equip models with the ability to learn continuously from a stream of tasks (Lu et al. 2024), a key requirement for adapting to evolving open-world sce-narios. A fundamental challenge is the stability-plasticity dilemma (Kim and Han 2023; Chen et al. 2023), which re-quires models to preserve previously learned knowledge (sta-bility) while adapting to new information (plasticity). We investigate the challenging rehearsal-free Class-Incremental Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 1 Corresponding author: De Cheng (dcheng@xidian.edu.cn)   
+
+> Textual Classifier Compensate Model 3 Model 2 Model 1 Model s-1 Dogs Birds Vehicles
+> (b) Our Framework
+> High Relevance Textual Classifier Visual Feature Hybrid Classifier
+> (a) Existing Approaches
+> l
+> Past Visual knowledge
+> 1
+> Visual Feature
+> H
+> al
+> Textual Semantic Priors
+> Image from the s-th Task Cat Cat Image from the s-th Task Modality Gap Vehicles Cat Unrelated Knowledge Transfer: Vehicles Cat
+> Vehicles Birds Dogs
+> Visual Classifier
+> s
+
+Figure 1: (a) Existing methods exhibit limited stability-plasticity trade-offs due to the unrelated transfer in backbone and the modality gap in classifier. (b) SECA leverage textual priors to (1) prioritize transferring relevant knowledge (Dog classes) when learning new classes (Cat), and (2) inject se-mantics into the visual classifier to bridge the modality gap. Learning (CIL) setting, where the model must continually learn new classes without rehearsal and predict over all seen categories without task identities. Recent advances in vision-language models, such as Con-trastive Language-Image Pre-training (CLIP) (Radford et al. 2021), provide strong zero-shot capabilities and serve as promising backbones for CL. While several methods (Zhou et al. 2025; Huang et al. 2024; Jha, Gong, and Yao 2024) leverage CLIP mainly as a powerful backbone, the poten-tial of its textual semantic priors for improving the stabil-ity–plasticity trade-off remains underexplored. To retain old knowledge in backbones, most approaches (Kirkpatrick et al. 2017; Kang, Park, and Han 2022; Asadi et al. 2023) rely on regularization or distillation to enforce consistency with model after the most recent task. However, such non-selective knowledge retention can lead to semantic interference, where unrelated or noisy knowledge from previous tasks hampers adaptation to new tasks and distorts earlier feature spaces. As shown in Fig. 1(a), when learning a new class like ’cat’, prior knowledge from similar classes such as ’dog’ or ’bird’ can The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+21645 be helpful, while unrelated classes like ’vehicle’ introduce in-terference that degrades learning. As for classifiers, although the text-only designs (Huang et al. 2024; Jha, Gong, and Yao 2024) offer strong generalization, they limit plasticity due to the inherent modality gap in CLIP. Prior studies (Liang et al. 2022; Fahim, Murphy, and Fyshe 2024) attributes this gap to a geometric separation in the shared embedding space, where visual and textual embeddings remain distinctly apart in the feature space. This modality gap is further exacerbated in CL, as task-isolated training prevents joint calibration, reducing the text-based classifier’s ability to adapt to new classes. To mitigate semantic interference in the backbone, we consider it essential to prioritize the transfer of semantically relevant historical knowledge. Since the text branch provides consistent semantics throughout continual adaptation, and CLIP inherently offers an aligned visual-textual space, we assume that textual cues offer reliable guidance for deter-mining which past visual knowledge to transfer and which to suppress , as shown in Fig.1(b). Moreover, to overcome the modality gap during classification, a straightforward solution lies in hybrid classifiers that support both cross-modality and intra-modality matching. While visual classifiers based on raw prototypes often suffer from semantic inaccuracies due to limited data and class imbalance in real-world CL, we propose to inject the stable and structured semantics from the textual branch into the visual side, enabling a semantic-enriched visual classifier to bridge the modality gap. Building on the above analysis, we propose Semantic-Enriched Continual Adaptation (SECA), a unified framework that harnesses the anti-forgetting and structured nature of textual semantic priors in CLIP. Specifically, we propose a Semantic-Guided Adaptive Knowledge Transfer (SG-AKT) module for selective transfer in the backbone. It exploit the textual embeddings of new images as semantic vectors to assess their relevance to a pool of adapters that encapsulate historical visual knowledge. Guided by the relevance scores, past representations from the adapter pool are aggregated in an instance-adaptive manner and serve as teacher signals for selective distillation. Besides, a Semantic-Enhanced Visual Prototype Refinement (SE-VPR) module is introduced to en-able a powerful visual-side classifier. It models the inter-class semantic relationships encoded in class-wise textual embed-dings and uses them to refine the structure of coarse CLIP visual prototypes, aligning them with the relational topol-ogy of the textual space. Combined with the text classifier, it forms a hybrid classification paradigm that compensates for the modality gap and enhances plasticity. Our main contributions are summarized as follows: • We propose Semantic-Guided Adaptive Knowledge Trans-fer (SG-AKT), a novel instance-adaptive distillation ap-proach that uses textual semantics to guide the selective transfer of historical knowledge, mitigating knowledge interference in the visual backbone; • We propose Semantic-Enhanced Visual Prototype Refine-ment (SE-VPR), which injects inter-class textual seman-tics into visual prototypes to build a powerful visual-side classifier, effectively compensating for the modality gap; • Extensive experiments demonstrate that our SECL out-performs existing methods and provides new insights into harnessing the potential of textual priors for CL. 
+
+## Related Work Continual Learning. Continual Learning (CL) aims to in-crementally acquire new knowledge while preserving perfor-mance on previously learned tasks. Traditional CL methods typically learn models from scratch and can be categorized into three types: (a) replay-based methods (Bonicelli et al. 2022; Aljundi et al. 2019a,b), which store exemplar samples to jointly train with new tasks; (b) regularization-based meth-ods (Jung et al. 2020; Zenke, Poole, and Ganguli 2017; Wang et al. 2025), which constrain parameter updates through addi-tional regularization terms; and (c) expansion-based methods (Hung et al. 2019; He et al. 2025), which dynamically allocate new parameters for future tasks to improve model plasticity. With the advent of large-scale pre-trained models (Dosovit-skiy 2020; Radford et al. 2021), recent studies (Wang et al. 2022b; Lu et al. 2024; Liang and Li 2024) have explored Parameter-Efficient Fine-Tuning (PEFT) as a promising solu-tion for CL, enabling task adaptation without full model re-training. In particular, CLIP-based continual learning (Huang et al. 2024; Zhou et al. 2025; Jha, Gong, and Yao 2024; Menabue et al. 2024) has attracted increasing interest due to its strong zero-shot generalization. STAR (Menabue et al. 2024) treats the pre-trained CLIP as a powerful task-id se-lector. RAPF (Huang et al. 2024) introduces a lightweight learnable projector and a selective pseudo-feature replay ap-proach, enhances fine-grained class discrimination. PROOF (Zhou et al. 2025) improves image-text alignment via a learn-able cross-attention module and alleviates forgetting through a weight averaging strategy. 
+
+Parameter-Efficient Fine-Tuning (PEFT) for Vision-Lanugage Models. Recent vision-language models (VLMs) such as CLIP (Radford et al. 2021) and BLIP (Li et al. 2022) enable strong zero-shot transfer but suffer from domain shift on downstream tasks. To address this, PEFT methods adapt VLMs by updating only a small set of parameters. Prompt tuning-based methods (Zhou et al. 2022b,a; Yao, Zhang, and Xu 2023; Cheng et al. 2024; Xu et al. 2025) learn soft prompts to condition the text branch, while adapter-based approaches (e.g., CLIP-Adapter (Gao et al. 2024), Tip-Adapter (Zhang et al. 2021)) introduce lightweight projection matrices or cache-based classifiers to improve model performance on downstream tasks. Other PEFT strategies include low-rank tuning (LoRA (Hu et al. 2021)), prefix tuning (Li and Liang 2021), and Mixture-of-Experts (MoE (Jacobs et al. 1991)). Despite tuning only a small subset of parameters, these methods have demonstrated effectiveness comparable to full-model fine-tuning. 
+
+## Methodology Problem Definition. In continual learning (CL), the model is trained sequentially on a series of tasks 
+
+D = {D 1, · · · , Ds, · · · , DS }, where the task Ds =
+
+{(xsi , y si )}|D s| 
+
+> i=1
+
+in s-th stage consists of image-label pairs from a distinct distribution. The label set are non-overlapping, 
+
+i.e. , Ys ∩ Y s′
+
+= ∅ for any s  = s′, where Ys denotes the 21646 Visual Feature Cat Bird Dog 
+
+…
+
+(b) SE-VPR 
+
+…
+
+> P1
+> Ps
+> P2
+
+…
+
+……Cat’s Semantic Vectors  
+
+> Lce −VLreg
+
+(a) SE-AKT 
+
+Vagg 
+
+> x
+> Class-wise Embeddings
+
+…
+
+> fV
+> Semantic Relevance
+
+…α(1)  
+
+> x
+
+α(2)    
+
+> xα(|P| )
+> x
+> V(1)
+> x
+> V(2)
+> x
+> V(|P| )
+> x
+> D1D2…
+> Ds
+
+Ds Images Textual Embeddings 
+
+> ………
+
+…   
+
+> Aggregation
+> New Old Refined Prototypes ˆcs
+> V
+> Image (Cat)
+
+x FV(·)Visual Encoder ·)  
+
+> AAdapter
+> Text Encoder
+> FT(·)
+> FV(·)Visual Encoder )
+> Adapter Pool PA1
+
+…  
+
+> A2A|P|
+> FV(·)Visual Encoder
+> ˆcs−1V
+> LSE −AKT
+> Distillation Dog Truck Cat Bird
+> Semantic relations ns CLIP Prototypes
+> …
+> {
+
+cV
+
+> Prototype Refinement
+
+Figure 2: SECA consists of two components: (a) The SG-AKT module that exploits textual semantic vectors to aggregates relevant historical visual knowledge; (b) The SE-VPR module that models inter-class semantic relations to refine CLIP prototypes. label space of Ds. The goal is to incrementally learn all S
+
+tasks while maintaining model performance on images from all seen classes Y1 ∪ · · · ∪ Y S during inference. 
+
+Overall framework. The overall framework is illustrated in Fig.2. Our SECA is built upon CLIP, which includes a vi-sual encoder FV(·) and a text encoder FT(·). SECA consists of two components: (1) Semantic-Guided Adaptive Knowl-edge Transfer (SG-AKT, Fig. 2(a)), an instance-adaptive dis-tillation approach that utilizes textual cues to estimate se-mantic relevance and selectively aggregate past knowledge. (2) Semantic-Enhanced Visual Prototype Refinement (SE-VPR, Fig. 2(b)), a module that leverages inter-class semantic relations to refine the structure of visual prototypes. 
+
+Hybrid Parameter-Efficient Fine-Tuning Baseline CLIP Fine-Tuning with Learnable Textual Prompts. The CLIP architecture comprises a visual encoder FV(·) and a text encoder FT(·). For the s-th task Ds, we introduce a learnable task-specific textual prompt Ps ∈ RM ×dT , where 
+
+M is the number of prompt tokens and dT is the embedding dimension of the text encoder. Given a class label y, the input is a concatenation of the learnable prompt and its tokenized class name CLASS y :
+
+Esy = [ Ps]1[Ps]2 · · · [Ps]M [CLASS y ], (1) where [Ps]m is the m-th learnable token in Ps. This sequence is then fed into the frozen text encoder FT(·) to generate the textual feature for y: FT(y; Ps) = FT(Esy ) ∈ RdT .
+
+CLIP Fine-Tuning with Visual Adapters. To adapt the visual encoder FV(·) to downstream tasks, we introduce a set of task-shared lightweight adapters (Chen et al. 2022) into the visual backbone. At the s-th task, we denote the adapter set as A = {A l}Ll=1 , where each Al is inserted alongside the l-th transformer block. Given an input ˆhl of the Feed-Forward Network (FFN) at layer l, the output is computed as: 
+
+hl+1 = ˆhl + FFN( ˆhl) + Al(ˆhl). (2) Given an image x ∈ D s, its final visual feature is denoted as FV(x; A) ∈ RdV , where dV is the dimension of the repre-sentation from visual encoder. 
+
+Hybrid Fine-Tuning Baseline. The probability of x being classified to class y is computed as: 
+
+ps(y | x) = exp( 〈F V(x; A), FT(y; Ps)〉/τ )
+
+∑
+
+> y∈Y s
+
+exp( 〈F V(x; A), FT(y; Ps)〉/τ ) , (3) where τ is a temperature factor and 〈· , ·〉 denotes the cosine similarity between 2-normalized visual and textual features. Given a data point (x, y ) ∈ D s, the learnable PEFT modules are trained through a standard cross-entropy loss: 
+
+Lce −T = −y log ps(y | x), (4) 
+
+Semantic-Guided Adaptive Knowledge Transfer 
+
+To enable selective knowledge transfer, we begin by extract-ing semantic vectors for new images, which are then used to assess their relevance to past representations from a pool of historical adapters. The resulting relevance scores guide the instance-adaptive aggregation of past representations, and the aggregated features serve as teacher signals for distillation. 
+
+Knowledge Aggregation and Distillation. To continually record learned visual knowledge, we maintain a pool of his-torical adapters, which serves as a repository of knowledge from past tasks. At the end of each task, the trained adapter 21647 is cached in a adapter pool P = {A 1, A2, · · · , A|P| } with a fixed size |P| . To maintain a constant pool size, we moni-tor adapter utility score and prune the past adapter with the highest utility when incorporating a new one. When a new task arrives ( i.e. , Ds), given a data point 
+
+(x, y ) ∈ D s, we extract the visual knowledge Vx of x from the adapter pool P by encoding x through all adapters in P:
+
+V(p) 
+
+> x
+
+= FV(x; Ap), Vx = [ V(1)  
+
+> x
+
+, · · · , V(|P |) 
+
+> x
+
+], (5) where V(p) 
+
+> x
+
+∈ RdV is the visual representation of x encoded by the p-th adapter Ap ∈ P . Vx collects diverse visual representations of x from different previous models. In parallel, we collect the textual semantic vectors of class label y associated with image x. To be specific, we com-bine the ground-truth word embedding CLASS y with textual prompts from the new and all previous tasks: 
+
+S(p) 
+
+> y
+
+= FT(y; Pp), Sy = [ S(1)  
+
+> y
+
+, · · · , S(s) 
+
+> y
+
+], (6) where S(p) 
+
+> y
+
+∈ dT is the text feature obtained by concatenating the word embedding CLASS y with the p-th task’s prompt 
+
+Pp. Each textual feature provides a task-specific semantic perspective of class y. This scheme extracts comprehensive and abundant semantic embeddings of class y.During training, consider the image x, we assess its se-mantic relevance to representations from the adapter pool using the associated semantic vectors Sy . To be specific, we introduce two learnable semantic projectors, WS ∈ RdT×dV
+
+and WV ∈ RdV ×dV , to map both Sy and Vx into a shared semantic space. Afterwards, the relevance score between x
+
+and adapter Ap is formulated as follows: 
+
+α(p) 
+
+> x
+
+= 1
+
+s
+
+> s
+
+∑
+
+> i=1
+
+[φ(S(i) 
+
+> y
+
+)WS][φ(V(p) 
+
+> x
+
+)WV], (7) where φ(·) denotes the LayerNorm (Ba, Kiros, and Hinton 2016) operation to to stabilize training. α(p) 
+
+> x
+
+represents the rel-evance of its ground-truth class y to learned visual knowledge from p-th adapter in shared semantic space. The relevance scores then used to guide the aggregation of visual knowledge 
+
+V(x) from the adapter pool: 
+
+Vagg  
+
+> x
+
+=
+
+> |P|
+
+∑
+
+> p=1
+
+exp( λα (p) 
+
+> x
+
+)
+
+∑|P|  
+
+> i=1
+
+exp( λα (i) 
+
+> x
+
+) V(p) 
+
+> x
+
+, (8) where the scaling factor λ is introduced to promote smoother feature aggregation. Such an aggregation paradigm adaptively assigns higher weights to knowledge from past adapters that are closely matched to the textual semantic vectors for each instance, prioritizing aggregating relevant knowledge. Two semantic projectors WS and WV are optimized by a cross-entropy loss Lagg , which guarantee the alignment between visual representations Vx and textual vectors Sy :
+
+Lagg = −y log ps(y | Vagg  
+
+> x
+
+). (9) The aggregated representation Vagg  
+
+> x
+
+serves as a teacher representation to distill relevant knowledge into the current model. The distillation is implemented by minimizing the KL divergence between the predictions of the aggregated feature 
+
+Vagg  
+
+> x
+
+and feature fV = FV(x, A) from the current adapter: 
+
+LSG -AKT =
+
+∑
+
+> y∈Y s
+
+sg (ps(y | Vagg  
+
+> x
+
+, τ ′)) log sg (ps(y | Vagg  
+
+> x
+
+, τ ′)) 
+
+ps(y | fV, τ ′) +  . (10) where sg( ·) denotes the stop-gradient operation, τ ′ is a tem-perature factor used to soften the probability distribution, similar to the role of τ in Eq. 3, and  is a small constant added for numerical stability. 
+
+Adapter Pool Management via Utility Score. To effec-tively manage the fixed capacity of the adapter pool, we adopt a pruning strategy: when incorporating a new adapter, we remove the existing one with the highest utility score. We define the utility score of the p-th adapter as Up, which rep-resents the adapter’s accumulated relevance to the current task. It is initially set to a uniform value of 1 
+
+> |P|
+
+. During the aggregation process, the utility scores are updated using a momentum-based strategy based on α(p) 
+
+> x
+
+:
+
+Up ← μUp + (1 − μ)α(p) 
+
+> x
+
+, p ∈ { 1, · · · , |P|} , (11) where μ is a momentum factor. After training, a higher utility score indicates the adapter’s knowledge has been sufficiently transferred to the latest model, making it a suitable candidate for removal to prune redundant knowledge while preventing the pool size from growing linearly with the number of tasks. 
+
+Semantic-Enhanced Visual Prototype Refinement 
+
+To bridge the modality gap, we construct a semantic-guided visual-side classifier for collaborative inference with the tex-tual classifier. This is achieved by modeling inter-class seman-tic relationships via textual embeddings, which are then used to refine the structure of coarse visual prototypes, aligning them with semantic structures in the text branch. 
+
+Prototype Refinement. Consider the s-th task, for each seen class within and before the s-th task (with class label set Y1: s = Y1 ∪ · · · ∪ Y s), we obtain a semantic embedding: Given a class k and the task-specific prompt Ps, we encode the class name using CLIP’s text encoder: Zk = FT(k; Ps).To enable flexible modeling of inter-class relationships, we introduce a learnable projector Hproj ∈ RdT×dT to project the class-wise embeddings into a trainable and more expres-sive latent space. We model the inter-class affinity matrix 
+
+M, which captures semantic similarities between different classes, based on the projected class-wise embeddings: 
+
+Mk,j = exp( −γ‖φ(Zk)Hproj − φ(Zj )Hproj ‖22), (12) where Mk,j represents the affinity score between the k-th and j-th classes, and γ is a scaling factor to smooth the dis-tribution of affinity values. Subsequently, the affinity scores are used to refine the structure of coarse visual prototypes: 
+
+ˆcV,k = ∑
+
+> j∈Y 1: s
+
+Mk,j 
+
+∑ 
+
+> i∈Y 1: s
+
+Mk,i 
+
+cV,j , (13) 21648 where cV,k denotes the coarse CLIP prototype of the k-th class. It is calculated by averaging the CLIP visual encoder features of all images belonging to class k at the beginning of its corresponding task: 
+
+cV,k = 1
+
+Nk
+
+∑
+
+> (x,y )∈D 1: s
+
+FV(x)1(y = k), (14) where Nk is the number of images of class k. 1(y = k) is an indicator function that equals 1 if y = k, and 0 otherwise. The refined visual prototypes ˆcs 
+
+> V
+
+= [ˆ cs
+
+> V,1
+
+, · · · , ˆcs
+
+> V,|Y 1: s|
+
+]
+
+serve as a visual-side classifier. For (x, y ) ∈ D s, the proba-bility of predicting x as class y ∈ Y s is computed as: 
+
+ˆpV(y | x) = exp( 〈F V(x; A), ˆcs 
+
+> V,y
+
+〉/τ )
+
+∑
+
+> y∈Y s
+
+exp( 〈F V(x; A), ˆcs 
+
+> V,y
+
+〉/τ ) . (15) The projector Hproj is trained with a classification loss 
+
+Lce −V to instruct the inter-class relationship modeling: 
+
+Lce −V = −y log ˆ pV(y | x). (16) 
+
+Prototype Consistency Regularization. Furthermore, to prevent Hproj from overfitting to new classes, we introduce a prototype regularization loss Lreg that promotes the temporal stability of visual prototypes for previously learned classes (Y1: s−1). This loss encourages the updated prototypes asso-ciated with old tasks to remain close to their earlier versions: 
+
+Lreg = 1
+
+|Y 1: s−1|
+
+∑
+
+> k∈Y 1: s−1
+
+‖ˆcs 
+
+> V,k
+
+− ˆcs−1V,k ‖22, (17) where ˆcs−1V,k is the refined visual prototype after the (s − 1) -th task of the previous class k. By injecting semantic relations into visual prototypes and preserving temporal consistency, SE-VPR establishes a powerful visual classifier that inherits textual semantic structures while bridging the modality gap. 
+
+Training Objective and Inference Strategy Training Objective. Our framework optimizes the SG-AKT and the SE-VPR modules, including the following terms: 
+
+L = Lce −T + Lagg + βLSG −AKT 
+
+︸ ︷︷ ︸
+
+> SG −AKT
+
++ Lce −V + Lreg 
+
+︸ ︷︷ ︸
+
+> SE −VPR
+
+, (18) where β is a trade-off hyper-parameter controlling the contri-bution of LSG −AKT . As historical knowledge accumulates during continual adaptation, we set β as a task-dependent variable that increases with tasks (see Appendix.B). 
+
+Inference Strategy. During inference, after the s-th task, given an image x, its final prediction ˆy is in a hybrid form, combining the prediction ˆpV of the refined visual classifier 
+
+ˆcV and predictions from all task-specific text classifiers: 
+
+ˆy = arg max 
+
+> y
+
+(
+
+ˆpV(y | x, τ ′) + 1
+
+s
+
+> s
+
+∑
+
+> i=1
+
+pi(y | x, τ ′)
+
+)
+
+, (19) where τ ′ is the temperature factor for inference, which is set to match the one used in LSG −AKT to ensure consistency between training and inference. 
+
+## Experiments Datasets. We evaluate our method on three represen-tative CIL benchmarks: ImageNetR (Hendrycks et al. 2021a), ImageNetA (Hendrycks et al. 2021b), and CIFAR-100 (Krizhevsky, Hinton et al. 2009). ImageNetR comprises 30,000 images spanning 200 classes, covering a wide range of visual styles. ImageNetA contains 7,500 challenging real-world adversarial examples images across 200 classes. CI-FAR100 is a commonly-used dataset in continual learning, which consists of 60000 32 ×32 images of 100 classes. We adopt both 10-split and 20-split settings, where the class set is evenly divided into 10 or 20 non-overlapping tasks. 
+
+Evaluation Metrics. Following prior PEFT-based CIL works (Tan et al. 2024; Gao, Cen, and Chang 2024; Huang et al. 2024), we adopt two standard evaluation metrics: (1) The last session accuracy (Last): the final accuracy over all classes after completing the last task, and (2) Average accu-racy (Avg), the average accuracy across all incremental tasks. All experiments are conducted using three random seeds, and we report the mean performances. 
+
+Implementation Details. All experiments are conducted on a single NVIDIA RTX 3090 GPU. We adopt CLIP (Radford et al. 2021) with a ViT-B/16 (Dosovitskiy 2020) visual en-coder pre-trained by OPENAI as our backbone. Our model is optimized using Adam (Kingma and Ba 2014) with an initial learning rate of 0.001. For the training schedule, each task is trained for 10 epochs on ImageNetR and ImageNetA, and 3 epochs on CIFAR100. The batch size is set to 64 for ImageN-etR and ImageNetA and 100 for CIFAR100. The capacity of the frozen adapter pool P in SG-AKT is set to 5, and the temperature factor τ ′ in LSG −AKT is set to 0.05. 
+
+SECA++: An Enhanced Variant of SECA. Following ex-isting PEFT-based CIL methods (Tan et al. 2024; Huang et al. 2024; Lu et al. 2024), we further implement an enhanced variant, denoted as SECA++, which incorporates Gaussian sampling-based feature replay to alleviate inter-task confu-sion during the training of the hybrid classifier, enhancing its discriminative ability for semantically confusing classes. 
+
+Comparison with the State-of-the-Arts 
+
+We compare SECA with recent state-of-the-art PEFT-based approaches, including prompt-based methods (Wang et al. 2022b; Lu et al. 2024; Smith et al. 2023), adapter-based methods (Li et al. 2024; Tan et al. 2024; Huang et al. 2024), the zero-shot CLIP (ZS-CLIP) and other represen-tative techniques built upon either ViT-B/16 pretrained on ImageNet-21K (Russakovsky et al. 2015) (ViT-21K) or CLIP-pretrained backbones. Evaluations are conducted on ImageN-etR, ImageNetA and CIFAR100, and the results are shown in Tab.1 and Tab.2. ‘ER/FP’ indicates the use of experience replay (Rolnick et al. 2019) or distributional sampling-based feature replay. Notably, most CLIP-based CIL methods incor-porate such replay strategies into their frameworks. For a fair comparison, we reproduce the results of two representative methods, RAPF (Huang et al. 2024) and VPT-NSP (Lu et al. 2024), using a CLIP backbone under a replay-free setting. These variants are denoted as RAPF † and VPT-NSP †.The results demonstrate the superiority of our method. Specifically, under the 10-split setting, our replay-free SECA 21649 Method Venue Backbone ER/FR 10S-ImageNetR 10S-ImageNetA 20S-ImageNetR 20S-ImageNetA Last ↑ Avg ↑ Last ↑ Avg ↑ Last ↑ Avg ↑ Last ↑ Avg ↑
+
+L2P (Wang et al. 2022b) CVPR-22 ViT-21k  72.34 77.36 44.04 51.24 69.64 75.28 40.48 49.62 CODA (Smith et al. 2023) CVPR-23 ViT-21k  73.31 78.47 52.08 63.92 69.96 75.34 44.62 54.86 Adam-adapter (Zhou et al. 2024) IJCV-24 ViT-21k  65.79 72.42 48.81 58.84 57.42 64.75 48.65 59.55 SSIAT (Tan et al. 2024) CVPR-24 ViT-21k  79.38 83.63 62.43 70.83 75.67 82.30 59.16 68.45 VPT-NSP (Lu et al. 2024) NeurIPS-24 ViT-21k  77.95 83.44 53.83 63.93 75.69 81.87 49.81 61.41 DIA (Li et al. 2024) CVPR-25 ViT-21k  79.03 85.61 59.78 70.43 76.32 83.51 – –ZS-CLIP – CLIP  74.93 81.56 47.33 58.35 74.93 82.09 47.33 59.36 L2P (Wang et al. 2022b) CVPR-22 CLIP  75.98 81.67 47.86 59.35 68.78 76.87 47.54 59.77 DualPrompt (Wang et al. 2022a) CVPR-22 CLIP  75.77 82.01 48.18 59.05 69.41 77.07 48.05 60.22 CODA (Smith et al. 2023) CVPR-22 CLIP  67.52 78.00 50.24 64.32 64.53 75.23 49.95 65.08 Adam-adapter (Zhou et al. 2024) IJCV-24 CLIP  71.35 78.65 59.35 68.56 68.75 76.71 58.55 67.72 RAPF † (Huang et al. 2024) ECCV-24 CLIP  73.23 82.20 45.54 60.67 71.28 81.66 43.85 58.54 RAPF (Huang et al. 2024) ECCV-24 CLIP  79.62 86.28 55.37 67.32 80.28 85.58 49.85 65.28 CLAP (Jha, Gong, and Yao 2024) NeurIPS-24 CLIP  79.98 85.77 58.66 69.35 79.12 85.03 55.84 67.72 VPT-NSP † (Lu et al. 2024) NeurIPS-24 CLIP  77.45 83.60 47.14 59.04 77.52 83.94 47.07 59.88 VPT-NSP (Lu et al. 2024) NeurIPS-24 CLIP  82.48 87.94 61.42 71.76 82.06 88.09 60.70 72.57 PROOF (Zhou et al. 2025) T-PAMI-25 CLIP  77.25 82.69 55.67 65.50 77.05 82.83 54.05 64.53 SECA (Ours) – CLIP  83.18 88.58 65.09 74.45 82.25 88.19 62.80 73.02 SECA++ (Ours) – CLIP  83.41 88.75 65.77 74.65 83.02 88.62 64.41 74.64 
+
+Table 1: Experimental results on ImageNetR and ImageNetA. We report the averaged results over 3 trials. VPT-NSP † and RAPF †
+
+denote the feature replay-free version of VPT-NSP (Lu et al. 2024) and RAPF (Huang et al. 2024), respectively. The highest results are in bold , and the second best results are underlined. Method ER/FR 10S-CIFAR100 20S-CIFAR100 Last ↑ Avg ↑ Last ↑ Avg ↑                                                       
+
+> ZS-CLIP 66.68 75.15 66.68 75.93 L2P (Wang et al. 2022b) 73.08 81.90 68.67 79.18 DualPrompt (Wang et al. 2022a) 72.51 81.45 69.91 79.74 CODA (Smith et al. 2023) 62.25 76.98 41.98 69.78 SLCA (Zhang et al. 2023) 67.58 80.53 66.84 78.96 Adam-adapter (Zhou et al. 2024) 65.50 75.76 58.12 70.18 RAPF (Huang et al. 2024) 79.04 86.19 79.26 86.87 CLAP (Jha, Gong, and Yao 2024) 78.21 86.13 77.35 86.08 PROOF (Zhou et al. 2025) 76.29 84.88 76.13 85.12 SECA (Ours) 79.79 86.70 77.73 85.35 SECA++ (Ours) 81.59 87.80 80.07 87.11
+
+Table 2: Experimental results on CIFAR100. All results are based on the CLIP model with a ViT-B/16 vision backbone. surpasses the strongest VPT-NSP (the replay-based version) by 0.70%, 3.67% on ImageNet-R and ImageNet-A in terms of Last accuracy, respectively. Our feature replay-enhanced version, SECA++, further boosts the performance, outper-forming VPT-NSP by 0.93% and 4.35% in Last accuracy on 10S-ImageNetR and 10S-ImageNetA, respectively. To sum up, our SECA has two main advantages: (1) It en-ables seamless knowledge injection into each layer within the visual encoder via layer-wise adapters combined with a adap-tive knowledge transfer mechanism, rather than merely attach-ing tunable modules after the frozen backbone; (2) It is com-patible with replay-based strategies, allowing further perfor-mance improvements when integrated with lightweight fea-ture replay. More evaluations can be found in Appendix .B. 
+
+Ablation Studies The effectiveness of components. We conduct ablation stud-ies on components of our training pipeline, including the hybrid PEFT baseline (H-PEFT), SG-AKT and SE-VPR. The results are shown in Tab.3. The H-PEFT (Idx 2) achieves a substantial improvement over ZS-CLIP (Idx 1), with +5.64% and +8.45% gains in Last accuracy on 10S-ImageNetR and 10S-ImageNetA. Incorporating SG-AKT (Idx 3) brings fur-ther gains (e.g., +2.13% on ImageNetA), effectively improv-ing representation learning in the visual encoder by selec-tively transferring past knowledge. Moreover, SE-VPR (Idx 4) form a hybrid classification paradigm by leveraging tex-tual semantics to refine visual prototypes, resulting in notable performance improvements (e.g., +4.65% on ImageNetA) compared to text-only classifier. 
+
+SG-AKT v.s. other Distillation Strategies. We compare SG-AKT with four alternative distillation strategies in Tab.4: (1) Seq. denotes sequential tuning without any distillation loss; (2) CLIP-KD distills from the frozen CLIP model as a global teacher; (3) Vanilla distills knowledge from the most recent task model, following prior works (Kang, Park, and Han 2022; Asadi et al. 2023); (4) Avg-KD is a simplified vari-ant of SG-AKT that aggregates adapter pool features by aver-aging, without relevance assessment. Tab. 4 shows that SG-AKT consistently outperforms all variants, with +0.77% and +1.58% Last-acc improvements over Avg-KD and Vanilla on 10S-ImageNetA, respectively. Although these two designs are effective for knowledge retention, they fall short compared to SG-AKT, highlighting the effectiveness of leveraging textual information to prioritize semantically relevant transfer. 
+
+SE-VPR v.s. other Classifier Designs. We compare our SE-VPR module with four alternative designs for construct-ing the classifier in Tab.5: (1) Only Text denotes using the text encoder alone for classification without visual classi-fiers; (2) Centroid (CLIP) computes class centroids using pretrained frozen CLIP prototypes as the visual-side classi-21650 Idx H-PEFT SG-AKT SE-VPR 10S-ImageNetA 10S-CIFAR100 10S-ImageNetR Last ↑ Avg ↑ Last ↑ Avg ↑ Last ↑ Avg ↑
+
+1 - - - 47.33 58.35 67.19 76.23 74.93 81.56 4  - - 55.78 ±1.36 67.97 ±0.38 73.97 ±0.65 82.75 ±0.28 80.57 ±0.15 87.04 ±0.35 5   - 57.91 ±0.55 68.56 ±0.66 75.93 ±0.09 84.16 ±0.21 81.36 ±0.49 87.55 ±0.29 6  -  62.62 ±0.65 73.15 ±0.25 77.13 ±0.56 84.91 ±0.43 81.30 ±0.55 87.63 ±0.12 7    65.09 ±0.48 74.45 ±0.76 79.79 ±0.42 86.70 ±0.16 83.18 ±0.34 88.58 ±0.07 Table 3: Ablation studies of each component in our approach on the three benchmarks. Method 10S-ImageNetA 10S-CIFAR100 Last ↑ Avg ↑ Last ↑ Avg ↑
+
+Methods without SE-VPR. 
+
+Seq. 55.78 ±1.36 67.97 ±0.38 73.97 ±0.65 82.75 ±0.28 CLIP-KD 55.01 ±0.68 67.00 ±0.27 71.21 ±0.61 80.98 ±0.50 Vanilla 57.05 ±0.75 67.93 ±0.47 74.55 ±0.26 83.26 ±0.32 Avg-KD 56.90 ±0.11 68.02 ±0.76 75.05 ±0.78 83.65 ±0.33 SG-AKT (Ours) 57.91 ±0.55 68.56 ±0.66 75.93 ±0.09 84.16 ±0.21 
+
+Methods with SE-VPR. 
+
+Seq. 62.62 ±0.65 73.15 ±0.25 77.13 ±0.56 84.91 ±0.43 CLIP-KD 62.39 ±0.77 73.01 ±1.17 73.30 ±0.80 83.76 ±0.18 Vanilla 63.51 ±0.71 73.89 ±0.69 76.42 ±0.44 85.75 ±0.37 Avg-KD 64.32 ±0.59 74.08 ±0.82 78.78 ±0.51 86.27 ±0.30 SG-AKT (Ours) 65.09 ±0.48 74.45 ±0.76 79.79 ±0.42 86.70 ±0.16 Table 4: Ablation studies of different distillation strategies on 10S-ImageNetA and 10S-CIFAR100. fier; (3) Centroid (adapted) leverages the fine-tuned CLIP visual encoder to extract class centroids; (4) Linear trains an additional linear classifier on top of the adapted visual features. The results indicate the necessity of incorporating a visual-side classifier to bridge the modality gap. It also show the superiority of our SE-VPR, which achieves the best performance compared to other variants, yielding +1.93% and +1.49% gains in Last accuracy over Centroid (adapted) on 10S-ImageNetA and 10S-CIFAR100. 
+
+Hyper-Parameter Analysis Analysis of the Pool Size |P| and the Temperature Factor 
+
+τ ′. We analyze the sensitivity of two key hyper-parameters in SG-AKT: the size |P| of the adapter pool and the tempera-ture factor τ ′ for knowledge transfer. The results are shown in Fig. 3. The performance constantly improves with larger pool size and saturates when |P| ≥ 5, where the results closely match those of using all previous adapters (denoted as ‘ALL’). This confirms that our utility-score-based pool management effectively prunes redundant knowledge with-out compromising accuracy. For the temperature factor τ ′, a relatively high τ ′ yields better performance, suggesting that smoother teacher labels benefits knowledge trransfer. Based on the results, we set |P| = 5 and τ ′ = 20 .0 for all datasets. 
+
+## Conclusion 
+
+In this paper, we focus on the potential of textual semantics in addressing the stability–plasticity dilemma in continual learn-ing (CL), and propose Semantic-Enriched Continual Adap-tation (SECA), a unified framework for class-incremental Method 10S-ImageNetA 10S-CIFAR100 Last ↑ Avg ↑ Last ↑ Avg ↑
+
+Only Text 57.91 ±0.55 68.56 ±0.66 75.93 ±0.09 84.16 ±0.21 Centroid (CLIP) 58.55 ±0.57 68.30 ±1.17 75.77 ±0.56 83.88 ±0.42 Centroid (Adapted) 63.16 ±0.30 72.89 ±0.98 78.30 ±0.89 86.15 ±0.66 Linear 51.07 ±3.34 62.76 ±3.19 74.20 ±0.50 82.98 ±0.59 SE-VPR (Ours) 65.09 ±0.48 74.45 ±0.76 79.79 ±0.42 86.70 ±0.16 Table 5: Ablation studies of different classifier designs on 10S-ImageNetA and 10S-CIFAR100 datasets. Figure 3: Model performances under different pool sizes |P| 
+
+and temperatures τ ′.learning with CLIP. By assessing the new image’s semantic relevance to historical knowledge using textual semantics, our Semantic-Guided Adaptive Knowledge Transfer (SG-AKT) selectively transfers relevant past knowledge to the current model, suppressing the transfer of unrelated or conflicting knowledge. Furthermore, by injecting inter-class semantic re-lations into visual prototypes, our Semantic-Enhanced Visual Prototype Refinement (SE-VPR) builds a powerful visual-side classifier to bridge the modality gap. We believe SECA provides valuable insights into text-grounded continual learn-ing by demonstrating how textual semantics enable better stability–plasticity trade-off. In the future, we aim to further explore adaptive transfer and multi-modal synergy in CL. 21651 Acknowledgements 
+
+This work was supported in part by the National Key R&D Program of China under Grant No.2023YFA1008600, in part by the National Natural Science Foundation of China under Grants 62576262, U22A2096, 62176198, in part by Scientific and Technological Innovation Teams in Shaanxi Province under grant 2025RS-CXTD-011, in part by the Shaanxi Province Core Technology Research and Development Project under grant 2024QY2-GJHX-11, 2024GX-YBXM-135, in part by the Fundamental Research Funds for the Central Universities under Grant QTZX25083, QTZX23042. This work is also supported by the National Engineering Lab-oratory for Integrated Aero-Space-Ground- Ocean Big Data Application Technology, China 
+
+## References 
+
+Aljundi, R.; Belilovsky, E.; Tuytelaars, T.; Charlin, L.; Cac-cia, M.; Lin, M.; and Page-Caccia, L. 2019a. Online contin-ual learning with maximal interfered retrieval. Advances in neural information processing systems , 32. Aljundi, R.; Lin, M.; Goujaud, B.; and Bengio, Y. 2019b. Gradient based sample selection for online continual learning. 
+
+Advances in neural information processing systems , 32. Asadi, N.; Davari, M.; Mudur, S.; Aljundi, R.; and Belilovsky, E. 2023. Prototype-sample relation distillation: towards replay-free continual learning. In International conference on machine learning , 1093–1106. PMLR. Ba, J. L.; Kiros, J. R.; and Hinton, G. E. 2016. Layer normal-ization. arXiv preprint arXiv:1607.06450 .Bonicelli, L.; Boschini, M.; Porrello, A.; Spampinato, C.; and Calderara, S. 2022. On the effectiveness of lipschitz-driven rehearsal in continual learning. Advances in Neural Information Processing Systems , 35: 31886–31901. Chen, Q.; Shui, C.; Han, L.; and Marchand, M. 2023. On the stability-plasticity dilemma in continual meta-learning: Theory and algorithm. Advances in Neural Information Pro-cessing Systems , 36: 27414–27468. Chen, S.; Ge, C.; Tong, Z.; Wang, J.; Song, Y.; Wang, J.; and Luo, P. 2022. Adaptformer: Adapting vision transformers for scalable visual recognition. Advances in Neural Information Processing Systems , 35: 16664–16678. Cheng, D.; Xu, Z.; Jiang, X.; Wang, N.; Li, D.; and Gao, X. 2024. Disentangled Prompt Representation for Domain Generalization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23595–23604. Dosovitskiy, A. 2020. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 .Fahim, A.; Murphy, A.; and Fyshe, A. 2024. It’s Not a Modal-ity Gap: Characterizing and Addressing the Contrastive Gap. 
+
+arXiv preprint arXiv:2405.18570 .Gao, P.; Geng, S.; Zhang, R.; Ma, T.; Fang, R.; Zhang, Y.; Li, H.; and Qiao, Y. 2024. Clip-adapter: Better vision-language models with feature adapters. International Journal of Com-puter Vision , 132(2): 581–595. Gao, Z.; Cen, J.; and Chang, X. 2024. Consistent Prompting for Rehearsal-Free Continual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 28463–28473. He, L.; Cheng, D.; Ma, Z.; Wang, H.; Zhang, D.; Wang, N.; and Gao, X. 2025. Ckaa: Cross-subspace knowledge align-ment and aggregation for robust continual learning. arXiv preprint arXiv:2507.09471 .Hendrycks, D.; Basart, S.; Mu, N.; Kadavath, S.; Wang, F.; Dorundo, E.; Desai, R.; Zhu, T.; Parajuli, S.; Guo, M.; et al. 2021a. The many faces of robustness: A critical analy-sis of out-of-distribution generalization. In Proceedings of the IEEE/CVF international conference on computer vision ,8340–8349. Hendrycks, D.; Zhao, K.; Basart, S.; Steinhardt, J.; and Song, D. 2021b. Natural adversarial examples. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 15262–15271. Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2021. Lora: Low-rank adaptation of large language models. arXiv preprint arXiv:2106.09685 .Huang, L.; Cao, X.; Lu, H.; and Liu, X. 2024. Class-Incremental Learning with CLIP: Adaptive Representation Adjustment and Parameter Fusion. arXiv:2407.14143. Hung, C.-Y.; Tu, C.-H.; Wu, C.-E.; Chen, C.-H.; Chan, Y.-M.; and Chen, C.-S. 2019. Compacting, picking and growing for unforgetting continual learning. Advances in neural informa-tion processing systems , 32. Jacobs, R. A.; Jordan, M. I.; Nowlan, S. J.; and Hinton, G. E. 1991. Adaptive mixtures of local experts. Neural computa-tion , 3(1): 79–87. Jha, S.; Gong, D.; and Yao, L. 2024. Clap4clip: Continual learning with probabilistic finetuning for vision-language models. arXiv preprint arXiv:2403.19137 .Jung, S.; Ahn, H.; Cha, S.; and Moon, T. 2020. Continual learning with node-importance based adaptive group sparse regularization. Advances in neural information processing systems , 33: 3647–3658. Kang, M.; Park, J.; and Han, B. 2022. Class-incremental learning by knowledge distillation with adaptive feature con-solidation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 16071–16080. Kim, D.; and Han, B. 2023. On the stability-plasticity dilemma of class-incremental learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 20196–20204. Kingma, D. P.; and Ba, J. 2014. Adam: A method for stochas-tic optimization. arXiv preprint arXiv:1412.6980 .Kirkpatrick, J.; Pascanu, R.; Rabinowitz, N.; Veness, J.; Des-jardins, G.; Rusu, A. A.; Milan, K.; Quan, J.; Ramalho, T.; Grabska-Barwinska, A.; et al. 2017. Overcoming catastrophic forgetting in neural networks. Proceedings of the national academy of sciences , 114(13): 3521–3526. Krizhevsky, A.; Hinton, G.; et al. 2009. Learning multiple layers of features from tiny images. 21652 Li, J.; Li, D.; Xiong, C.; and Hoi, S. 2022. Blip: Bootstrap-ping language-image pre-training for unified vision-language understanding and generation. In International conference on machine learning , 12888–12900. PMLR. Li, J.; Wang, S.; Qian, B.; He, Y.; Wei, X.; and Gong, Y. 2024. Dynamic Integration of Task-Specific Adapters for Class Incremental Learning. arXiv preprint arXiv:2409.14983 .Li, X. L.; and Liang, P. 2021. Prefix-Tuning: Optimizing Continuous Prompts for Generation. In Zong, C.; Xia, F.; Li, W.; and Navigli, R., eds., Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , 4582–4597. Online: Association for Computational Linguistics. Liang, V. W.; Zhang, Y.; Kwon, Y.; Yeung, S.; and Zou, J. Y. 2022. Mind the gap: Understanding the modality gap in multi-modal contrastive representation learning. Advances in Neural Information Processing Systems , 35: 17612–17625. Liang, Y.-S.; and Li, W.-J. 2024. InfLoRA: Interference-Free Low-Rank Adaptation for Continual Learning. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23638–23647. Lu, Y.; Zhang, S.; Cheng, D.; Xing, Y.; Wang, N.; Wang, P.; and Zhang, Y. 2024. Visual Prompt Tuning in Null Space for Continual Learning. arXiv preprint arXiv:2406.05658 .Menabue, M.; Frascaroli, E.; Boschini, M.; Sangineto, E.; Bonicelli, L.; Porrello, A.; and Calderara, S. 2024. Seman-tic residual prompts for continual learning. In European Conference on Computer Vision , 1–18. Springer. Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; et al. 2021. Learning transferable visual models from nat-ural language supervision. In International conference on machine learning , 8748–8763. PmLR. Rolnick, D.; Ahuja, A.; Schwarz, J.; Lillicrap, T.; and Wayne, G. 2019. Experience replay for continual learning. Advances in neural information processing systems , 32. Russakovsky, O.; Deng, J.; Su, H.; Krause, J.; Satheesh, S.; Ma, S.; Huang, Z.; Karpathy, A.; Khosla, A.; Bernstein, M.; et al. 2015. Imagenet large scale visual recognition challenge. 
+
+International journal of computer vision , 115: 211–252. Smith, J. S.; Karlinsky, L.; Gutta, V.; Cascante-Bonilla, P.; Kim, D.; Arbelle, A.; Panda, R.; Feris, R.; and Kira, Z. 2023. Coda-prompt: Continual decomposed attention-based prompting for rehearsal-free continual learning. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 11909–11919. Tan, Y.; Zhou, Q.; Xiang, X.; Wang, K.; Wu, Y.; and Li, Y. 2024. Semantically-Shifted Incremental Adapter-Tuning is A Continual ViTransformer. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,23252–23262. Wang, H.; Cheng, D.; He, L.; Li, Y.; Li, J.; Wang, N.; and Gao, X. 2025. EKPC: Elastic Knowledge Preservation and Com-pensation for Class-Incremental Learning. arXiv preprint arXiv:2506.12351 .Wang, Z.; Zhang, Z.; Ebrahimi, S.; Sun, R.; Zhang, H.; Lee, C.-Y.; Ren, X.; Su, G.; Perot, V.; Dy, J.; et al. 2022a. Dual-prompt: Complementary prompting for rehearsal-free contin-ual learning. In European Conference on Computer Vision ,631–648. Springer. Wang, Z.; Zhang, Z.; Lee, C.-Y.; Zhang, H.; Sun, R.; Ren, X.; Su, G.; Perot, V.; Dy, J.; and Pfister, T. 2022b. Learn-ing to prompt for continual learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recog-nition , 139–149. Xu, Z.; Cheng, D.; Jiang, X.; Wang, N.; Li, D.; and Gao, X. 2025. Adversarial Domain Prompt Tuning and Generation for Single Domain Generalization. In Proceedings of the Computer Vision and Pattern Recognition Conference , 18584– 18595. Yao, H.; Zhang, R.; and Xu, C. 2023. Visual-language prompt tuning with knowledge-guided context optimization. In Pro-ceedings of the IEEE/CVF conference on computer vision and pattern recognition , 6757–6767. Zenke, F.; Poole, B.; and Ganguli, S. 2017. Continual learn-ing through synaptic intelligence. In International conference on machine learning , 3987–3995. PMLR. Zhang, G.; Wang, L.; Kang, G.; Chen, L.; and Wei, Y. 2023. Slca: Slow learner with classifier alignment for continual learning on a pre-trained model. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,19148–19158. Zhang, R.; Fang, R.; Zhang, W.; Gao, P.; Li, K.; Dai, J.; Qiao, Y.; and Li, H. 2021. Tip-adapter: Training-free clip-adapter for better vision-language modeling. arXiv preprint arXiv:2111.03930 .Zhou, D.-W.; Cai, Z.-W.; Ye, H.-J.; Zhan, D.-C.; and Liu, Z. 2024. Revisiting class-incremental learning with pre-trained models: Generalizability and adaptivity are all you need. International Journal of Computer Vision , 1–21. Zhou, D.-W.; Zhang, Y.; Wang, Y.; Ning, J.; Ye, H.-J.; Zhan, D.-C.; and Liu, Z. 2025. Learning without forgetting for vision-language models. IEEE Transactions on Pattern Anal-ysis and Machine Intelligence .Zhou, K.; Yang, J.; Loy, C. C.; and Liu, Z. 2022a. Conditional prompt learning for vision-language models. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 16816–16825. Zhou, K.; Yang, J.; Loy, C. C.; and Liu, Z. 2022b. Learning to prompt for vision-language models. International Journal of Computer Vision , 130(9): 2337–2348. 21653

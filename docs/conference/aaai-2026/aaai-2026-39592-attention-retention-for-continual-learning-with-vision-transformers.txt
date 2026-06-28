@@ -1,0 +1,364 @@
+Title: Attention Retention for Continual Learning with Vision Transformers
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39592/43553
+
+Number of Pages: 9
+
+Markdown Content:
+# Attention Retention for Continual Learning with Vision Transformers 
+
+# Yue Lu 1†, Xiangyu Zhou 1†, Shizhou Zhang 1* , Yinghui Xing 1, Guoqiang Liang 1, Wencong Zhang 2* 
+
+> 1
+
+School of Computer Science, Northwestern Polytechnical University, China 
+
+> 2
+
+Hikrobot Co., Ltd., China zgxd@mail.nwpu.edu.cn, 2021300119@mail.nwpu.edu.cn, szzhang@nwpu.edu.cn, xyh 7491@nwpu.edu.cn, gqliang@nwpu.edu.cn, zhangwencong@hikrobotics.com 
+
+Abstract 
+
+Continual learning (CL) empowers AI systems to progres-sively acquire knowledge from non-stationary data streams. However, catastrophic forgetting remains a critical challenge. In this work, we identify attention drift in Vision Transform-ers as a primary source of catastrophic forgetting, where the attention to previously learned visual concepts shifts signifi-cantly after learning new tasks. Inspired by neuroscientific in-sights into the selective attention in the human visual system, we propose a novel attention-retaining framework to mitigate forgetting in CL. Our method constrains attention drift by ex-plicitly modifying gradients during backpropagation through a two-step process: 1) extracting attention maps of the pre-vious task using a layer-wise rollout mechanism and gen-erating instance-adaptive binary masks, and 2) when learn-ing a new task, applying these masks to zero out gradients associated with previous attention regions, thereby prevent-ing disruption of learned visual concepts. For compatibility with modern optimizers, the gradient masking process is fur-ther enhanced by scaling parameter updates proportionally to maintain their relative magnitudes. Experiments and visual-izations demonstrate the effectiveness of our method in miti-gating catastrophic forgetting and preserving visual concepts. It achieves state-of-the-art performance and exhibits robust generalizability across diverse CL scenarios. 
+
+# Introduction 
+
+Humans are capable of continuously accumulating and inte-grating knowledge in dynamic environments. Similarly, for AI systems, the ability to learn continuously over time is essential for achieving long-term adaptation and intelligent evolution. Continual learning (CL), which aims to enable AI systems to learn adaptively in non-stationary data streams, akin to how humans acquire and develop knowledge. 
+
+Catastrophic forgetting remains the central challenge in continual learning for artificial neural networks. Extensive efforts have been devoted to addressing this issue. For instance, replay-based methods (Rebuffi et al. 2017; Wu et al. 2018) store and replay previously learned samples. Regularization-based approaches (Kirkpatrick et al. 2017; 
+
+> *
+
+Shizhou Zhang and Wencong Zhang are co-corresponding au-thors. † Yue Lu and Xiangyu Zhou are co-first authors. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Figure 1: (a) Visualization of attention maps on the first task’s ( T1) samples. Columns two to four show attention maps from ViT models that are (i) only fine-tuned on T1,(ii) sequentially fine-tuned over 10 tasks (Model-T10 Seq-FT), and (iii) trained with our method over 10 tasks. Seq-FT leads to severe attention drift, while our method effectively preserves the original attention and thus mitigates forgetting. (b) Quantitative comparison of attention drift relative to T1.Zeng et al. 2019) constrain changes in important param-eters. Expansion-based methods (Yan, Xie, and He 2021; Smith et al. 2023) allocate independent network branches for new tasks. These strategies mimic various aspects of hu-man learning, such as memory consolidation, synaptic plas-ticity regulation, and the formation of new neural connec-tions. They offer valuable insights into building continual The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+24133 learning systems that resemble biological intelligence. In the visual system, limited neural resources force the brain to selectively process the sensory inputs. (Zhang et al. 2012) report that the primary visual cortex (also known as V1) generates a saliency map through neural activity to highlight attention-attracting regions in the visual field. This selective attention remains consistently anchored on the dis-criminative features of visual concepts, even as new con-cepts are acquired. Such inherent stability ensures that pre-viously learned knowledge is preserved and not disrupted by subsequent learning, forming the biological foundation for non-forgetting in human visual cognition. Inspired by this neuroscientific insight, we argue that preventing attention drift from previously learned concepts is essential for CL systems to overcome catastrophic forgetting. However, Vi-sion Transformers (Dosovitskiy et al. 2021) (ViTs) exhibit severe attention drift after learning new tasks, as illustrated in the third column of Figure 1(a). To address this issue and enhance the alignment between ViT attention mecha-nism and biological perception, we propose ARCL-ViT, an Attention-Retaining method that explicitly constrains atten-tion drift on previous tasks during the learning of new tasks, thereby alleviating catastrophic forgetting. However, directly optimizing the objective of preventing attention drift requires storing previous task data and is com-putationally infeasible. Instead, we approximately achieve this objective by suppressing gradients contributing to shift-ing previous attention during backpropagation, which elim-inates the need for old task data. This is achieved through two steps: 1) Attention Mask Generation. After completing a task, we extract the attention maps corresponding to the learned categories and generate binary masks that identify their critical attention regions. In this step, we introduce a layer-wise rollout mechanism for attention map extraction and develop an instance-adaptive thresholding strategy to dynamically identify salient attention regions. 2) Gradient Masking. When learning the next task, we use the masks to zero out the gradients associated with these regions, so as to prevent parameter updates from disrupting the model’s orig-inal attention to previous visual concepts. To ensure compat-ibility with modern optimizers, we further scale the parame-ter updates proportionally to maintain the relative magnitude between the masked and original gradients. As a result, our method suppresses attention drift and mitigates forgetting, as shown in the last column of Figure 1(a). Overall, we summarize our contributions as follows: • We identify attention drift in Vision Transformers as a primary source of catastrophic forgetting in continual learning, and reveal the necessity of preserving selective attention to previous visual concepts. • We propose a novel framework for retaining attention, which constrains attention drift via gradient masking and employs a layer-wise rollout and adaptive thresholding strategy to generate effective attention masks. • Our method is extensively evaluated on challenging con-tinual learning benchmarks, achieving state-of-the-art performance and robust generalization across diverse pre-training schemes and long-sequence settings. 
+
+# Related Work 
+
+Replay-based methods mitigate catastrophic forgetting by emulating the hippocampal mechanism of memory reactiva-tion, which involves periodically revisiting prior knowledge to consolidate learning. These methods can be broadly cate-gorized into two types. 1) Memory-based replay retains and reuses samples from previous tasks, with the key challenge being the efficient selection of exemplars. For instance, (Re-buffi et al. 2017) use a herding strategy to select samples whose features closely approximate those of the entire train-ing set. 2) Generative replay (Wu et al. 2018; Xiang et al. 2019), which synthesizes samples from past tasks using gen-erative models to avoid storing real data. However, replay-based methods often raise concerns regarding data privacy and storage overhead. Consequently, recent CL approaches utilizing pre-trained ViTs have predominantly focused on the replay-free setting. 
+
+Expansion-based methods create new branches when learning new tasks, mimicking the formation of new synap-tic connections in the brain. In CNN-based approaches, such as DER (Yan, Xie, and He 2021), expansion is implemented by adding new convolutional branches while freezing pre-viously learned feature extractors. In ViT-based approaches, the expansion mechanism is implemented through dynamic extension of prompt pools (Wang et al. 2022b). Representa-tive methods such as DualPrompt (Wang et al. 2022a) and NNPrompt (Lu et al. 2025a) learn a task-specific prompt for each task, which is then stored in a prompt pool. Dur-ing inference, the model selects a relevant prompt from the pool for the input instance and incorporates the prompt into the prediction process. Therefore, each prompt essentially serves as a parameterized branch tailored to a specific task. 
+
+Regularization-based methods , inspired by biologi-cal synaptic plasticity that enables the brain to adapt to new environments, facilitate continual learning by adjust-ing parameter plasticity. Representative approaches include EWC (Kirkpatrick et al. 2017) and SI (Zenke, Poole, and Ganguli 2017), which estimate the importance of each pa-rameter to previous tasks and penalize changes to crit-ical weights when learning new tasks. Another line of regularization-based methods focuses on orthogonal projec-tions, such as OWM (Zeng et al. 2019), NSCL (Wang et al. 2021; Lu et al. 2024; Kong et al. 2022) and GPM (Saha, Garg, and Roy 2021; Qiao et al. 2024). These methods aim to project model parameters onto a subspace that preserves the outputs from previous tasks while learning new ones, with differences in how they implement orthogonality. Our approach can be categorized as a regularization-based method, as it directly constrains gradients during learning new tasks. By masking gradients associated with prior atten-tion regions, it reduces the disruption of previously acquired attention and effectively mitigates forgetting. 
+
+# Preliminaries 
+
+Continual Learning Problem Formulation 
+
+Under the continual learning protocol, a model is trained sequentially on a series of T tasks T1, T2, . . . , TT . For the t-th task Tt, the training set is denoted as Dt =24134 Figure 2: Illustration of our proposed attention-retaining continual learning (ARCL-ViT) framework. After finishing Tt−1, the model extracts attention maps Ut−1 and generates the mask ¯Mt−1 to identify attention regions. During subsequent training in Tt, the mask ¯Mt−1 is used to selectively zero out gradients in the corresponding attention regions. The masked gradients 
+
+∇(Wq.t )′, ∇(Wk.t )′, ∇(Wv.t )′ are used to update the learnable weights Wq.t , Wk.t , Wv.t .
+
+{(x(n) 
+
+> t
+
+, y (n) 
+
+> t
+
+)}|T t|
+
+> n=1
+
+, where x(n) 
+
+> t
+
+is the n-th input sample with label y(n) 
+
+> t
+
+, and |T t| denotes the number of instances in this task. We focus on the class-incremental learning scenario, where the label space Yt of each task Tt is disjoint from those of other tasks, i.e. , Yt ∩ Y t′ = ∅ for t̸ = t′. After com-pleting training on Tt, the corresponding training set Dt be-comes unavailable for future tasks. The model is expected to accurately classify test samples from all previously learned classes, without access to task identity at inference time. 
+
+Vision Transformer 
+
+We adopt the Vision Transformer (Dosovitskiy et al. 2021) (ViT) as our base model. A given image is first divided into N non-overlapping patches and linearly projected into 
+
+D-dimensional tokens. Then a class token is prepended to the sequence, followed by the addition of positional em-beddings. Next, the resulting sequence is fed into L Trans-former blocks. Within the l-th block f l(·), the input to-kens first undergo a LayerNorm, and the normalized tokens 
+
+Xl ∈ R(N +1) ×D are transformed through three projections: 
+
+Ql = XlWlq , Kl = XlWlk, Vl = XlWlv , (1) where Wlq , Wlk, Wlv ∈ RD×D . The self-attention output is computed as: Fl = softmax 
+
+ Ql(Kl)⊤
+
+> √D
+
+
+
+Vl. As shown in the “Self-Attention” module in Figure 2, this operation can be decomposed into three steps: 
+
+Al = D− 12 Ql(Kl)⊤, Sl = softmax( Al), Fl = SlVl. (2) 
+
+Fl is then passed through another LayerNorm followed by a feedforward network (FFN) to produce the output sequence 
+
+Yl for this block. Finally, the class token from the last layer’s output (denote as yL 
+
+> cls
+
+∈ RD ) is extracted and fed into the classifier g(·) and loss function ℓ(·) for optimization. In our setting, we employ a ViT model that has been pre-trained on large-scale datasets. During continual learning, we freeze all pre-trained parameters except for the projec-tion weights Wlq , Wlk, Wlv in Transformer block f l(·) and the classifier g(·). This design allows our model to adjust the attention weights to new tasks while preserving general representations from the pre-trained backbone. 
+
+# Method 
+
+Overview of Our Approach 
+
+Our objective is to prevent attention drift from the previous task Tt−1 when optimizing parameters for the current task 
+
+Tt. Let ψl(·) denote the function extracting the attention map at the l-th layer. This goal is formulated as: 
+
+min 
+
+> Wlθ.t
+
+E(xt,y t)∼D t [ℓ(g(f l(xt; Wlθ.t ), y t))] ,
+
+s.t. ∥ψl(xt−1;Wlθ.t ) − ψl(xt−1;Wlθ.t −1)∥ = 0 ,
+
+(3) where xt−1 denotes samples from Dt−1, and θ represents 
+
+{q,k,v }. Directly optimizing this objective is infeasible due to: 1) the complexity of ψl(·) makes closed-form solutions intractable, and 2) the need to store Dt−1 incurring heavy storage overhead. Instead, we analyze how gradients impact attention regions and observe that updates along attention gradient directions directly alter attention values. By sup-pressing gradients in previously attended regions, we thus prevent such shifts and preserve prior attention patterns (see Appendix-“Theoretical Justification”), which enables us to approximately achieve the objective in a data-free manner. 24135 As illustrated in Figure 2, our approach consists of two steps: Adaptive Mask Generation and Gradient Masking .The first step incorporates a layer-wise attention rollout and instance-adaptive thresholding to generate a mask ¯Mt−1 for previous task, which is then applied in the second step as a gradient mask to modify gradients. In the following, we first assume a suitable attention mask ¯Mt−1 is already available and introduce the proposed gradient masking for attention retention, followed by the procedure for mask generation. 
+
+Attention Retention via Gradient Masking 
+
+We first analyze the relationship between the gradients ∇(·)
+
+w.r.t. the parameters Wθ.t and the attention matrix At for the current task Tt. For simplicity, the layer superscript l is omitted. Based on Eq. (2) which defines A, we have the fol-lowing derivations: ∇(Qt) = D− 12 ∇(At)Kt, ∇(Kt) = 
+
+D− 12 ∇(At)⊤Qt. Similarly, from Eq. (2) for F, we obtain: 
+
+∇(Vt) = S⊤ 
+
+> t
+
+∇(Ft). Building on the QKV computation in Eq. (1), we further derive the relationship between the gra-dients ∇(Wq.t ), ∇(Wk.t ), ∇(Wv.t ) and At:
+
+
+
+∇(Wq.t ) = D− 12 X⊤ 
+
+> t
+
+· ∇ (At) · Kt,
+
+∇(Wk.t ) = D− 12 X⊤ 
+
+> t
+
+· ∇ (At)⊤ · Qt,
+
+∇(Wv.t ) = X⊤ 
+
+> t
+
+· S⊤ 
+
+> t
+
+· ∇ (Ft).
+
+(4) From the above equations, we observe that the attention matrix At (and its activated counterpart St) directly in-fluences the gradients ∇(Wθ.t ). Under standard training, these gradients are applied via gradient descent to update the weights Wθ.t . Consequently, the attention computed by the updated weights shifts toward the discriminative regions 
+
+(i.e. , the most salient object features reflecting the visual concept, such as the head for a cat) of Dt, thereby improving accuracy on the current task. However, the updated model may lose focus on Dt−1, resulting in catastrophic forgetting and degraded performance. To address this issue, we remove gradients in the regions corresponding to the previous task’s attention during back-propagation when training the current task . Specifically, when completing the training of task Tt−1, we extract the attention map Ut−1 and construct a binary mask ¯Mt−1 by setting high-attention regions to 0 and low-attention regions to 1. During training of Tt, we perform an element-wise mul-tiplication ( ⊙) between ¯Mt−1 and At (or St), thereby elim-inating gradients corresponding to the previous task’s atten-tion regions in the updates of W{q.t, k.t, v.t }. Formally, the gradient masking is formulated as: 
+
+
+
+∇(Wq.t )′ = D− 12 X⊤ 
+
+> t
+
+· (∇(At) ⊙ ¯Mt−1) · Kt,
+
+∇(Wk.t )′ = D− 12 X⊤ 
+
+> t
+
+· (∇(At)⊤ ⊙ ¯M⊤
+
+> t−1
+
+) · Qt,
+
+∇(Wv.t )′ = X⊤ 
+
+> t
+
+· (S⊤ 
+
+> t
+
+⊙ ¯M⊤
+
+> t−1
+
+) · ∇ (Ft),
+
+(5) where ∇(·)′ represents the masked gradients. Nevertheless, the optimizer does not update parameters directly based on the raw gradients, i.e. , ∆Wθ.t ̸ = ∇(Wθ.t ),where ∆Wθ.t denotes the parameter update. For example, the Adam optimizer computes ∆Wθ.t based on the first and second moments of past gradients. This can lead to exces-sively large or small updates when using the masked gradi-ents, potentially hindering optimization. Therefore, we fur-ther adapt the proposed gradient masking to optimizers. Specifically, we aim to scale the parameter updates so that the ratio between the masked and original updates matches the ratio of the corresponding gradients, formulated as: 
+
+∆W′
+
+> θ.t
+
+∆Wθ.t 
+
+= ∇(Wθ.t )′
+
+∇(Wθ.t ) , (6) where ∆Wθ.t denotes the parameter update computed by the optimizer using the unmasked gradient ∇(Wθ.t ), while 
+
+∆W′ 
+
+> θ.t
+
+represents the expected parameter update. By rear-ranging the above equation, we derive: 
+
+∆W′ 
+
+> θ.t
+
+= ∇(Wθ.t )′
+
+∇(Wθ.t ) ⊙ ∆Wθ.t . (7) We then use ∆W′ 
+
+> θ.t
+
+to update the parameters: 
+
+W<s> θ.t = W<s −1>θ.t − γ∆W′
+
+> θ.t
+
+, (8) where <s> denotes the s-th optimization step and γ is the learning rate. The same procedure can be similarly extended to all layers of the ViT architecture. Notably, this adapta-tion is optimizer-agnostic and can theoretically be integrated with any optimization algorithm. In our experiments, we em-ploy the widely-used Adam optimizer, which empirically demonstrates satisfactory performance. To implement Eq. (5), our method employs the mask 
+
+¯Mt−1 constructed from the attention map Ut−1 of the pre-vious task Tt−1. The attention map should accurately cap-ture the discriminative regions of the target object to ensure effective gradient modulation. To this end, we develop a tai-lored procedure for attention map extraction and mask gen-eration, as detailed in the following subsection. 
+
+Adaptive Mask Generation 
+
+We propose a layer-wise rollout approach based on the roll-out method (Abnar and Zuidema 2020) to extract attention maps, as well as an adaptive mask construction strategy. For the weight matrices Wlq.t , Wlk.t and Wlv.t in the l-th block (l ∈ { 1, 2, . . . , L }), the computation of its associated mask 
+
+¯Mlt−1 is as follows. We first consider a single sample from Dt−1 (omitting the sample identifier for brevity), which is fed into the model trained on Tt−1 for forward propagation. We ex-tract the activated attention matrices from all layers, denoted as {S1
+
+> t−1
+
+, S2
+
+> t−1
+
+, . . . , SLt−1}. The layer-wise rollout attention matrix for the l-th layer is computed as: 
+
+ˆSlt−1 = ˜S1 
+
+> t−1
+
+· ˜S2 
+
+> t−1
+
+· . . . · ˜Slt−1, (9) where ˜Slt−1 = I + Slt−1, and I is the identity matrix to prevent self-suppression across layers (Abnar and Zuidema 2020). Based on ˆSlt−1 ∈ R(N +1) 2
+
+, we extract its class atten-tion map Ult−1 ∈ R√N 2
+
+by selecting the attention weights between the class token (query) and all image tokens (keys) and reshaping it into a matrix. Specifically, Ult−1 corre-sponds to the first row of ˆSlt−1 excluding the first element, 24136 Method Venue 10S-ImageNet-R 20S-ImageNet-R 10S-CIFAR-100 10S-DomainNet Acc. ↑ Forgetting ↓ Acc. ↑ Forgetting ↓ Acc. ↑ Forgetting ↓ Acc. ↑ Forgetting ↓
+
+L2P CVPR’22 61.57 ±0.66 9.73 ±0.47 59.38 ±0.50 5.89 ±0.36 83.83 ±0.04 7.63 ±0.30 81.17 ±0.83 † 8.98 ±1.25 
+
+DualPrompt ECCV’22 68.13 ±0.49 4.68 ±0.20 63.21 ±0.49 5.28 ±0.45 86.51 ±0.33 5.16 ±0.09 81.70 ±0.78 † 8.04 ±0.31 
+
+CODA-Prompt CVPR’23 75.45 ±0.56 1.64 ±0.10 72.37 ±1.19 0.96 ±0.15 86.25 ±0.74 1.67 ±0.26 80.04 ±0.79 † 10.16 ±0.35 
+
+APG ICCV’23 73.27 8.59 71.22 7.39 89.35 6.01 - -ESN AAAI’23 71.07 ±0.29 4.99 ±0.49 64.77 ±0.71 6.65 ±1.24 86.34 ±0.52 4.76 ±0.14 79.22 ±2.04 † 10.62 ±2.12 
+
+OS-Prompt++ ECCV’24 75.67 ±0.40 1.27 ±0.10 73.77 ±0.19 0.79 ±0.07 86.68 ±0.67 1.18 ±0.21 - -EvoPrompt AAAI’24 76.83 ±0.08 2.78 ±0.06 74.41 ±0.23 2.56 ±0.22 87.97 ±0.30 2.60 ±0.42 79.50 ±0.29 ‡ 3.81 ±0.36 
+
+PGP ICLR’24 69.34 ±0.05 4.53 ±0.04 - - 86.92 ±0.05 5.35 ±0.19 80.41 ±0.25 ‡ 8.39 ±0.18 
+
+OVOR-Deep ICLR’24 76.11 ±0.21 7.16 ±0.34 73.85 ±0.29 6.80 ±0.65 85.99 ±0.89 6.42 ±2.03 79.61 ±0.86 ‡ 4.77 ±0.94 
+
+ConvPrompt CVPR’24 77.86 ±0.25 4.33 ±0.24 75.10 ±0.39 4.10 ±0.29 88.87 ±0.33 4.75 ±0.15 79.47 ±0.35 ‡ 6.49 ±0.43 
+
+InfLoRA CVPR’24 75.65 ±0.14 5.73 ±0.44 71.01 ±0.45 6.83 ±0.44 87.06 ±0.25 6.22 ±0.39 81.45 ±0.68 ‡ 5.35 ±0.52 
+
+EASE CVPR’24 76.17 7.82 73.27 8.51 87.76 5.94 78.89 ‡ 7.89 CPrompt CVPR’24 77.14 ±0.11 5.97 ±0.68 74.79 ±0.28 7.34 ±0.65 87.82 ±0.21 5.06 ±0.50 82.97 ±0.34 7.45 ±0.93 
+
+VPT-CPG AAAI’25 78.63 ±0.52 7.18 ±0.62 75.33 ±0.49 * 7.08 ±0.52 90.63 ±0.44 3.98 ±0.65 83.21 ±0.67 7.09 ±0.82 
+
+CAPrompt AAAI’25 71.67 ±0.45 * 5.24 ±0.48 71.24 ±0.80 * 6.45 ±0.78 87.27 ±0.39 * 4.90 ±0.22 80.97 ±0.98 * 4.21 ±0.34 
+
+SD-LoRA ICLR’25 77.34 ±0.35 - 75.26 ±0.37 - 88.01 ±0.31 - 81.01 ±0.42 * -BiLoRA CVPR’25 77.95 ±0.14 - 72.41 ±0.76 - 87.46 ±0.76 - 76.56 ±0.41 -LoRA-DRS CVPR’25 75.94 ±0.46 - 73.78 ±0.44 - 89.14 ±0.23 - 71.19 ±0.55 * -CPrompt-KAC CVPR’25 78.07 - 75.73 - 87.19 - - -SEMA CVPR’25 78.00 - 74.53 - 86.98 - 80.92 * -Seq-FT Baseline 49.43 ±1.72 44.31 ±0.94 39.63 ±2.43 53.98 ±2.23 52.85 ±1.89 49.24 ±2.11 44.06 ±0.87 59.43 ±1.15 
+
+ARCL-ViT This work 81.17 ±0.59 4.84 ±1.45 79.40 ±0.56 6.59 ±1.01 90.87 ±0.26 3.92 ±0.34 83.94 ±0.47 7.04 ±1.21 
+
+Table 1: Comparison with existing methods. The standard deviation ( i.e. , the value after ±) is reported when available. Missing results in the corresponding papers are denoted by “-”. Accuracies marked with †, ‡ and * are reproduced by (Gao, Cen, and Chang 2024), (Lu et al. 2025b) and us, respectively. ‘Seq-FT’ represents the sequential fine-tuning baseline using Eq. (4). The best accuracy among all methods is highlighted in bold , and the best accuracy among existing methods is underlined. and can be formulated as Ult−1 = ˆSlt−1[1 , 2 :] . We then con-struct the mask based on Ult−1.Since the size of discriminative regions varies across im-ages, using a fixed threshold or proportion for mask genera-tion is suboptimal. To address this, we propose an adaptive approach to distinguish between attention and background regions. Due to the sharpening effect of the softmax func-tion, the activated values in the attention regions are typi-cally much higher than those in the background. As a result, sorting the elements of Ult−1 in ascending order yields a curve that resembles a sigmoid function. The optimal thresh-old index k∗ is determined by locating the point with the lowest second-order derivative in the sorted attention curve: 
+
+k∗ = arg min  
+
+> 2≤k≤N−1
+
+(uk+1 − 2uk + uk−1) , (10) where u1, u 2, . . . , u N denotes the sorted elements of Ult−1,and the corresponding adaptive threshold is τ lt−1 = uk∗ .This point corresponds to the inflection point where the curve rises sharply from low values to the high-value plateau region. Next, all elements in Ult−1 greater than or equal to 
+
+τ lt−1 are classified as attention regions, and a binary mask 
+
+Mlt−1 is generated accordingly: 
+
+Mlt−1,i =
+
+0, if Ult−1,i ≥ τ lt−1
+
+1, otherwise ∀i ∈ { 1, · · · , N } (11) To apply Mlt−1 ∈ R√N 2
+
+to ∇(Alt) ∈ R(N +1) 2
+
+for gradi-ent masking, we extend and align the mask as follows. First, we flatten Mlt−1 into a row vector denoted as mlt−1, and prepend a 0 to its left which aims to maintain the stability of the class token, resulting in ¯mlt−1 ∈ RN +1 . Next, to en-force a consistent attention retention rule for all queries, we broadcast ¯mlt−1 to all N + 1 rows, yielding the mask ma-trix ¯Mlt−1 of shape (N + 1) 2. This mask is used in Eq. (5) for element-wise multiplication with ∇(Alt) and Slt during gradient masking. In practice, we further extend Mlt−1 from each instance to all samples of a class and previous tasks by averaging, re-sulting in continuous masks within [0 , 1] . For Transformers with multi-head attention, Eq. (5) ∼(11) can be applied inde-pendently to each head. More details and the full algorithm are provided in the Appendix. 
+
+# Experiments 
+
+Experimental Setups 
+
+We evaluate our method on four class-incremental learn-ing (CIL) benchmarks, including 10-split and 20-split ImageNet-R, 10-split CIFAR-100 and 10-split DomainNet. Note that the 10-split DomainNet benchmark was organized by (Wang et al. 2023) for challenging cross-domain CIL, consisting of the 200 classes with the most images from the 24137 Index Attention Mask 10S-ImageNet-R 10S-DomainNet 
+
+a. b. c. d. e. Acc. Forg. Acc. Forg. 1 × × × × × 49.43 44.31 44.06 59.43 2 √ × × √ × 77.63 12.84 76.28 20.86 3 √ × × × √ 80.33 6.31 82.17 10.33 4 × √ × × √ 80.43 7.42 82.28 11.10 5 × × √ √ × 76.72 13.86 75.60 21.61 6 × × √ × √ 81.17 4.84 83.94 7.04 Table 2: Ablation study on different attention map extraction (a. raw attention, b. naive rollout, c. layer-wise rollout) and mask thresholding ( d. fixed, e. adaptive) strategies. Masked regions 10S-ImageNet-R 10S-DomainNet Acc. Forgetting Acc. Forgetting Random 73.27 4.22 79.52 6.70 Non-attention 69.55 7.56 76.08 9.47 Attention 81.17 4.84 83.94 7.04 Table 3: Ablation study on different masked regions for at-tention maps. original DomainNet (Peng et al. 2019). We use ViT-B/16 pre-trained on ImageNet-21k (Rus-sakovsky et al. 2015) as the backbone by default in our experiments. Each task employs an independent classifier. During training, the W{q,k,v } layers in all 12 ViT blocks as well as the classifier are fine-tuned. We employ the Adam optimizer with a learning rate of 0.0001 for the W{q,k,v }
+
+layers and 0.01 for the classifier. During inference, all clas-sifiers are concatenated, and the backbone from the final task is used for prediction. We report the final average accuracy and final average forgetting, each computed over three runs with different random seeds. Additional experimental de-tails are provided in the Appendix. Our code is available at https://github.com/zugexiaodui/AttentionRetentionCL. 
+
+Comparison with Existing Methods 
+
+We compare the proposed ARCL-ViT with existing meth-ods on the four benchmarks in Table 1. The competitors in-clude recent state-of-the-art works such as VPT-CPG (Lu et al. 2025b), SD-LoRA (Wu et al. 2025), BiLoRA (Zhu et al. 2025) and KAC (Hu et al. 2025). The Seq-FT base-line refers to sequentially fine-tuning the W{q,k,v } layers and the classifier without any anti-forgetting technique. The only difference between Seq-FT and our method is that Seq-FT updates parameters using Eq. (4) while our method ap-plies Eq. (5) ∼(8). The direct comparison to Seq-FT vali-dates the core effectiveness of our approach, which achieves 37% higher accuracy and 46% less forgetting by removing attention drift from previous tasks. Furthermore, our method surpasses 15 recent approaches from 2024 and 2025 and achieves state-of-the-art performance, with up to 3.7% and an average of 1.8% higher accuracy across the benchmarks. Weights Method 10S-ImageNet-R 10S-DomainNet Acc. Forgetting Acc. Forgetting DINO-1k L2P 56.71 4.60 50.72 16.89 CODA-P 64.02 7.70 66.74 8.91 EASE 65.97 9.24 70.23 9.64 CPrompt 64.66 9.26 75.31 9.93 InfLoRA 68.31 8.81 75.05 7.70 VPT-CPG 68.32 2.78 77.46 10.18 Seq-FT 39.93 49.27 35.67 67.98 ARCL-ViT 72.37 4.91 79.39 7.90 iBOT-1k L2P 60.80 6.65 53.32 17.12 CODA-P 68.02 6.23 65.80 12.35 EASE 69.91 9.22 72.39 10.25 CPrompt 69.14 8.82 77.45 9.28 InfLoRA 71.84 9.05 76.60 8.51 VPT-CPG 72.16 5.80 77.79 13.02 Seq-FT 44.48 47.96 37.85 66.06 ARCL-ViT 76.48 7.68 80.88 9.85 Table 4: Results of using DINO and iBOT weights pre-trained on ImageNet-1k ( i.e. , DINO-1k and iBOT-1k). 
+
+Ablation Study 
+
+Construction of Attention Masks We investigate two factors in the construction of attention masks: 1) the method for extracting attention maps, and 2) the strategy for deter-mining the mask threshold. Specifically, three attention map extraction methods are considered: a) Raw attention in each layer, i.e. , replacing Eq. (9) with ˆSlt−1 = Slt−1. b) Naive rollout, which simply accumulates the attention maps across all layers, i.e. , ˆSlt−1 = ˜S1 
+
+> t−1
+
+· . . . · ˜SLt−1. c) Layer-wise rollout using Eq. (9). The thresholding strategy include two alterna-tives: d) Fixed threshold, where the top 20% (determined by hyper-parameter search) positions in attention maps are set to 0. e) Adaptive threshold described in Eq. (10). The results of different configurations are presented in Table 2. Several key observations can be drawn: 1) Exper-iment 2, serving as a simplified variant of our approach, demonstrates the effectiveness of our core attention preser-vation concept for CL. By employing basic raw-attention with fixed thresholding, this configuration achieves a sub-stantial 30% accuracy improvement and 35% reduction in forgetting compared to the Seq-FT baseline (Index 1). 2) Layer-wise rollout attention exhibits superior compatibility with our framework. Comparing experiments 3, 4, and 6, layer-wise rollout achieves an average accuracy improve-ment of 1.3% over both raw attention and naive rollout meth-ods. 3) Comparison between experiments 2 vs. 3 and 5 vs. 6shows that the adaptive thresholding strategy yields an av-erage accuracy gain of 5.4% over the fixed threshold. This result highlights the importance of adopting adaptive thresh-olding, which removes the need for manual tuning and en-ables more accurate identification of discriminative regions. When layer-wise rollout is combined with adaptive thresh-olding, our method achieves the best performance. 24138 Method Venue 50S-ImageNet-R 50S-DomainNet 100S-ImageNet-R 100S-DomainNet Acc. Forgetting Acc. Forgetting Acc. Forgetting Acc. Forgetting L2P CVPR’22 51.38 12.34 63.13 11.19 41.51 14.48 54.83 14.95 OVOR-Deep ICLR’24 63.25 5.23 68.29 6.85 43.02 7.30 52.09 8.66 ConvPrompt CVPR’24 64.61 7.12 71.76 6.37 44.32 8.97 56.21 6.27 InfLoRA CVPR’24 62.81 10.37 71.87 9.20 42.23 14.17 48.06 15.43 EASE CVPR’24 70.27 6.73 65.34 9.64 51.56 7.56 37.26 29.12 CPrompt CVPR’24 70.75 7.44 70.74 9.01 59.90 9.52 57.60 9.42 VPT-CPG AAAI’25 73.08 12.12 72.27 19.93 64.63 12.18 60.81 27.43 Seq-FT Baseline 22.57 70.01 9.89 90.34 10.65 76.04 8.87 88.65 ARCL-ViT This work 76.45 8.20 74.32 15.95 70.72 12.90 62.35 25.63 Table 5: Performance on long-sequence continual learning experiments using 50 and 100 splits of ImageNet-R and DomainNet. 
+
+Different Masked Regions To validate the necessity of masking attention regions specifically ( i.e. , Eq. (11)), we conduct two comparative experiments: 1) Random masking. We randomly select positions to be set to zero in the mask, with the number of masked pixels matching that of the atten-tion pixels identified by Eq. (11). 2) Non-attention Masking. We set non-attention regions to 0 by modifying the condition in Eq. (11) to Ult−1,i < τ lt−1. As shown in Table 3, masking the non-attention regions yields the poorest performance and leads to severe forgetting. Interestingly, it still performs bet-ter than Seq-FT, which is because the non-attention regions for one class may overlap with the attention regions of an-other class, thereby indirectly providing partial retention to relevant attention areas. Our proposed approach, which re-moves the attention regions of previous tasks, substantially outperforms the random masking baseline. This systematic comparison confirms the necessity of masking attention re-gions to effectively reduce attention drift for CL. 
+
+Generalization Experiments 
+
+Different Pre-training Weights To validate the generaliz-ability of our method across different pre-training weights, we follow InfLoRA (Liang and Li 2024) and conduct ex-periments using ViT-B/16 initialized with self-supervised DINO (Caron et al. 2021) and iBOT (Zhou et al. 2022) weights pre-trained on ImageNet-1k (denoted as DINO-1k and iBOT-1k, respectively). For comparison, we also repro-duce 6 representative methods when official results are un-available. As presented in Table 4, ARCL-ViT exhibits sig-nificant improvements over the Seq-FT baseline, achieving an average accuracy gain of 37.8% while reducing forget-ting by 50.2%. It surpasses existing approaches by 2.9% in accuracy with DINO-1k weights and by 3.7% with iBOT-1k weights. These results verify that our approach effectively generalizes to diverse pre-training weights. Our method also generalizes well across different ViT architectures, with ex-perimental results provided in the Appendix. 
+
+Long-Sequence Continual Learning We further evalu-ate the generalizability of our method in long-sequence CL scenarios. In this setting, the ImageNet-R and DomainNet datasets, each containing 200 classes, are partitioned into 50 and 100 tasks. As shown in Table 5, which compares our results with seven competitors (implementations from VPT-CPG (Lu et al. 2025b)), ARCL-ViT outperforms the pre-vious state-of-the-art approach VPT-CPG by 3.3% in accu-racy. Although our method exhibits comparable forgetting, this result indicates that it achieves an effective trade-off between plasticity and stability. This enables our model to continually acquire new knowledge through controlled for-getting. Consequently, our approach attains superior overall accuracy in the challenging long-sequence CL scenarios. 
+
+Analysis of Attention Retention 
+
+We visualize the attention maps for samples from T1 of 10-split ImageNet-R and DoaminNet. As shown in Figure 1(a), our method effectively preserves the original attention on key visual concepts. We further make a quantitative compar-ison of attention drift across different methods, as illustrated in Figure 1(b). The attention drift value at the t-th task ( t > 2)is calculated as follows: For each sample in D1, attention maps are extracted using both the T1 and Tt models. The Frobenius norm of their difference is calculated and then normalized by the Frobenius norm of the T1 attention map to serve as the attention drift value. Our method achieves the lowest attention drift at the end of training (6.0%), which is significantly lower than that of Seq-FT (25.9%) and other competitors. These results provide quantitative evidence that our method retains attention to previously learned visual concepts, thereby mitigating catastrophic forgetting. 
+
+# Conclusion 
+
+In this work, we introduce a novel attention-retaining frame-work to address the challenge of catastrophic forgetting in continual learning for Vision Transformers. Concretely, we propose a gradient masking method to preserve selec-tive attention to previously learned visual concepts. Our method employs a layer-wise rollout and adaptive threshold-ing strategy for attention mask generation, and incorporates optimizer-compatible updates to ensure effective training. Extensive experimental results on multiple continual learn-ing scenarios demonstrate both the superiority and general-izability of our approach. In future work, we will extend this framework to other Transformer-based architectures and ex-plore the integration of additional biological principles. 24139 Acknowledgments 
+
+This work was supported in part by the National Natural Sci-ence Foundation of China (NSFC) under Grant 62576282, 62476223, 62376218; in part by the National Key Re-search and Development Program of China under Grant 2024YFF1306501; in part by Innovation Capability Support Program of Shaanxi (Program No. 2024ZC-KJXX-043); in part by Natural Science Basic Research Program of Shaanxi Province (2024JC-DXWT-07). 
+
+# References 
+
+Abnar, S.; and Zuidema, W. 2020. Quantifying Attention Flow in Transformers. In Annual Meeting of the Association for Computational Linguistics , 4190–4197. Caron, M.; Touvron, H.; Misra, I.; J´ egou, H.; Mairal, J.; Bo-janowski, P.; and Joulin, A. 2021. Emerging Properties in Self-Supervised Vision Transformers. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,9630–9640. Chaudhry, A.; Khan, N.; Dokania, P. K.; and Torr, P. H. S. 2020. Continual Learning in Low-rank Orthogonal Sub-spaces. In Proceedings of the Conference on Neural Infor-mation Processing Systems .Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn, D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.; Heigold, G.; Gelly, S.; Uszkoreit, J.; and Houlsby, N. 2021. An Image Is Worth 16x16 Words: Transformers for Image Recognition at Scale. In Proceedings of the International Conference on Learning Representations .Gao, Z.; Cen, J.; and Chang, X. 2024. Consistent Prompting for Rehearsal-Free Continual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 28463–28473. Hu, Y.; Liang, Z.; Yang, F.; Hou, Q.; Liu, X.; and Cheng, M.-M. 2025. KAC: Kolmogorov-Arnold Classifier for Contin-ual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .Kirkpatrick, J.; Pascanu, R.; Rabinowitz, N.; Veness, J.; Des-jardins, G.; Rusu, A. A.; Milan, K.; Quan, J.; Ramalho, T.; Grabska-Barwinska, A.; Hassabis, D.; Clopath, C.; Ku-maran, D.; and Hadsell, R. 2017. Overcoming Catastrophic Forgetting in Neural Networks. Proceedings of the National Academy of Sciences , 114(13): 3521–3526. Kong, Y.; Liu, L.; Wang, Z.; and Tao, D. 2022. Balanc-ing Stability and Plasticity Through Advanced Null Space in Continual Learning. In Proceedings of the European Con-ference on Computer Vision , volume 13686, 219–236. Liang, Y.-S.; and Li, W.-J. 2024. InfLoRA: Interference-Free Low-Rank Adaptation for Continual Learning. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23638–23647. Lu, Y.; Tan, J.; Zhang, S.; Xing, Y.; Liang, G.; and Zhang, Y. 2025a. Nearest-Neighbor Class Prototype Prompt and Sim-ulated Logits for Continual Learning. Pattern Recognition ,169: 111933. Lu, Y.; Zhang, S.; Cheng, D.; Liang, G.; Xing, Y.; Wang, N.; and Zhang, Y. 2025b. Training Consistent Mixture-of-Experts-Based Prompt Generator for Continual Learning. In 
+
+Proceedings of the AAAI Conference on Artificial Intelli-gence .Lu, Y.; Zhang, S.; Cheng, D.; Xing, Y.; Wang, N.; Wang, P.; and Zhang, Y. 2024. Visual Prompt Tuning in Null Space for Continual Learning. In Proceedings of the Conference on Neural Information Processing Systems .Peng, X.; Bai, Q.; Xia, X.; Huang, Z.; Saenko, K.; and Wang, B. 2019. Moment Matching for Multi-Source Do-main Adaptation. In Proceedings of the IEEE/CVF Interna-tional Conference on Computer Vision , 1406–1415. Qiao, J.; Zhang, Z.; Tan, X.; Chen, C.; Qu, Y.; Peng, Y.; and Xie, Y. 2024. Prompt Gradient Projection for Continual Learning. In Proceedings of the International Conference on Learning Representations .Rebuffi, S.-A.; Kolesnikov, A.; Sperl, G.; and Lampert, C. H. 2017. iCaRL: Incremental Classifier and Representation Learning. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 2001–2010. Russakovsky, O.; Deng, J.; Su, H.; Krause, J.; Satheesh, S.; Ma, S.; Huang, Z.; Karpathy, A.; Khosla, A.; Bernstein, M. S.; Berg, A. C.; and Fei-Fei, L. 2015. ImageNet Large Scale Visual Recognition Challenge. International Journal of Computer Vision , 115(3): 211–252. Saha, G.; Garg, I.; and Roy, K. 2021. Gradient Projection Memory for Continual Learning. In Proceedings of the In-ternational Conference on Learning Representations .Smith, J. S.; Karlinsky, L.; Gutta, V.; Cascante-Bonilla, P.; Kim, D.; Arbelle, A.; Panda, R.; Feris, R.; and Kira, Z. 2023. CODA-Prompt: COntinual Decomposed Attention-Based Prompting for Rehearsal-Free Continual Learning. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 11909–11919. Wang, S.; Li, X.; Sun, J.; and Xu, Z. 2021. Training Net-works in Null Space of Feature Covariance for Continual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 184–193. Wang, Y.; Ma, Z.; Huang, Z.; Wang, Y.; Su, Z.; and Hong, X. 2023. Isolation and Impartial Aggregation: A Paradigm of Incremental Learning without Interference. In Proceedings of the AAAI Conference on Artificial Intelligence , 10209– 10217. Wang, Z.; Zhang, Z.; Ebrahimi, S.; Sun, R.; Zhang, H.; Lee, C.-Y.; Ren, X.; Su, G.; Perot, V.; Dy, J. G.; and Pfis-ter, T. 2022a. DualPrompt: Complementary Prompting for Rehearsal-Free Continual Learning. In Proceedings of the European Conference on Computer Vision , volume 13686, 631–648. Wang, Z.; Zhang, Z.; Lee, C.-Y.; Zhang, H.; Sun, R.; Ren, X.; Su, G.; Perot, V.; Dy, J.; and Pfister, T. 2022b. Learn-ing to Prompt for Continual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 139–149. 24140 Wu, C.; Herranz, L.; Liu, X.; Van De Weijer, J.; Raducanu, B.; et al. 2018. Memory Replay GANs: Learning to Gener-ate New Categories without Forgetting. Proceedings of the Conference on Neural Information Processing Systems , 31. Wu, Y.; Piao, H.; Huang, L.-K.; Wang, R.; Li, W.; Pfister, H.; Meng, D.; Ma, K.; and Wei, Y. 2025. SD-LoRA: Scal-able Decoupled Low-Rank Adaptation for Class Incremen-tal Learning. Proceedings of the International Conference on Learning Representations .Xiang, Y.; Fu, Y.; Ji, P.; and Huang, H. 2019. Incremen-tal Learning Using Conditional Adversarial Networks. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 6618–6627. Yan, S.; Xie, J.; and He, X. 2021. DER: Dynamically Ex-pandable Representation for Class Incremental Learning. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 3014–3023. Zeng, G.; Chen, Y.; Cui, B.; and Yu, S. 2019. Continual Learning of Context-Dependent Processing in Neural Net-works. Nature Machine Intelligence , 1(8): 364–372. Zenke, F.; Poole, B.; and Ganguli, S. 2017. Continual Learn-ing Through Synaptic Intelligence. In Proceedings of the International Conference on Machine Learning , volume 70, 3987–3995. Zhang, X.; Zhaoping, L.; Zhou, T.; and Fang, F. 2012. Neu-ral Activities in V1 Create a Bottom-Up Saliency Map. Neu-ron , 73(1): 183–192. Zhou, J.; Wei, C.; Wang, H.; Shen, W.; Xie, C.; Yuille, A. L.; and Kong, T. 2022. Image BERT Pre-training with Online Tokenizer. In Proceedings of the International Conference on Learning Representations .Zhu, H.; Zhang, Y.; Dong, J.; and Koniusz, P. 2025. BiLoRA: Almost-Orthogonal Parameter Spaces for Contin-ual Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .24141

@@ -1,0 +1,439 @@
+Title: CIP-Net: Continual Interpretable Prototype-based Network
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39216/43177
+
+Number of Pages: 9
+
+Markdown Content:
+# CIP-Net: Continual Interpretable Prototype-based Network 
+
+# Federico Di Valerio 1, Michela Proietti 1, Alessio Ragno 2,3 , Roberto Capobianco 4
+
+> 1
+
+Department of Computer, Control and Management Engineering (DIAG), Sapienza University, IT-00185, Rome, Italy 
+
+> 2
+
+INSA Lyon, CNRS, LIRIS UMR 5205, FR-94276, Villeurbanne France 
+
+> 3
+
+EPITA Research Laboratory (LRE), FR-69621, Le Kremlin-Bicˆ etre, France 
+
+> 4
+
+Sony AI, CH-8952, Zurich, Switzerland 
+
+{divalerio, mproietti }@diag.uniroma1.it, alessio.ragno@ {insa-lyon.fr, epita.fr }, roberto.capobianco@sony.com 
+
+Abstract 
+
+> Continual learning constrains models to learn new tasks over time without forgetting what they have already learned. A key challenge in this setting is catastrophic forgetting, where learning new information causes the model to lose its perfor-mance on previous tasks. Recently, explainable AI has been proposed as a promising way to better understand and reduce forgetting. In particular, self-explainable models are useful because they generate explanations during prediction, which can help preserve knowledge. However, most existing ex-plainable approaches use post-hoc explanations or require ad-ditional memory for each new task, resulting in limited scal-ability. In this work, we introduce CIP-Net, an exemplar-free self-explainable prototype-based model designed for contin-ual learning. CIP-Net avoids storing past examples and main-tains a simple architecture, while still providing useful expla-nations and strong performance. We demonstrate that CIP-Net achieves state-of-the-art performances compared to pre-vious exemplar-free and self-explainable methods in both task- and class-incremental settings, while bearing signifi-cantly lower memory-related overhead. This makes it a prac-tical and interpretable solution for continual learning.
+
+Code & Supplementary Material —https://github.com/KRLGroup/CIP-Net 
+
+# Introduction 
+
+Continual learning (CL) research aims at developing mod-els that can learn tasks sequentially, without revisiting past data. In this setting, the major obstacle is catastrophic for-getting (French 1999; Goodfellow et al. 2013; Kirkpatrick et al. 2017): learning new tasks overwrites or distorts earlier knowledge, sharply degrading performance on past tasks. Explainable artificial intelligence (XAI) helps with under-standing this phenomenon by analyzing why and how cer-tain knowledge is retained or lost across tasks. In this line of work, Cossu et al. (2023) leverage XAI to study expla-nation drift, i.e., a shift in the explanations of past tasks as new knowledge is acquired. Given that these represen-tational modifications are usually a direct cause of catas-trophic forgetting, several works directly exploit explana-tions to develop XAI-guided approaches that prevent expla-nation drift and, in turn, mitigate forgetting. Most methods 
+
+> Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+use post-hoc explainability (Ede et al. 2022; Ebrahimi et al. 2021; Saha and Roy 2023; Bai et al. 2023) (i.e., explana-tions are produced after each task’s training, looking at the model’s output and parameters), whereas recent work intro-duces self-interpretable CL models (Rymarczyk et al. 2023; Proietti et al. 2025). Among them, ICICLE (Rymarczyk et al. 2023) builds on a popular prototype-based architecture, namely ProtoPNet (Chen et al. 2019), to tackle catastrophic forgetting in continual image classification. Prototype-based networks directly build interpretability into the model, gen-erating explanations during prediction (Rudin 2019). Specif-ically, these models link each prediction to a handful of visu-ally meaningful image patches, thus enabling intuitive this-looks-like-that reasoning that is self-generated rather than post-produced (Chen et al. 2019). In CL, this explicit evi-dence makes drift easier to detect and track. However, ICI-CLE comes with one major drawback: it adds a new proto-type head for each task, where a prototype head is a specific module that enables prototype-based reasoning in the model. As a consequence, computation and memory grow with the number of tasks, limiting ICICLE’s scalability, and separate heads limit cross-task sharing. To overcome these issues, we propose a novel Contin-ual Interpretable Prototype-based Network (CIP-Net), built on PIP-Net’s (Nauta et al. 2023) lighter prototype-based reasoning. A single fixed-size pool of shared patch-level prototypes yields robust accuracy and stable explanations, eliminating the need for exemplar storage or multiple task-specific prototype layers. To prevent interference in the shared prototype layer, we adopt alignment–uniformity self-supervision and targeted regularization mechanisms. On CUB-200-2011 (CUB, Wah et al. (2011)) and Stanford Cars (CARS, Krause et al. (2013)) benchmarks, CIP-Net out-performs ICICLE and other exemplar-free standard CL ap-proaches in both task-incremental learning (TIL, task iden-tity known at test time) and class-incremental learning (CIL, task identity not known at test time). Our contributions are: • CIP-Net: an exemplar-free, self-explainable, prototype-based CL model with a shared prototype layer, that en-ables knowledge sharing and avoids the memory-related overhead associated with task-specific prototype heads; • Introduction of targeted prototype regularization, dis-couraging changes in important prototypes for past tasks, and loss terms to encourage the use of sparse prototypes The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 20772
+
+and promote orthogonality between classification heads; • CIP-Net mitigates catastrophic forgetting, outperform-ing ICICLE in both TIL and CIL scenarios on CUB and CARS datasets, with gains up to +35% (TIL) and 
+
++11 .9% (CIL) in final average accuracy on CUB and up to +34 .2% (TIL) and +38 .2% (CIL) on CARS; • Explanation drift analysis, which reveals that explana-tions remain stable during training; • An open-source implementation of CIP-Net 
+
+# Related Work 
+
+CL methods can be broadly framed within a five-branch tax-onomy (Wang et al. 2024). Regularization-based approaches introduce additional penalties to discourage changes in weights or activations. For instance, EWC (Kirkpatrick et al. 2017) estimates parameter importance via the Fisher in-formation matrix, penalizing changes to high-importance weights. In contrast, LwF (Li and Hoiem 2017) distills the previous model’s outputs on new-task data to preserve old decision boundaries. Differently, replay-based strategies ap-proximate past data by storing a small exemplar buffer (Re-buffi et al. 2017; Hou et al. 2019) or generating pseudo-samples (Shin et al. 2017), which are then replayed along-side the current task’s data. Representation-based methods are typically exemplar-free alternatives, producing robust representations through self-supervised learning, large-scale pre-training, or representation learning. Examples belong-ing to this category are FeTrIL (Petit et al. 2023), which learns a feature-translation module to align new represen-tations with a frozen old classifier, and PASS (Zhu et al. 2021), which combines prototype augmentation with self-supervision to maintain class discrimination without storing images. Optimization-based approaches, on the other hand, directly act on the optimization process, by projecting gra-dients in non-interfering directions (Farajtabar et al. 2020), or using meta-learning (Rajasegaran et al. 2020). Finally, architecture-based solutions either allocate task-specific pa-rameters through masking (Mallya, Davis, and Lazebnik 2018), pruning-and-packing (Mallya and Lazebnik 2018), or dynamic expansion (Yan, Xie, and He 2021), to reduce task interference. Within these families, some methods effec-tively leverage XAI. For example, LwM (Dhar et al. 2019) extends the idea behind LwF by distilling attention/acti-vation maps instead of (or in addition to) logits, enabling exemplar-free knowledge transfer. Others employ explana-tions to select the examples to store in the replay buffer (Saha and Roy 2023; Shim et al. 2021; Bai et al. 2023). Ede et al. (2022), instead, propose to create task-specific network components. In these contexts, XAI allows for the identifi-cation of a phenomenon known as explanation drift, which consists of a change in the explanations of old tasks after training on subsequent ones (Cossu et al. 2024). By atten-uating explanation drift, XAI-guided approaches prove to be effective in mitigating catastrophic forgetting (Proietti, Ragno, and Capobianco 2025; Ebrahimi et al. 2021). While most of the existing XAI-guided CL approaches are post-hoc, meaning they provide explanations for pre-trained models, ICICLE (Rymarczyk et al. 2023) builds on ProtoPNet (Chen et al. 2019), a prototype-based self-interpretable architecture. This type of architectures learn a set of prototypes that represent parts of the training input im-ages, and perform the classification based on the similarity of the patches of the current input to the learned prototypes. While this scheme allows providing explanations at predic-tion time, ICICLE shows that it can also be exploited for suppressing catastrophic forgetting. To adapt this architec-ture to the CL scenarios, ICICLE features task-specific pro-totype layers and classification heads. However, this means that the network grows considerably with the number of tasks. In this work, we take inspiration from this idea and specif-ically address these issues. We propose CIP-Net, which re-lies on a different prototype-based network, namely PIP-Net (Nauta et al. 2023). While replicating ICICLE’s exemplar-free protocol, we replace multiple prototype heads with a 
+
+single and shared prototype layer. In this way, we manage to keep the memory and computational overhead introduced by prototype-based reasoning constant as the number of tasks grows, while maintaining interpretability and improving ac-curacy. 
+
+# Background 
+
+In this section, we introduce the mathematical basis neces-sary to understand our proposed method. We begin by in-troducing prototype-based self-explainable models, which offer an interpretable alternative to standard deep learning approaches by providing interpretable predictions through comparisons of input features to learned prototypical parts. In particular, we focus on ProtoPNet (Chen et al. 2019) and then PIP-Net (Nauta et al. 2023), which are at the basis of ICICLE and our proposed approach, CIP-Net. 
+
+## Prototype-based Neural Networks 
+
+A prototype-based neural network is an architecture that consists of a feature extractor followed by a prototype layer 
+
+gp, which learns a set of P prototypical representations used for classification. Formally, a feature extractor f maps an input x ∈ RH×W ×C to a latent representation z = f (x) ∈
+
+RH′×W ′×D , and the prototype layer gp computes class ev-idence by comparing this latent representation to a set of prototypes using a model-specific similarity function. In ProtoPNet (Chen et al. 2019), each prototype pj ∈
+
+RHp×Wp×D is a learnable parameter tensor representing a prototypical latent patch. Similarity is measured using the negative squared Euclidean distance: sim (zi, pj ) = −∥ zi − pj ∥22, (1) where zi is a patch from the latent representation. For each prototype, the maximum similarity across all patches is used. The final class logit for class k is computed as: 
+
+sk =
+
+> P
+
+X
+
+> j=1
+
+wj,k · max  
+
+> i
+
+sim (zi, pj ), (2) where wj,k is the learned importance weight of prototype pj
+
+for class k. Additionally, during training, each prototype is 20773 projected onto the closest latent patch in the training set to ground it in a real image. The training loss combines cross-entropy and interpretability terms: 
+
+LProtoPNet = LCE + λclst · L clst + λsep · L sep , (3) where Lclst pulls latent patches closer to their class proto-types, and Lsep pushes them away from other-class proto-types. In PIP-Net (Nauta et al. 2023), prototypes are not learned directly but they are simply one channel of the final feature map. The presence of a prototype in the latent representation is determined through a softmax operation across the chan-nel dimension. Given a latent feature map z ∈ RH′×W ′×D ,a softmax is applied at each spatial location: 
+
+z′ 
+
+> h,w,d
+
+= exp( zh,w,d )
+
+PDd′=1 exp( zh,w,d ′ ) , (4) and the presence score of prototype d is obtained via spatial max-pooling: 
+
+pd = max  
+
+> h,w
+
+z′
+
+> h,w,d
+
+. (5) Classification scores are computed using a sparse, non-negative linear layer: 
+
+sk =
+
+> D
+
+X
+
+> d=1
+
+wd,k · pd, with wd,k ≥ 0. (6) Due to the lack of specific prototype representations and the impossibility of performing the prototype projection, in order to ensure semantic consistency, PIP-Net employs a contrastive learning objective during pretraining. The full loss is: 
+
+LPIP-Net = λC LCE + λALA + λT LT, (7) where LA aligns prototype activations between augmented views of the same image: 
+
+LA = − 1
+
+HW 
+
+X
+
+> h,w
+
+log  z′ 
+
+> h,w, :
+
+· z′′ 
+
+> h,w, :
+
+ , (8) and LT encourages uniform prototype usage: 
+
+LT = − 1
+
+D
+
+> D
+
+X
+
+> d=1
+
+log tanh 
+
+> B
+
+X
+
+> b=1
+
+p(b)
+
+!
+
++ ϵ
+
+!
+
+. (9) Here, z′ and z′′ are feature maps from two augmentations of the same image, and p(b) is the prototype presence score vector in minibatch b. This design allows PIP-Net to produce interpretable predictions using shared, semantically mean-ingful prototypes. 
+
+## ICICLE 
+
+ICICLE (Rymarczyk et al. 2023) extends prototype–based reasoning to exemplar-free CL. Assume a stream of T tasks  C1, X 1, Y 1, , . . . ,  CT , X T , Y T , where Ct is the set of classes introduced at task t, Xt and Y t the associated sam-ples and respective labels. During task t, only Xt, Y t are accessible, and no data from earlier tasks is stored. Clearly, 
+
+Ci ∩ Cj = ∅ for all i̸ = j.While ICICLE is built on top of ProtoPNet, the authors propose to use a dedicated prototype layer gt and classifica-tion head ht for every task. Each prototype layer gt contains 
+
+M t = K · | Ct| prototypes, with K being the number of prototypical parts per class. During training, LCE is calculated on the concatenation of all task logits. On the other hand, Lclst and Lsep are left unaltered and computed within the gt head. Inspired by Keswani et al. (2022), a regularization term prevents expla-nation shift by minimizing the difference between prototype similarities at tasks t and t − 1:
+
+LIR =
+
+> H
+
+X
+
+> i=1
+> W
+
+X
+
+> j=1
+
+sim  p t−1, z ti,j 
+
+ − sim  p t, z ti,j 
+
+ Si,j , (10) where pt−1 is a prototype frozen after task t−1, pt its current counterpart, and S is a binary mask selecting the γ-quantile of the pixels with the highest similarity. 
+
+# Methods 
+
+We propose CIP-Net, a CL model that combines inter-pretability, efficiency, and robustness to catastrophic forget-ting. CIP-Net, illustrated in Figure 1, extends PIP-Net by adapting the shared prototype layer and introducing targeted task-aware regularization to incremental learning scenarios. In this section, we describe the architectural modifications, prototype pretraining, and full training objective. 
+
+Architecture CIP-Net builds upon the prototype extrac-tion pipeline of PIP-Net: each input image is processed by a convolutional backbone that produces a latent feature map; prototype presence scores are computed via a softmax over the channel dimension, followed by spatial max-pooling, yielding a vector p = [ p1, ..., p D ] ∈ RD . A known issue in CL arises when logits from newer tasks exhibit higher mag-nitudes than those from earlier ones. This scale mismatch introduces a bias toward recent tasks, thereby accelerating catastrophic forgetting. To address this, we modify the clas-sification head to normalize both the prototype activation vector p and the classifier weight vectors w(t) 
+
+> c
+
+∈ RD for each class c in task t. The class scores are then computed as: 
+
+sk = τ · p⊤w(t)
+
+> c
+
+∥p∥2 · ∥ w(t) 
+
+> c
+
+∥2
+
+(11) where τ is a learnable temperature parameter that com-pensates for the reduced variance introduced by normaliza-tion, ensuring that logits remain expressive and comparable across tasks. 
+
+Training Following the structure of PIP-Net, for each task, our training is composed of two distinct phases: a pre-training phase aimed at producing semantically rich and di-verse prototypes, and a continual training phase in which task-specific classifiers are learned. In the first phase, the convolutional backbone and proto-type layer are trained jointly using an unsupervised objective 20774 Figure 1: CIP-Net overview. Two augmented views are processed by a CNN to produce a prototype feature map z; channel-wise softmax and maxpooling operation yield prototype-presence scores p. Contrastive alignment loss L′ 
+
+> A
+
+aligns prototypes across views, L′ 
+
+> T
+
+promotes rarely used prototypes, and LR limits drift of important ones over tasks. Task-specific sparse, non-negative heads map prototypes to classes, trained with negative log-likelihood loss LC plus sparsity LH and head-decorrelation LD .that does not rely on class labels. The goal here is to shape the prototypes into meaningful and reusable concepts before introducing the task-specific classification. From PIP-Net, we modify slightly LA to encourage faster convergence be-tween the two augmented views to their midpoint represen-tation: 
+
+L′A = − 12HW 
+
+X
+
+> h,w
+
+log  (z′ 
+
+> h,w, :
+
+· zmh,w, :)( z′′  
+
+> h,w, :
+
+· zmh,w, :) ,
+
+(12) where zmh,w, : = z′  
+
+> h,w, :+z′′
+> h,w, :
+> 2
+
+. Given that a trivial solution to L′A would be to collapse onto a single active prototype, we adopt the same solution as PIP-Net with a diversity-promoting term L′T . We modify the diversity loss with a selection mechanism that filters the prototypes on which we want to induce uniform activation. The resulting loss is then: 
+
+L′T = − 1
+
+|˜I| 
+
+X 
+
+> d∈˜I
+
+log 
+
+
+
+tanh   BX
+
+> b
+
+pb
+
+ + ε
+
+
+
+, ˜I =
+
+> ˆt
+
+[
+
+> t=1
+
+˜It.
+
+(13) Here ˆt is the current task and ˜I is the set of rarely activated prototypes. To obtain ˜I, for each head we select the least frequently activated prototypes ( < 75 th percentile of proto-types with a presence score ≥ 0.5) and we consider them as 
+
+rarely-used . Essentially, L′T forces rarely-used prototypes to activate at least once per batch. Additionally, we intro-duce another regularization term, which is responsible for controlling the explanation drift, that is, the change of proto-type activations when learning successive tasks. The result-ing prototype-stability regularizer acts separately on every previously learned classification head. In this case, for each task t, only highly-used prototypes belonging to It = P \ ˜It
+
+enter the loss: 
+
+LR =
+
+> t< ˆt
+
+X
+
+> t=1
+
+LtR =
+
+> t< ˆt
+
+X
+
+> t=1
+
+1
+
+|I t|
+
+X
+
+> d∈I t
+
+ max  
+
+> c
+
+|wtd,c | ∥f ˆtd − f td∥2,
+
+(14) where wtc,d are the class-prototype weights for the previous task t. In LtR, the Euclidean distance between the current prototype feature vector fd and the prototype features ob-tained from the frozen model trained on the previous task f td
+
+is penalized and weighted by the prototype’s maximum out-going class weight. This term stops the semantics of proto-types that are critical for earlier tasks from drifting too much while leaving rarely activated prototypes free to adapt. As a result, LR safeguards past performance and explanations without hindering the network’s capacity to learn and up-date prototypes for the current task. Note that this loss term is only active in tasks following the first one. The total pre-training objective is given by: 
+
+Lpre = λAL′A + λT L′T + λRLR, (15) where each term contributes to building a diverse and inter-pretable prototype set. Once pretraining is complete, the model enters the incre-mental learning phase. For each new task ˆt, only the clas-sification head wˆt is newly initialized and trained, while the backbone and prototype layer are fine-tuned and ear-lier heads are frozen. The core of the objective is the stan-dard negative log-likelihood classification loss LC , which ensures that the model correctly predicts the labels of the current task. However, to maintain interpretability and pre-vent interference across tasks, we introduce two additional regularizers. The first is a Hoyer sparsity loss (Hoyer 2004): 
+
+LH =
+
+1 − 1
+
+|Cˆt|
+
+X 
+
+> c∈Cˆt
+
+√D − ∥wˆtc∥1
+
+∥wˆtc∥2 + ϵ
+
+√D − 1
+
+ . (16) 
+
+LH encourages each class in the current task to rely on a small number of prototypes. This leads to concise and dis-entangled explanations while limiting overlapping prototype 20775 usage. The second term is a head decorrelation loss: 
+
+LD =
+
+> ˆt
+
+X
+
+> t=0
+
+
+
+∥St∥ − ∥ diag  St∥
+
+
+
+, (17) where St =  W(t) W(ˆ t)⊤2 is the squared pairwise dot product between the weight vectors of the t-th head and the current head ˆt. LD promotes orthogonality between the current classification head and those from previous tasks. By minimizing the off-diagonal elements of the dot-product matrices between heads, this term prevents new tasks from reusing prototype combinations already assigned to earlier classes, reducing representational interference and forget-ting. The full training objective for the current task is there-fore: 
+
+L = Lpre + λC LC + λH LH + λD LD , (18) where each component plays a distinct role: preserving di-versity and stability from the pretraining phase, ensuring accurate task-specific predictions, and enforcing structured, sparse, and disjoint prototype usage over time. 
+
+# Results 
+
+We evaluate CIP-Net on the standard CL benchmarks in the prototypes literature of CUB (Wah et al. 2011) (200 bird species) and CARS (Krause et al. 2013) (196 car models). We split the classes in each dataset into {4, 10, 20 } and {4, 7, 14 } tasks, respectively. We run each experiment on 3 dif-ferent seeds, except for the ablation study (1 seed). Further details on compute resources and used hyperparameter val-ues are described in the Supplementary Material .
+
+CIP-Net Outperforms Baselines in All Tested Scenarios 
+
+We compare CIP-Net with ICICLE (Rymarczyk et al. 2023) and the baselines it was compared against, as it is the current state-of-the-art exemplar-free interpretable CL method and, to our knowledge, the closest prototype-based CL approach to our method in the literature. In Table 1, we report the fi-nal average accuracy, i.e., the average accuracy computed on all the tasks after training the model on the last one, ob-tained by the tested methods in the TIL and CIL scenarios on the CUB dataset. Final average accuracies for every task configuration on CARS and the per-task average accuracies for the 4-task setting on CUB (also with ResNet34 back-bone) can be found in the Supplementary Material . We use these metrics as they are standard in CL literature (Rymar-czyk et al. 2023; Wang et al. 2024). CIP-Net consistently outperforms the baselines across all settings, with improve-ments over ICICLE in final average accuracy from +11 .5% 
+
+(4 tasks) to +35 .0% (20 tasks) in TIL and from +11 .9% 
+
+(4 tasks) to +8 .1% (20 tasks) in CIL on CUB. On CARS, we get even higher improvements ranging from +20 .8% (4 tasks) to +34 .2% (14 tasks) in TIL and from +25 .4% (4 tasks) to +38 .2% (7 tasks) and +27 .3% (14 tasks) in CIL (see the Supplementary Material ). Interestingly, in the TIL scenario, the performance remains high as the number of tasks increases, suggesting that CIP-Net better mitigates cu-mulative forgetting when the task identity is known. We hy-pothesize this could be the result of CIP-Net learning more   
+
+> (a) Task 1 (b) Task 2
+> (c) Task 3 (d) Task 3
+
+Figure 2: Example of suppressed prototype activation drift for one of the regularized prototypes from task 1 to task 4 (4-tasks setting) on CUB. More details in Supplementary Material. generalizable prototypes, selectively re-adapting important ones, or progressively recognizing a broader set of patterns as new tasks are introduced, while still treating specific pro-totypes as discriminative for earlier tasks, whose classifica-tion heads remain frozen. Some intuition of this can be no-ticed in Figure 3, where the same prototypes are visualized for each task after training on the last one. In contrast, a more typical trend appears in the CIL scenario. As the num-ber of tasks increases, forgetting also increases, and infer-ring the correct class from the input alone becomes more challenging for the model. As it commonly happens with CL models in the CIL setting, CIP-Net also exhibits a bias toward the most recent task (shown for the 4-task settings on CUB in the Supplementary Material ), leading to reduced av-erage accuracy as the task space expands. However, CIP-Net still outperforms the considered baselines in all task settings, highlighting a better retention of past knowledge. 
+
+CIP-Net Mitigates Explanation Drift To assess whether our XAI-guided learning truly mitigates explanation drift, we monitor how the activations of prototypes learned in the earliest tasks on specific input images evolve as subsequent tasks are introduced. Figures 2 shows how the activation of one of the regularized prototypes does not change from the first task to the last one (4-task setting). This example of-fers a qualitative confirmation that CIP-Net’s regularization term suppresses modifications to the most frequently used prototypes, thereby minimizing inter-task interference and keeping their activations essentially stable across the entire training process. Examples of other images together with a rare example of a drifted regularized prototype are shown in the Supplementary Material . A quantitative evaluation of the suppression of the drift is presented in Figure 4: panel (a) plots the average change in prototype activations computed 20776 Method Final Avg. Task-Incremental Accuracy Final Avg. Class-Incremental Accuracy                                                                                                                                       
+
+> 4 Tasks 10 Tasks 20 Tasks 4 Tasks 10 Tasks 20 Tasks EWC 0.445 ±0.012 0.288 ±0.034 0.188 ±0.031 0.213 ±0.007 0.095 ±0.007 0.046 ±0.011 LWM 0.452 ±0.023 0.294 ±0.032 0.226 ±0.025 0.180 ±0.011 0.090 ±0.011 0.044 ±0.008 LWF 0.301 ±0.048 0.175 ±0.028 0.129 ±0.023 0.219 ±0.011 0.078 ±0.008 0.072 ±0.008 ICICLE 0.654 ±0.011 0.602 ±0.035 0.497 ±0.099 0.350 ±0.053 0.185 ±0.005 0.099 ±0.003
+> CIP-Net 0.772 ±0.015 0.846 ±0.024 0.847 ±0.016 0.469 ±0.012 0.358 ±0.030 0.180 ±0.012
+> FeTrIL 0.750 ±0.008 0.607 ±0.018 0.407 ±0.051 0.375 ±0.006 0.199 ±0.003 0.127 ±0.011 PASS 0.775 ±0.006 0.647 ±0.006 0.518 ±0.012 0.395 ±0.001 0.233 ±0.009 0.139 ±0.017 PIP-Net C 0.843 ±0.002
+
+Table 1: Final average (3 seeds) accuracy comparison for different numbers of tasks on CUB for both task- and class-incremental scenarios. This table describes the behavior of CIP-Net with an increasing number of tasks to be learned and compares it to other baselines. CIP-Net outperforms the baseline methods across all task numbers. Additionally, we show the gap between interpretable and black-box models by comparing CIP-Net to FeTrIL (Petit et al. 2023) and PASS (Zhu et al. 2021). At last, the PIP-Net (with ConvNeXt (Liu et al. 2022) backbone) performance upper bound is presented. Results of methods different from CIP-Net are taken from Rymarczyk et al. (2023).   
+
+> (a) Task 0 (b) Task 1
+> (c) Task 2 (d) Task 3
+
+Figure 3: Visualization of a portion of prototypes for each task in CUB’s 4-task setting), obtained after training on the whole task sequence. over classes between the current task and the first task, while panel (b) depicts the average change between the current task and the immediately preceding task. The plots clearly show that throughout the tasks, the activations stay mostly stable. 
+
+CIP-Net Reduces Overhead As described in the Meth-ods section, CIP-Net integrates a single prototype layer as the final layer of the convolutional backbone. The number of prototypes, a predefined hyperparameter, serves as an upper bound since the model may use only a subset. This is a key  
+
+> (a) (b)
+
+Figure 4: (a) Average difference of activation values over classes between the current task and the first task. (b) Aver-age difference of activation values over classes between the current task and the immediate previous task.                     
+
+> Model # Prototypes Total Parameters (4-tasks) ICICLE PTtMt=PTtK· | Ct|PTtMt·#( Wgt)≈1MLN
+> CIP-Net ≤D0
+
+Table 2: Comparison of parameters’ overhead between CIP-Net and ICICLE used for the prototype layers. Note that 
+
+#( Wgt ) represents the number of parameters of layer gt in ICICLE, where they use prototypes of dimension 512 . Un-like ICICLE, CIP-Net does not use additional parameters for its prototype-based reasoning. The classification heads are not considered in the prototype layers. difference from ICICLE, which introduces a separate pro-totypical part layer gt for each task, causing parameters to grow linearly with the number of tasks. Table 2 compares the memory overhead from prototype-based reasoning in ICI-CLE and CIP-Net. Instead of adding M t = K · | Ct| new prototypes at each incremental step, CIP-Net reuses and in-crementally updates a fixed, shared prototype pool, regular-ized to retain prior knowledge while adapting to new classes. This approach reduces prototype-based reasoning related storage and computation while preserving interpretability without ICICLE’s architectural growth. For each task, only a tensor of D values is stored to record frequently used proto-types, enabling the regularization described in the Methods section. 20777 Task-Incremental Accuracy Class-Incremental Accuracy CIP-Net Task 1 Task 2 Task 3 Task 4 Final Avg. Task 1 Task 2 Task 3 Task 4 Final Avg.                                                                                                                                     
+
+> w/o LD0.72 ±0.04 0.71 ±0.13 0.81 ±0.03 0.85 ±0.05 0.77 ±0.01 0.09 ±0.01 0.29 ±0.06 0.50 ±0.01 0.82 ±0.06 0.43 ±0.00
+> w/o LH0.85 ±0.01 0.72 ±0.14 0.81 ±0.03 0.84 ±0.06 0.81 ±0.03 0.19 ±0.04 0.45 ±0.05 0.61 ±0.04 0.76 ±0.07 0.50 ±0.03
+> w/o LD&LH0.81 ±0.01 0.74 ±0.13 0.82 ±0.02 0.84 ±0.05 0.80 ±0.03 0.11 ±0.03 0.24 ±0.10 0.49 ±0.04 0.82 ±0.05 0.42 ±0.03
+> w/o LR0.14 ±0.02 0.35 ±0.04 0.56 ±0.04 0.86 ±0.06 0.48 ±0.03 0.00 ±0.00 0.08 ±0.05 0.17 ±0.03 0.83 ±0.07 0.27 ±0.02
+> w/o τ0.83 ±0.04 0.37 ±0.04 0.32 ±0.04 0.31 ±0.08 0.46 ±0.05 0.83 ±0.04 0.02 ±0.01 0.00 ±0.00 0.00 ±0.00 0.21 ±0.01
+> CIP-Net 0.83 ±0.00 0.63 ±0.15 0.81 ±0.04 0.82 ±0.06 0.77 ±0.01 0.25 ±0.04 0.42 ±0.02 0.51 ±0.04 0.70 ±0.06 0.47 ±0.01
+
+Table 3: Model’s ablations (3 seeds) comparing accuracies in TIL and CIL 4-tasks scenarios. 
+
+Loss Components Functional Importance to CIP-Net’s Performance To assess the importance of each loss term in maintaining CIP-Net’s performance and stability across tasks, we conduct an ablation study, with results reported in Table 3. Removing the decorrelation loss LD caused a slight TIL drop and a larger CIL decline, disproportionately affect-ing earlier tasks. Interestingly, omitting the Hoyer term LH
+
+yielded performance comparable to the full model. Further analysis showed that setting to 0 all near-zero weights be-low the 50 th percentile maintained accuracy, suggesting that classification heads naturally favor sparse weight matrices, enabling more compact explanations. This points to future work on promoting sparsity more efficiently or allowing it to emerge naturally. When both LD and LH were removed, CIL accuracy declined, again affecting early tasks more. The absence of these regularizers loosens the constraints on the prototypes, which can reduce their intuitiveness and discrim-inative power and marginally lower overall performance. The prototype regularization term LR proved essential: its removal caused one of the two worst performances in both CIL and TIL, with strong bias toward recent tasks and aggra-vated forgetting. Finally, excluding the temperature parame-ter τ produced a similar overall accuracy drop to removing 
+
+LR, but with an opposite trend of better performance on the earliest task and severely reduced results on the most recent ones. Overall, these results confirm that each component dis-tinctly contributes to balancing stability, plasticity, and dis-criminative power in CIP-Net. 
+
+Global and Local Explanations Like PIP-Net, CIP-Net also offers two complementary forms of interpretability. Global explanations are provided by the decision layers: the weights link each class to its relevant prototypes, clearly counting only those prototypes whose weights are non-zero, with smaller values indicating less importance. Local explanations zoom in on a single prediction, pin-pointing the prototypes that fire at specific spatial locations. This is valid for both TIL and CIL scenarios. Naturally, the particular subset of prototypes, and thus the visual rationale, may differ between TIL and CIL evaluations. An intuitive illustration of this patch-level rationale is shown in the Sup-plementary Material .To get a visual representation of each prototype d, we re-trieve the top-k training patches that maximize its impor-tance score, computed as the element-wise product of the normalized prototype activations for sample i and classifi-cation weights considered, based on the scenario being TIL or CIL: md = max c p⊤ 
+
+> i
+
+wd. We empirically found the im-age patches with a score md > 0.01 to be more intuitive, so only patches whose score exceeds this value are retained. In the TIL case, the search is restricted to each task’s training images, so that for each task we get a full visual represen-tation of the prototypes. Whereas in the CIL case, the full training set is considered. An example for the 4-tasks setting is shown in Figure 3. 
+
+# Conclusions 
+
+We have introduced CIP-Net, an exemplar-free, prototype-based CL framework that delivers state-of-the-art per-formance compared to previous exemplar-free and self-explainable methods in both TIL and CIL settings. By grounding every decision in a combination of shared pro-totypes, CIP-Net offers explanations that remain useful and stable across tasks, effectively mitigates catastrophic for-getting, and avoids the increasing memory-related overhead commonly associated with prototype-based reasoning. 
+
+Limitations CIP-Net retains the interpretability benefits of prototype-based models but also their drawbacks, includ-ing the latent–human semantic gap, vulnerability to small adversarial perturbations, and other known issues (Gautam et al. 2023; Hoffmann et al. 2021; Kim et al. 2022; Nauta et al. 2021; Rymarczyk et al. 2022). Although the PIP-Net backbone generalizes beyond fine-grained datasets like CUB and CARS, CIP-Net has not yet been tested on them. Our frequency-based regularization constrains only some prototypes, so an inappropriate proportion can blur expla-nations or reduce accuracy, particularly over long task se-quences. Frequent prototypes are not always meaningful, as they may represent common backgrounds (e.g., sky or sea), though their usefulness can depend on context: for instance, in CUB, a “sea” prototype aids seabird classification. 
+
+Future Work Promising research directions include de-vising better sparsity-promoting strategies for more compact explanations and exploring alternative prototype regulariza-tion schemes to address the previously noted limitations. Additionally, while PIP-Net is designed to recognize out-of-distribution samples, this has not been explored in CIP-Net yet; leveraging this capability for autonomous new-task de-tection could be an interesting direction. 20778 Acknowledgments 
+
+This work was supported by the French National Research Agency (ANR) through the France 2030 program, under the PEPR “WAIT4” (ANR-22-PEAE-0008). This work has been carried out while Michela Proietti and Federico Di Va-lerio were enrolled in the Italian National Doctorate on Ar-tificial Intelligence and the PhD in Engineering in Computer Science, respectively, run by Sapienza University of Rome. 
+
+# References 
+
+Bai, G.; Ling, C.; Gao, Y.; and Zhao, L. 2023. Saliency-Augmented Memory Completion for Continual Learning ,244–252. Chen, C.; Li, O.; Tao, D.; Barnett, A.; Rudin, C.; and Su, J. K. 2019. This looks like that: deep learning for inter-pretable image recognition. Advances in neural information processing systems , 32. Cossu, A.; Spinnato, F.; Guidotti, R.; and Bacciu, D. 2023. A protocol for continual explanation of shap. arXiv preprint arXiv:2306.07218 .Cossu, A.; Spinnato, F.; Guidotti, R.; and Bacciu, D. 2024. Drifting explanations in continual learning. Neurocomput-ing , 127960. Dhar, P.; Singh, R. V.; Peng, K.-C.; Wu, Z.; and Chellappa, R. 2019. Learning without memorizing. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 5138–5146. Ebrahimi, S.; Petryk, S.; Gokul, A.; Gan, W.; Gonzalez, J. E.; Rohrbach, M.; and trevor darrell. 2021. Remembering for the Right Reasons: Explanations Reduce Catastrophic Forgetting. Ede, S.; Baghdadlian, S.; Weber, L.; Nguyen, A.; Zanca, D.; Samek, W.; and Lapuschkin, S. 2022. Explain to not forget: Defending against catastrophic forgetting with xai. Farajtabar, M.; Azizan, N.; Mott, A.; and Li, A. 2020. Orthogonal Gradient Descent for Continual Learning. In Chiappa, S.; and Calandra, R., eds., Proceedings of the Twenty Third International Conference on Artificial Intelli-gence and Statistics , volume 108 of Proceedings of Machine Learning Research , 3762–3773. PMLR. French, R. M. 1999. Catastrophic forgetting in connectionist networks. Trends in cognitive sciences , 3(4): 128–135. Gautam, S.; H¨ ohne, M. M.-C.; Hansen, S.; Jenssen, R.; and Kampffmeyer, M. 2023. This looks more like that: Enhanc-ing self-explaining models by prototypical relevance propa-gation. Pattern Recognition , 136: 109172. Goodfellow, I. J.; Mirza, M.; Xiao, D.; Courville, A.; and Bengio, Y. 2013. An empirical investigation of catastrophic forgetting in gradient-based neural networks. arXiv preprint arXiv:1312.6211 .Hoffmann, A.; Fanconi, C.; Rade, R.; and Kohler, J. 2021. This looks like that... does it? shortcomings of latent space prototype interpretability in deep networks. arXiv preprint arXiv:2105.02968 .Hou, S.; Pan, X.; Loy, C. C.; Wang, Z.; and Lin, D. 2019. Learning a unified classifier incrementally via rebalancing. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 831–839. Hoyer, P. O. 2004. Non-negative matrix factorization with sparseness constraints. Journal of machine learning re-search , 5(Nov): 1457–1469. Keswani, M.; Ramakrishnan, S.; Reddy, N.; and Balasubra-manian, V. N. 2022. Proto2Proto: Can you recognize the car, the way I do? In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 10233–10243. Kim, S. S.; Meister, N.; Ramaswamy, V. V.; Fong, R.; and Russakovsky, O. 2022. HIVE: Evaluating the human inter-pretability of visual explanations. In European Conference on Computer Vision , 280–298. Springer. Kirkpatrick, J.; Pascanu, R.; Rabinowitz, N.; Veness, J.; Des-jardins, G.; Rusu, A. A.; Milan, K.; Quan, J.; Ramalho, T.; Grabska-Barwinska, A.; et al. 2017. Overcoming catas-trophic forgetting in neural networks. Proceedings of the national academy of sciences , 114(13): 3521–3526. Krause, J.; Stark, M.; Deng, J.; and Fei-Fei, L. 2013. 3d ob-ject representations for fine-grained categorization. In Pro-ceedings of the IEEE international conference on computer vision workshops , 554–561. Li, Z.; and Hoiem, D. 2017. Learning without forgetting. 
+
+IEEE transactions on pattern analysis and machine intelli-gence , 40(12): 2935–2947. Liu, Z.; Mao, H.; Wu, C.-Y.; Feichtenhofer, C.; Darrell, T.; and Xie, S. 2022. A convnet for the 2020s. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 11976–11986. Mallya, A.; Davis, D.; and Lazebnik, S. 2018. Piggyback: Adapting a single network to multiple tasks by learning to mask weights. In Proceedings of the European conference on computer vision (ECCV) , 67–82. Mallya, A.; and Lazebnik, S. 2018. Packnet: Adding mul-tiple tasks to a single network by iterative pruning. In Pro-ceedings of the IEEE conference on Computer Vision and Pattern Recognition , 7765–7773. Nauta, M.; Jutte, A.; Provoost, J.; and Seifert, C. 2021. This looks like that, because... explaining prototypes for in-terpretable image recognition. In Joint European Confer-ence on Machine Learning and Knowledge Discovery in Databases , 441–456. Springer. Nauta, M.; Schl¨ otterer, J.; Van Keulen, M.; and Seifert, C. 2023. Pip-net: Patch-based intuitive prototypes for in-terpretable image classification. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2744–2753. Petit, G.; Popescu, A.; Schindler, H.; Picard, D.; and Dele-zoide, B. 2023. Fetril: Feature translation for exemplar-free class-incremental learning. In Proceedings of the IEEE/CVF winter conference on applications of computer vision , 3911– 3920. Proietti, M.; Ragno, A.; and Capobianco, R. 2025. XAI-Guided Continual Learning: Rationale, Methods, and Future 20779 Directions. WIREs Data Mining and Knowledge Discovery ,15(4): e70046. E70046 DMKD-00697.R2. Proietti, M.; Wurman, P. R.; Stone, P.; and Capobianco, R. 2025. ProtoCRL: Prototype-based Network for Continual Reinforcement Learning. In Reinforcement Learning Con-ference .Rajasegaran, J.; Khan, S. H.; Hayat, M.; Khan, F. S.; and Shah, M. 2020. iTAML: An Incremental Task-Agnostic Meta-learning Approach. 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 13585– 13594. Rebuffi, S.-A.; Kolesnikov, A.; Sperl, G.; and Lampert, C. H. 2017. icarl: Incremental classifier and representation learn-ing. In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition , 2001–2010. Rudin, C. 2019. Stop explaining black box machine learning models for high stakes decisions and use interpretable mod-els instead. Nature machine intelligence , 1(5): 206–215. Rymarczyk, D.; Struski, Ł.; G´ orszczak, M.; Lewandowska, K.; Tabor, J.; and Zieli´ nski, B. 2022. Interpretable im-age classification with differentiable prototypes assignment. In European Conference on Computer Vision , 351–368. Springer. Rymarczyk, D.; Van De Weijer, J.; Zieli´ nski, B.; and Twar-dowski, B. 2023. Icicle: Interpretable class incremental con-tinual learning. In Proceedings of the IEEE/CVF Interna-tional Conference on Computer Vision , 1887–1898. Saha, G.; and Roy, K. 2023. Saliency Guided Experience Packing for Replay in Continual Learning. Shim, D.; Mai, Z.; Jeong, J.; Sanner, S.; Kim, H.; and Jang, J. 2021. Online Class-Incremental Continual Learning with Adversarial Shapley Value. Proceedings of the AAAI Con-ference on Artificial Intelligence , 35(11): 9630–9638. Shin, H.; Lee, J. K.; Kim, J.; and Kim, J. 2017. Continual learning with deep generative replay. Advances in neural information processing systems , 30. Wah, C.; Branson, S.; Welinder, P.; Perona, P.; and Belongie, S. 2011. The caltech-ucsd birds-200-2011 dataset. Wang, L.; Zhang, X.; Su, H.; and Zhu, J. 2024. A Compre-hensive Survey of Continual Learning: Theory, Method and Application. IEEE Transactions on Pattern Analysis and Machine Intelligence , 1–20. Yan, S.; Xie, J.; and He, X. 2021. Der: Dynamically ex-pandable representation for class incremental learning. In 
+
+Proceedings of the IEEE/CVF conference on computer vi-sion and pattern recognition , 3014–3023. Zhu, F.; Zhang, X.-Y.; Wang, C.; Yin, F.; and Liu, C.-L. 2021. Prototype augmentation and self-supervision for in-cremental learning. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , 5871– 5880. 20780

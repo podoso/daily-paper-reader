@@ -1,0 +1,351 @@
+Title: Distillation-Guided Structural Transfer for Continual Learning Beyond Sparse Distributed Memory
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39960/43921
+
+Number of Pages: 9
+
+Markdown Content:
+# Distillation-Guided Structural Transfer for Continual Learning Beyond Sparse Distributed Memory 
+
+# Huiyan Xue 1* , Xuming Ran 2* , Yaxin Li 1, Qi Xu 1† , Enhui Li 1, Yi Xu 1, Qiang Zhang 1† 
+
+> 1
+
+School of Computer Science and Technology, Dalian University of Technology, China 
+
+> 2
+
+National University of Singapore, Singapore xuqi@dlut.edu.cn, zhangq@dlut.edu.cn 
+
+Abstract 
+
+Sparse neural systems are gaining traction for efficient contin-ual learning due to their modularity and low interference. Ar-chitectures like Sparse Distributed Memory Multi-Layer Per-ceptrons (SDMLP) construct task-specific subnetworks via Top-K activation and have shown resilience against catas-trophic forgetting. However, their rigid modularity poses two fundamental challenges: (1) the isolation of sparse subnet-works severely limits cross-task knowledge reuse; and (2) increased sparsity reduces interference but often degrades performance due to constrained feature sharing. We pro-pose Selective Subnetwork Distillation ( SSD ), a structurally guided continual learning framework that treats distillation not as a regularizer, but as a topology-aligned information conduit. By identifying neurons with high activation fre-quency, SSD selectively distills knowledge within previous Top-K subnetworks and output logits—without requiring re-play or task labels—preserving both sparsity and functional specialization. Unlike conventional distillation, SSD oper-ates under hard modular constraints and enables structural re-alignment without altering the sparse architecture. While our method is validated on SDMLP, its structure-aligned mecha-nism has the potential to generalize to other sparse networks as a plug-in module for promoting representation sharing. Comprehensive experiments on Split CIFAR-10, CIFAR-100, and MNIST demonstrate that SSD improves accuracy, reten-tion, and manifold coverage, offering a structurally grounded solution to sparse continual learning. 
+
+# Introduction 
+
+In Continual Learning (CL), models are required to sequen-tially acquire new tasks while avoiding the forgetting of previously learned knowledge (French 1999). However, ar-tificial neural networks often suffer from catastrophic for-getting during sequential learning, where representations of earlier tasks are overwritten by new ones, severely degrad-ing long-term performance (De Lange et al. 2021; Aljundi et al. 2019). Inspired by the sparse activation mechanisms in biolog-ical neural systems (Kanerva 1988), Sparse Distributed 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Corresponding authors. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Memory (SDM)-based improvements to Multi-Layer Per-ceptrons (MLPs) have been proposed (Li, Smith, and Doe 2023; Sung, Nair, and Raffel 2021). These methods lever-age the Top-K activation function to retain only the most active neurons in each layer, dynamically forming input-dependent subnetworks (Frankle and Carbin 2019; Evci et al. 2022). This sparsity reduces task interference at the parameter level, enabling continual learning without replay (Mai et al. 2022). Nevertheless, the subnetworks activated for different tasks in SDMLP are typically disjoint and struc-turally isolated, which restricts cross-task knowledge trans-fer and limits the reuse of prior representations. This inde-pendence degrades generalization in dynamic environments, particularly under high sparsity, where the model struggles with representation bottlenecks and a trade-off emerges be-tween accuracy and sparsity. To address this structural bottleneck, we propose 
+
+Selective Subnetwork Distillation ( SSD ), which enhances continual learning through structure-aware knowledge trans-fer. Instead of relying on global distillation or task labels, SSD selects Top-n neurons based on their historical activa-tion frequency to perform layer-wise distillation and con-struct hierarchical connection paths between corresponding subnetworks. This structural routing mechanism, inspired by selective activation in neurophysiology (Olshausen and Field 2023), effectively establishes inter-subnetwork knowl-edge channels, enabling structured sharing and transfer (Ran et al. 2024). SSD surpasses SDMLP in both structural design and functional capacity. It addresses SDMLP’s core limi-tations: disconnected subnetworks and insufficient knowl-edge reuse, and the trade-off between accuracy and spar-sity, thereby providing a structural enhancement (Wang et al. 2022) strategy tailored for sparse continual learning. In contrast to conventional knowledge distillation tech-niques that operate in the output space via loss functions (Hinton, Vinyals, and Dean 2015; Gou et al. 2021), SSD functions not as a loss adjustment but as an architectural mechanism. It explicitly connects sparse task-specific sub-networks through inter-layer paths, enabling transferable representation sharing at the architectural level. This struc-tural advantage allows SSD to function without sample re-play or task labels, making it well-suited for more complex and dynamic continual learning scenarios (Bhat, Zonooz, and Arani 2022; Hafez and Erekmen 2024). The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+27423 The primary contributions of this work are summarized as follows: • A systematic analysis of structural bottlenecks in sparse continual learning frameworks such as SDMLP, particu-larly in terms of knowledge transfer and representational capacity (De Lange et al. 2021; Li et al. 2024); • The proposal of SSD , a structure-enhanced method that performs layer-wise selective distillation based on neu-ron activation and subnetwork connectivity, achieving cross-task knowledge transfer without relying on replay or task labels; • Extensive experiments on standard continual learning benchmarks including Split CIFAR-10, CIFAR-100, and MNIST, where SSD achieves significant improvements in classification accuracy and knowledge retention, vali-dating its effectiveness and generality within sparse con-tinual learning settings. The remainder of this paper is organized as follows: Sec-tion 2 reviews related work on sparse continual learning and knowledge distillation; Section 3 introduces the back-ground and mechanisms of Sparse Distributed Memory and SDMLP; Section 4 presents the design and training strategy of the proposed Selective Subnetwork Distillation; Section 5 reports experimental results and ablation studies; and Sec-tion 6 discusses the method’s advantages, limitations, and potential extensions, followed by the conclusion. 
+
+# Related Work 
+
+## Sparse Subnetwork-Based Continual Learning Methods 
+
+Continual learning techniques can generally be categorized into three major paradigms: architectural approaches (Good-fellow et al. 2013; Springenberg et al. 2015), regularization-based approaches (Smith et al. 2022; Kirkpatrick et al. 2017; Zenke, Poole, and Ganguli 2017; Aljundi, Chakravarty, and Tuytelaars 2018), and replay-based methods (De Lange et al. 2021; Hsu et al. 2018). Among these, architectural ap-proaches, which design task-specific network structures, of-ten leverage sparse subnetwork strategies to minimize inter-task interference.(Aljundi et al. 2019; Xu et al. 2018; Mallya and Lazebnik 2018b; Schwarz et al. 2021b; Smith et al. 2022). Specifically, some methods use weight masking or dy-namic routing to partition pre-trained networks into task-specific subnetworks. For instance, Piggyback (Mallya and Lazebnik 2018b) learns binary masks to select substructures on fixed weights for new tasks, Supermasks in Superpo-sition (Wortsman, Farajtabar et al. 2020) identifies sparse subnetworks without altering weights, and PackNet (Mallya and Lazebnik 2018a) prunes redundant weights to allocate capacity for subsequent tasks. These approaches typically require explicit task boundaries and additional memory for masks or weight snapshots. Alternatively, sparse activation mechanisms limit active neurons per layer to dynamically form task-specific subnetworks, well-suited for task-free continual learning. However, these methods often lack ef-fective knowledge transfer across tasks, limiting long-term generalization. 
+
+## Knowledge Distillation in Continual Learning 
+
+Knowledge distillation (KD) (Hinton, Vinyals, and Dean 2015) has been widely applied to continual learning. Fol-lowing the taxonomy in (Li et al. 2024), KD-based con-tinual learning approaches can be categorized into three paradigms: regularization-based, data replay-based, and fea-ture replay-based distillation. Regularization-based methods constrain the current model’s predictions to match those of the previous model, enabling knowledge retention without data replay, such as Learning without Forgetting (LwF) (Li and Hoiem 2016) using logits distillation and Learning without Memorizing (LwM) (Dhar et al. 2019) employing attention-based fea-ture alignment. Data replay-based methods store or gen-erate past task samples, like iCaRL (Rebuffi et al. 2017) combining exemplars with distillation loss, Deep Genera-tive Replay (DGR) (Shin et al. 2017) synthesizing data, and SparCL (Wang et al. 2022) optimize replay efficiency for resource-limited devices. Feature replay-based methods re-construct old task feature spaces to avoid raw data storage, as in GFR (Belouadah, Popescu, and Kanellos 2020) and PLOP (Douillard et al. 2021) extends this idea to dense pre-diction tasks such as semantic segmentation. These methods significantly enhance continual learn-ing but focus on dense architectures and often rely on replay, limiting sparse network applications. Our Sparse Subnetwork Distillation (SSD) balances sparsity and cross-task connectivity, unlike LwF, iCaRL, DGR, or mask-based (Mallya and Lazebnik 2018b) and pruning-based (Mostafa and Wang 2019) methods, offering alightweight, scalable continual learning solution. 
+
+# Background on Sparse Distributed Memory 
+
+Sparse Distributed Memory (SDM) is an associative mem-ory model inspired by neurobiological principles, using sparse activation patterns to store and retrieve informa-tion based on similarity-driven neuron selection. Bricken et al. (Kanerva 1988) extended this principle to neural networks, introducing the Sparse Distributed Multi-Layer Perceptron (SDMLP), a continual learning framework that forms sparse, task-specific subnetworks to mitigate catas-trophic forgetting. SDMLP integrates several biologically inspired mecha-nisms into a standard MLP architecture. It first applies a 
+
+Top-K activation function (Cekic, Bakiskan, and Mad-how 2022), selecting the K most active neurons per layer to dynamically form sparse subnetworks. Both inputs and weights are L2-normalized , and bias terms are removed to ensure balanced neuron participation and prevent domi-nance by a few neurons. Inspired by Dale’s principle, non-negative weight constraints (Dale 1935) enhance biolog-ical plausibility and sparse connectivity. Finally, SDMLP employs SGD without momentum to avoid stale gradient updates that may deactivate neurons. Through these mecha-nisms, SDMLP effectively isolates task-relevant knowledge within dedicated subnetworks, mitigating catastrophic for-getting in continual learning. 27424 student model teacher model subnet work loss select n active neurons Softmax(T = t) soft predictions soft labels Softmax(T = t) Softmax(T = 1) Teacher Probs Student Probs hard predictions hard labels Data Top-K Top-K SDMLP 
+
+> Loss KD Hidden Loss KD Logits Loss CE
+> frequently activated neurons
+
+Figure 1: Overview of the Selective Subnetwork Distillation (SSD) framework. Given the same input, both teacher and student SDMLPs activate task-specific sparse subnetworks via Top-K selection. SSD identifies the Top-n most frequently activated neu-rons across training and selectively distills their hidden activations, preserving structural sparsity while aligning task-relevant representations. Shared neurons across tasks (red blocks) promote subnetwork connectivity and enhance representation reuse. SSD further distills the output logits for stable decision boundaries. 
+
+# Selective Subnetwork Distillation 
+
+## Overview 
+
+We propose Selective Subnetwork Distillation ( SSD ), a structural framework that enhances sparse subnetwork con-nectivity through selective neuron routing to address the lim-itations of SDMLP in cross-task knowledge transfer. SSD employs a teacher-student architecture, where the student model is the SDMLP for the current task, and the teacher model, starting from task 1, is the SDMLP trained on the previous task to retain prior knowledge (Li, Smith, and Doe 2023; French 1999). Due to the sequential nature of contin-ual learning, task 0 lacks prior knowledge for distillation, so SSD activates the teacher model from task 1 onward. Unlike conventional self-distillation, SSD selectively dis-tills the Top-n active neurons from the previous task, en-hancing inter-task representation transfer while preserving inactive neurons for dynamic subnetwork construction in new tasks (Olshausen and Field 2023; Frankle and Carbin 2019). The SSD framework is illustrated in Figure 1, with its workflow comprising three steps: neuron selection, lay-erwise distillation, and loss function optimization. 
+
+## Selective Neuron Identification 
+
+The core of SSD lies in identifying neurons essential for re-taining prior knowledge within sparse subnetworks. Here, 
+
+Top-K denotes the sparse activation with a fixed number K
+
+of active neurons per layer, whereas Top-n refers to the sub-set of frequently activated neurons selected for distillation. Because Top-K activates a fixed number of neurons at each forward pass, neurons differ in their activation frequency during training. At the end of task t − 1, we compute the normalized acti-vation frequency of each hidden layer neuron by counting its selections by the Top-k activation function across all training samples. We then select the Top-n most frequently activated neurons, where n is a tunable hyperparameter ( k ≤ n ≤ r,with r being the total number of neurons in the layer). Abla-tion studies on CIFAR-10 demonstrate that setting n = 1 .0k
+
+improves accuracy by 11.7%, effectively balancing sparsity and knowledge retention. These Top-n neurons form the core subnetwork of the teacher model, with their activations mapped to the student model via selective distillation paths, establishing structural connections across tasks. The selection of Top-n neurons is motivated by information-theoretic principles (Morcos et al. 2018; Schwarz et al. 2021a). Neurons with high activation frequen-cies tend to capture task-specific patterns with low entropy, indicating stable and informative representations (Schwarz et al. 2021a). To quantify neuron stability, we define the ac-tivation entropy of each neuron i as: 
+
+Hi = −pi log pi − (1 − pi) log(1 − pi), (1) where pi denotes the normalized activation frequency of 27425 neuron i during training. Specifically, pi = ai/N , where ai
+
+is the number of times neuron i is selected by the Top-k ac-tivation function, and N is the total number of training sam-ples. Neurons with lower entropy are more likely to repre-sent consistent task-relevant features and are thus preferred for selective distillation. This formulation enables SSD to identify structurally reliable neurons across tasks, promot-ing efficient knowledge transfer while preserving sparsity. 
+
+## Layerwise and Selective Distillation Design 
+
+SSD facilitates knowledge transfer through two levels of dis-tillation: hidden layer activation distillation and output layer logits distillation. For hidden layers, SSD distills only the ac-tivations of the Top-n neurons identified previously, preserv-ing SDMLP’s sparse subnetwork structure while transfer-ring critical representations from prior tasks. At the output layer, SSD distills the soft logits distribution of the teacher model to retain classification knowledge, stabilizing the stu-dent model’s decision boundaries to mitigate forgetting. To implement these two pathways, we adopt temperature-scaled Kullback–Leibler (KL) divergence as the distillation objective for both hidden and output layers: 
+
+LKD hidden = T 2 · KL σ z[Is]
+
+> t
+
+T
+
+!
+
+∥ σ z[It]
+
+> t−1
+
+T
+
+!! 
+
+, (2) 
+
+LKD logits = T 2 · KL 
+
+
+
+σ
+
+ zt
+
+T
+
+
+
+∥ σ
+
+ zt−1
+
+T
+
+ 
+
+, (3) where Is and It denote the Top-n neuron indices in the student and teacher subnetworks, respectively, and z[Is] 
+
+> t
+
+,
+
+z[It] 
+
+> t−1
+
+represent the corresponding activations. The tempera-ture parameter T softens the predicted distributions (Hinton, Vinyals, and Dean 2015), while the scaling factor T 2 com-pensates for reduced gradient magnitudes. This selective distillation strategy targets structurally im-portant neurons, ensuring both subnetwork consistency and output-level classification performance. Figure 1 illustrates SSD’s layerwise distillation paths, highlighting the role of Top-n neurons in cross-task knowledge transfer. Furthermore, SSD strengthens subnetwork connectivity by selectively distilling frequently active neurons, thereby reducing the average path length in the neuron activation graph and improving manifold representation coverage. This structural alignment is supported by reduced neuron entropy (Eq. 1), as discussed in Section . 
+
+## Loss Function and Training Schedule 
+
+The total loss function of SSD combines the cross-entropy loss for the current task with the distillation loss: 
+
+Ltotal = αLCE + (1 − α)LKD , (4) 
+
+LCE = −
+
+> o
+
+X
+
+> i=1
+
+yi log σ(zit ), (5) 
+
+LKD = λLKD hidden + (1 − λ)LKD logits . (6) Here, α ∈ [0 , 1] controls the trade-off between learn-ing new knowledge and retaining previous tasks. The cross-entropy loss LCE is computed over o output classes, where Algorithm 1: SSD Training Procedure  
+
+> 1:
+
+Input : Task t dataset Dt, teacher model Mt−1, student model Mt 
+
+> 2:
+
+Hyperparameters : α = 0 .7, λ = 0 .1, T = 8 .0, n =1.0k 
+
+> 3:
+
+for each task t ≥ 1 do  
+
+> 4:
+
+Compute activation frequencies of hidden neurons in Mt−1 using Dt−1 
+
+> 5:
+
+Select Top-n neurons per hidden layer based on ac-tivation frequencies  
+
+> 6:
+
+for each training sample (x, y ) ∈ Dt do  
+
+> 7:
+
+Compute classification loss LCE (Eq. 5)  
+
+> 8:
+
+Compute hidden distillation loss LKD hidden 
+
+(Eq. 2)  
+
+> 9:
+
+Compute logits distillation loss LKD logits (Eq. 3)  
+
+> 10:
+
+Compute total loss Ltotal (Eq. 4)  
+
+> 11:
+
+Update Mt parameters to minimize Ltotal  
+
+> 12:
+
+end for  
+
+> 13:
+
+end for  
+
+> 14:
+
+Output : Trained student model Mt
+
+zt denotes the student model’s logits and σ(·) is the softmax function. The distillation loss LKD combines hidden-state matching and output-logit distillation, weighted by λ ∈ [0 , 1] , which balances structural preservation and output-level knowledge transfer. We set the hyperparameters α = 0 .7, λ = 0 .1, and T =8.0 based on empirical validation, which achieves a good balance between stability and plasticity on Split CIFAR-10, improving validation accuracy by 11.7% and reducing for-getting by 32.5% (see Table 3). 
+
+Training Procedure. Algorithm 1 summarizes SSD’s training. For each task t, we first identify the Top-n most active neurons from the previous model Mt−1 using Dt−1
+
+to form a sparse subnetwork. The student model Mt is then trained on the current dataset Dt by jointly minimizing clas-sification loss, hidden state alignment loss on the selected neurons, and logits distillation loss. Hyperparameters α, λ,
+
+T , and n control the relative weights, temperature, and the distilled subnetwork size. 
+
+# Experiment 
+
+## Experiment Setup 
+
+We evaluate the performance of Selective Subnetwork Dis-tillation (SSD) in continual learning using three datasets: Split CIFAR-10, Split CIFAR-100, and Split MNIST(Zenke, Poole, and Ganguli 2017). Split CIFAR-10 divides CIFAR-10 into 5 tasks, each containing 2 classes; Split CIFAR-100 comprises 50 tasks, each with 2 classes, testing more com-plex class distributions; Split MNIST splits MNIST into 5 tasks(Hsu et al. 2018; Farquhar and Gal 2018). We employ ConvMixer(Trockman and Kolter 2022) as a frozen feature extractor to generate 256-dimensional embeddings from raw images. The training process consists of three steps: (1) im-age embedding, (2) pretraining the student model on Ima-27426 Method K CIFAR-10 CIFAR-100 MNIST SDMLP 10 0.71 0.32 0.53 SI - 0.44 - -EWC - 0.65 0.16 0.61 
+
+SSD (Ours) 10 0.81 0.43 0.57 SSD+EWC 10 0.87 0.52 0.86 
+
+Table 1: Validation accuracy (Val.Acc) on Split CIFAR-10, CIFAR-100, and MNIST with 10k neurons per layer. All results are averaged over 5 runs with random task splits.K is the number of active neurons selected by Top-K activation. Missing values (-) indicate untested configurations geNet32(Russakovsky et al. 2015) embeddings, and (3) con-tinual learning in a class-incremental setting, with each task trained for 2000 epochs. Each task was trained for 2000 epochs to ensure subnetwork convergence under Top-K and GABA sparsity. To ensure fair comparisons, we fix the neu-ron count per layer (1000 or 10000) and set the Top-k ac-tivation parameter to k = 10 or k = 1 . Hyperparameters (n = 1 .0, α = 0 .7, λ = 0 .1, T = 8 .0) are optimized via validation set tuning. 
+
+## Overall Accuracy Improvements 
+
+We compare SSD against baseline methods (SDMLP, SI(Zenke, Poole, and Ganguli 2017), EWC(Kirkpatrick et al. 2017)) in terms of validation accuracy, as reported in Ta-ble 1 and Table 2. On Split CIFAR-10 with 10000 neurons and k = 10 , SSD improves accuracy from 71% (SDMLP) to 81%, and combining SSD with EWC further boosts ac-curacy to 87%, demonstrating the synergy between struc-tural enhancement and parameter regularization. With 1000 neurons, SSD increases accuracy from 63% to 73%. On Split CIFAR-100 and Split MNIST, SSD consistently out-performs baselines, achieving average accuracy gains of 12% and 4%, respectively. These results validate SSD’s ro-bustness in multi-task scenarios, driven by its selective neu-ron routing that enhances cross-task knowledge transfer. 
+
+## Catastrophic Forgetting (BWT) 
+
+We quantify SSD’s ability to mitigate catastrophic forgetting using the Backward Transfer (BWT) metric(Lopez-Paz and Ranzato 2017) defined as: BWT = 1
+
+T − 1 
+
+> T−1
+
+X
+
+> i=1
+
+ RT,i − Ri,i 
+
+, (7) where RT,i denotes the accuracy on task i after training the final task T , and Ri,i is the accuracy on task i immedi-ately after it was learned. , as shown in Table 3. On Split CIFAR-10 with 10000 neurons and k = 10 , SDMLP ex-hibits significant forgetting with a BWT of -0.1828, whereas SSD substantially improves to -0.1234, reducing forgetting by 32.5%. Method K CIFAR-10 CIFAR-100 MNIST SDMLP 10 0.63 0.29 0.53 SDMLP 1 0.70 0.25 0.69 SI - 0.34 - 0.36 EWC - 0.67 0.12 0.61 
+
+SSD (Ours) 10 0.73 0.34 0.55 
+
+SSD (Ours) 1 0.74 0.35 0.74 
+
+SSD+EWC 1 0.80 0.40 0.86 Table 2: Validation accuracy (Val.Acc) on Split CIFAR-10, CIFAR-100, and MNIST with 1k neurons per layer. Exper-imental settings and notation follow Table 1. Method Mean BWT Forgetting Reduction SDMLP -0.1828 –SSD -0.1234 +32.5% Table 3: Backward Transfer (BWT) comparison on Split CIFAR-10 (10000 neurons). Lower BWT indicates less for-getting. 
+
+## Structural specialization analysis 
+
+To validate SSD’s structural enhancement mechanism, we analyze neuron activation specialization by computing the entropy of activation frequencies across the training set. On Split CIFAR-10, SSD reduces the average neuron entropy from 0.99 (SDMLP) to 0.003 (p <0.01), indicating higher task-specificity and reduced inter-task interference(Achille and Soatto 2018). Figure 2 shows a heatmap of top-k neu-ron indices across training epochs, where the stabilization of neuron indices in later epochs (around 150–175) indicates the emergence of consistently active neurons(Morcos et al. 2018). These frequently activated neurons correspond to lower activation entropy (Eq. 1)(Fernando and et al. 2017), providing visual evidence of structural convergence and neu-ron specialization. This information-theoretic stability un-derpins SSD’s performance gains over SDMLP’s random activation patterns. 
+
+## SSD and EWC: complementary mechanisms 
+
+We demonstrate that SSD and EWC operate orthogonally to enhance continual learning. SSD optimizes task-shared subnetwork topology through selective neuron distillation, strengthening cross-task structural connectivity. In con-trast, EWC stabilizes critical parameters to prevent forget-ting(Kirkpatrick et al. 2017). Their distinct mechanisms en-able synergy: SSD enhances structural routing(Mallya and Lazebnik 2018a), while EWC constrains parameter drift. As shown in Table 1 and Table 2, combining SSD with EWC improves accuracy to 87% on Split CIFAR-10 and 52% on Split CIFAR-100, surpassing standalone methods. Future work will explore their integration for further forgetting mit-igation, including detailed analysis of BWT metrics. 27427 Figure 2: Heatmap of Top-k neuron indices over training epochs. The index patterns stabilize in later epochs, suggest-ing the emergence of low-entropy, task-shared neurons (see Eq. 1), which underpins SSD’s structural specialization. 
+
+# Ablation Analysis of SSD’s Structural Design 
+
+Unless otherwise stated, all ablation experiments in this sec-tion are conducted under the Split CIFAR-10 setting with 10,000 hidden neurons. The distillation temperature is fixed at T = 2.0 and the hidden-output loss weight is set to 
+
+α = 0 .7, except when analyzing the impact of these pa-rameters specifically. 
+
+## Selective vs. Full Distillation 
+
+SSD is not a pruning strategy but performs structure-aware knowledge transfer by selectively distilling low-entropy, fre-quently active neurons. We evaluate two components of SSD through ablation: (1) the use of a Top-k mask for selective distillation, and (2) hierarchical distillation applied to both hidden and output layers. Full distillation transfers knowl-edge from all neurons without activation filtering, while se-lective distillation targets only the Top-1000 most active neurons based on activation statistics. As shown in Table 4, combining selective and hierarchical distillation yields the highest validation accuracy (0.8083), demonstrating the ad-vantage of structure-aware knowledge transfer. Each com-ponent alone also contributes noticeable improvement. 
+
+Selective Hierarchical Accuracy 
+
+✓ × 0.7874 
+
+× ✓ 0.8056 
+
+✓ ✓ 0.8083 Table 4: Effect of Selective and Hierarchical Distillation on Accuracy. 
+
+## Effect of λ: Balancing Hidden and Logit Distillation 
+
+We analyze the relative contributions of hidden layer and output layer distillation to the overall distillation loss by con-ducting ablation experiments on the hyperparameter λ, de-fined in Equation 2 and 3 as the weighting factor between the 
+
+Hidden Weight Logit Weight Accuracy 
+
+0.5 0.5 0.8083 0.9 0.1 0.7902 0.7 0.3 0.8001 0.3 0.7 0.8087 0.1 0.9 0.8174 Table 5: Effect of Different KD Loss Weights on Accuracy. hidden layer loss ( Lhidden  
+
+> KD
+
+) and the output layer loss ( Llogits  
+
+> KD
+
+). As presented in Table 5, accuracy increases as more weight is allocated to the output layer (smaller λ), with the peak accuracy of 0.8143 achieved at λ = 0 .1. This suggests that the output layer’s soft targets encode rich class similarity in-formation, while the hidden layer’s feature activations pro-vide complementary structural guidance, enhancing knowl-edge transfer. 
+
+## Effect of Top-n Selection Granularity 
+
+We evaluate the impact of neuron selection granularity in hidden layer distillation by varying the number of active neurons n during the distillation phase. Experiments are conducted across six settings: Top-10, Top-100, Top-200, Top-500, Top-1000, and Top-2000. As depicted in Figure 3, the model maintains stable accuracy across different n val-ues, with the highest validation accuracy of 0.8083 at n =1000 and a near-optimal 0.8081 at n = 200 . This indicates that distilling a small subset of critical neurons effectively transfers task-relevant knowledge, approaching the perfor-mance of full distillation. The choice of n reflects a trade-off between sparsity and accuracy: smaller n enhances selectiv-ity and compression potential, while larger n offers marginal performance gains. In practice, the range of Top-200 to Top-1000 balances distillation efficiency and task performance. 
+
+Figure 3: Accuracy vs. Top-n size for subnetwork distilla-tion. 27428 Figure 4: Left: 3D accuracy surface over distillation param-eters α and T (scaled). Right: 2D line plot for accuracy vs. 
+
+α under different T values. 
+
+## Distillation Parameter Sensitivity 
+
+We assess the sensitivity of SSD to distillation parameters by examining the weighting coefficient α (see Equation 4) for hidden and output layer distillation, and the softmax tem-perature T of the teacher model. Figure 4 presents a 3D ac-curacy surface and 2D accuracy curves for various α and 
+
+T combinations. The model exhibits robustness to α vari-ations, maintaining stable performance for α ∈ [0 .3, 0.7] .Higher temperatures ( T = 6 .0 or T = 8 .0) improve accu-racy, attributed to smoother soft targets that facilitate knowl-edge transfer. The optimal configuration of α = 0 .7 and 
+
+T = 8 .0 achieves the highest validation accuracy of 0.8174. These findings demonstrate that SSD sustains strong per-formance across a wide hyperparameter range, reducing re-liance on fine-tuning. 
+
+## Analysis of Structural Transferability and Knowledge Retention 
+
+As shown in Fig. 5, we systematically evaluate SSD’s cross-task learning capabilities using three key metrics: Co-sine Similarity (structural alignment), Jaccard Similarity 
+
+(training stability), and KL Divergence (knowledge reten-tion). Note that no teacher model exists for Task 0; thus, teacher-dependent metrics (Cosine Similarity and KL Diver-gence) are computed starting from Task 1. 
+
+Structural Transferability & Stability Cosine similarity between the weight vectors of task-specific sub-networks (formed via top-k selection) quantifies the directional align-ment between teacher and student models. Values consis-tently remaining above 0.77 across all tasks (Fig. 5) confirm SSD’s strong capability to transfer structural knowledge. To further assess training stability, we compute Jaccard similarity between the Top-k neuron index sets of adjacent sampling points (every 50 epochs): Jaccard = |St−1 ∩ St||St−1 ∪ St| , (8) where St denotes the set of Top-k neuron indices at epoch 
+
+t. As shown in Fig. 5, Jaccard similarity exhibits larger vari-ance during early training but gradually stabilizes at a high level ( > 0.81 ) from Task 1 onwards as teacher-guided dis-tillation influences neuron selection. This indicates that SSD progressively converges to stable structural representations. 
+
+Knowledge Retention Capability KL divergence mea-sures the discrepancy between the student’s predictions and the teacher’s temperature-scaled soft targets: KL (P ∥ Q) = X
+
+> x∈X
+
+P (x) log P (x)
+
+Q(x) , (9) where P denotes the teacher distribution and Q denotes the student distribution. Lower KL divergence values reflect bet-ter knowledge preservation and reduced catastrophic forget-ting. We observe sharp increases at the beginning of each new task, followed by rapid decreases and stabilization be-low 0.2, confirming SSD’s effectiveness in assimilating new knowledge without erasing prior task information. 
+
+Conclusion Cosine similarity, Jaccard similarity, and KL divergence together characterize SSD’s learning dynamics: cosine indicates structural alignment, Jaccard reflects neu-ron selection stability, and KL measures knowledge reten-tion. Their synergy allows SSD to maintain stable represen-tations and achieve robust continual learning. 
+
+Figure 5: Evaluation of structural transferability (Cosine/-Jaccard similarity) and knowledge retention (KL diver-gence) across sequential tasks. 
+
+# Conclusion 
+
+We address cross-task knowledge transfer limitations in SDMLP caused by isolated sparse subnetworks by introduc-ing SSD. Through selective neuron routing and layerwise distillation, SSD improves subnetwork connectivity while retaining sparse Top-k activations. Unlike traditional dis-tillation (Tian, Krishnan, and Isola 2020), SSD acts as a dynamic structural enhancement mechanism that resolves knowledge fragmentation. Although developed for SDMLP, SSD can generalize to other sparse architectures, including sparse CNNs and Top-k Transformers (Zhou et al. 2022). 27429 Acknowledgments 
+
+This work was supported in part by the National Natu-ral Science Foundation of China (NSFC) under Grant (No. 62476035, 62206037, and U24B20140), and the Young Elite Scientists Sponsorship Program by CAST under Grant 2024QNRC001. 
+
+# References 
+
+Achille, A.; and Soatto, S. 2018. Emergence of Invariance and Disentanglement in Deep Representations. In Interna-tional Conference on Learning Representations (ICLR) .Aljundi, R.; Chakravarty, P.; and Tuytelaars, T. 2018. Mem-ory aware synapses: Learning what (not) to forget. In ECCV .Aljundi, R.; Lin, M.; Goujaud, B.; and Bengio, Y. 2019. Task-free continual learning. In CVPR .Belouadah, E.; Popescu, A.; and Kanellos, I. 2020. Incre-mental learning of object detectors without catastrophic for-getting. In IEEE TPAMI .Bhat, P. S.; Zonooz, B.; and Arani, E. 2022. Task Agnos-tic Representation Consolidation: A Self-supervised Based Continual Learning Approach. In Proceedings of the AAAI Workshop on Lifelong Learning Agents .Cekic, M.; Bakiskan, C.; and Madhow, U. 2022. Neuro-Inspired Deep Neural Networks with Sparse, Strong Activa-tions. In Proceedings of the IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) .Dale, H. 1935. Pharmacology and Nerve-endings. Proceed-ings of the Royal Society of Medicine .De Lange, M.; Aljundi, R.; Masana, M.; Parisot, S.; Jia, X.; Leonardis, A.; Slabaugh, G.; and Tuytelaars, T. 2021. A con-tinual learning survey: Defying forgetting in classification tasks. IEEE Transactions on Pattern Analysis and Machine Intelligence , 44(7): 3366–3385. Dhar, P.; Singh, R.; Peng, H.; Torr, P.; and Bilen, H. 2019. Learning without Memorizing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 5138–5146. Douillard, A.; Cord, M.; Ollion, C.; Robert, T.; and Valle, E. 2021. PLOP: Learning without Forgetting for Continual Semantic Segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 12326–12336. Evci, U.; Gale, T.; Elsen, E.; and Uszkoreit, J. 2022. Rigging the Lottery: Making All Tickets Winners. In International Conference on Learning Representations (ICLR) .Farquhar, S.; and Gal, Y. 2018. Towards Robust Evalua-tions of Continual Learning. In NeurIPS Continual Learning Workshop .Fernando, C.; and et al. 2017. PathNet: Evolution Channels Gradient Descent in Super Neural Networks. In Proceed-ings of the International Conference on Machine Learning (ICML) .Frankle, J.; and Carbin, M. 2019. The lottery ticket hypoth-esis: Finding sparse, trainable neural networks. In ICLR .French, R. M. 1999. Catastrophic forgetting in connectionist networks. Trends in Cognitive Sciences , 3(4): 128–135. Goodfellow, I. J.; Mirza, M.; Xiao, D.; Courville, A.; and Bengio, Y. 2013. An empirical investigation of catastrophic forgetting in gradient-based neural networks. arXiv preprint arXiv:1312.6211 .Gou, J.; Yu, B.; Maybank, S. J.; and Tao, D. 2021. Knowl-edge Distillation: A Survey. International Journal of Com-puter Vision , 129(6): 1789–1819. Hafez, M. B.; and Erekmen, K. 2024. Continual Deep Rein-forcement Learning with Task-agnostic Policy Distillation. 
+
+Scientific Reports , 14(1): 1–12. Hinton, G.; Vinyals, O.; and Dean, J. 2015. Distill-ing the knowledge in a neural network. arXiv preprint arXiv:1503.02531 .Hsu, Y.-C.; Liu, Y.-C.; Ramasamy, A.; and Kira, Z. 2018. Re-evaluating continual learning scenarios: A categorization and case for strong baselines. In NeurIPS .Kanerva, P. 1988. Sparse Distributed Memory . MIT Press. Kirkpatrick, J.; et al. 2017. Overcoming catastrophic for-getting in neural networks. Proceedings of the National Academy of Sciences , 114(13): 3521–3526. Li, S.; Su, T.; Zhang, X.; and Wang, Z. 2024. Continual Learning with Knowledge Distillation: A Survey. IEEE Transactions on Neural Networks and Learning Systems .Li, X.; Smith, J.; and Doe, A. 2023. Sparse distributed mem-ory for continual learning. Proceedings of ICML , 1234– 1245. Li, Z.; and Hoiem, D. 2016. Learning without forgetting. In 
+
+ECCV .Lopez-Paz, D.; and Ranzato, M. 2017. Gradient episodic memory for continual learning. In Advances in Neural In-formation Processing Systems (NeurIPS) .Mai, Z.; Yin, B.; Wang, Z.; Zhang, T.; Chen, Y.; and Hong, X. 2022. Online Continual Learning with Maximal Inter-fered Retrieval. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,13606–13615. Mallya, A.; and Lazebnik, S. 2018a. PackNet: Adding mul-tiple tasks to a single network by iterative pruning. In CVPR .Mallya, A.; and Lazebnik, S. 2018b. Piggyback: Adding multiple tasks to a single, fixed network by learning to mask. In ECCV .Morcos, A. S.; Barrett, D. G.; Rabinowitz, N. C.; and Botvinick, M. 2018. On the importance of single directions for generalization. In International Conference on Learning Representations (ICLR) .Mostafa, H.; and Wang, X. 2019. Parameter Efficient Train-ing of Deep Convolutional Neural Networks by Dynamic Sparse Reparameterization. In Proceedings of the Inter-national Conference on Machine Learning (ICML) , 4646– 4655. Olshausen, B. A.; and Field, D. J. 2023. Sparse coding in neural systems. Nature Reviews Neuroscience , 24(3): 192– 204. Ran, X.; Yao, J.; Wang, Y.; Xu, M.; and Liu, D. 2024. Brain-inspired continual pre-trained learner via silent synaptic con-solidation. CoRR , abs/2410.05899. 27430 Rebuffi, S.-A.; Kolesnikov, A.; Sperl, G.; and Lampert, C. H. 2017. iCaRL: Incremental classifier and representation learning. In CVPR .Russakovsky, O.; Deng, J.; Su, H.; et al. 2015. ImageNet Large Scale Visual Recognition Challenge. International Journal of Computer Vision (IJCV) , 115(3): 211–252. Schwarz, J.; et al. 2021a. Powerpropagation: A sparsity in-ducing weight reparameterization. In Advances in Neural Information Processing Systems (NeurIPS) .Schwarz, J.; et al. 2021b. Progress & compress: A scalable framework for continual learning. In ICLR .Shin, H.; Lee, J. K.; Kim, J.; and Kim, J. 2017. Continual Learning with Deep Generative Replay. In Advances in Neu-ral Information Processing Systems (NeurIPS) , 2990–2999. Smith, J.; et al. 2022. Always be dreaming: A new approach for data-free class-incremental learning. NeurIPS .Springenberg, J. T.; Dosovitskiy, A.; Brox, T.; and Ried-miller, M. 2015. Striving for simplicity: The all convolu-tional net. In ICLR workshop .Sung, Y.-L.; Nair, V.; and Raffel, C. A. 2021. Training Neu-ral Networks with Fixed Sparse Masks. In Advances in Neu-ral Information Processing Systems (NeurIPS) .Tian, Y.; Krishnan, D.; and Isola, P. 2020. Contrastive Rep-resentation Distillation. In CVPR .Trockman, A.; and Kolter, Z. 2022. Patches Are All You Need? In International Conference on Learning Represen-tations (ICLR) .Wang, Z.; Zhan, Z.; Gong, Y.; Yuan, G.; Tang, J.; and Zhang, X. 2022. SparCL: Sparse Continual Learning on the Edge. In Advances in Neural Information Processing Sys-tems (NeurIPS) .Wortsman, M.; Farajtabar, M.; et al. 2020. Supermasks in superposition. In NeurIPS .Xu, Z.; et al. 2018. Reinforced continual learning. In 
+
+NeurIPS .Zenke, F.; Poole, B.; and Ganguli, S. 2017. Continual learn-ing through synaptic intelligence. In Proceedings of the In-ternational Conference on Machine Learning (ICML) .Zhou, Y.; Lei, T.; Liu, H.; Du, N.; Huang, Y.; Dai, Z.; Eis-ner, J.; and Ahmed, A. 2022. Mixture-of-Experts with Ex-pert Choice Routing. In Advances in Neural Information Processing Systems (NeurIPS) .27431

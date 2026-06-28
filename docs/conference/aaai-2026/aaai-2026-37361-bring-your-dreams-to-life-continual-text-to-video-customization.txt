@@ -1,0 +1,467 @@
+Title: Bring Your Dreams to Life: Continual Text-to-Video Customization
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/37361/41323
+
+Number of Pages: 9
+
+Markdown Content:
+# Bring Your Dreams to Life: Continual Text-to-Video Customization 
+
+# Jiahua Dong 1* , Xudong Wang 2,3* , Wenqi Liang 4, Zongyan Han 1, Meng Cao 1, Duzhen Zhang 1,Hanbin Zhao 5,6 , Zhi Han 2† , Salman Khan 1,7 , Fahad Shahbaz Khan 1,8 
+
+> 1
+
+Mohamed bin Zayed University of Artificial Intelligence 
+
+> 2
+
+State Key Laboratory of Robotics and Intelligent Systems, Shenyang Institute of Automation, Chinese Academy of Sciences 
+
+> 3
+
+University of Chinese Academy of Sciences 
+
+> 4
+
+University of Trento 
+
+> 5
+
+Zhejiang University 
+
+> 6
+
+Zhejiang Key Laboratory of Intelligent High Speed UAV Technology 
+
+> 7
+
+Australian National University 
+
+> 8
+
+Link¨ oping University 
+
+{dongjiahua1995, liangwenqi0123 }@gmail.com, {wangxudong, hanzhi }@sia.cn 
+
+{zongyan.han, meng.cao, duzhen.zhang, salman.khan, fahad.khan }@mbzuai.ac.ae, zhaohanbin@zju.edu.cn 
+
+Abstract 
+
+Customized text-to-video generation (CTVG) has recently witnessed great progress in generating tailored videos from user-specific text. However, most CTVG methods assume that personalized concepts remain static and do not expand incre-mentally over time. Additionally, they struggle with forgetting and concept neglect when continuously learning new con-cepts, including subjects and motions. To resolve the above challenges, we develop a novel Continual Customized V ideo Diffusion (CCVD) model, which can continuously learn new concepts to generate videos across various text-to-video gener-ation tasks by tackling forgetting and concept neglect. To ad-dress catastrophic forgetting, we introduce a concept-specific attribute retention module and a task-aware concept aggrega-tion strategy. They can capture the unique characteristics and identities of old concepts during training, while combining all subject and motion adapters of old concepts based on their relevance during testing. Besides, to tackle concept neglect, we develop a controllable conditional synthesis to enhance regional features and align video contexts with user conditions, by incorporating layer-specific region attention-guided noise estimation. Extensive experimental comparisons demonstrate that our CCVD outperforms existing CTVG models. 
+
+# Introduction 
+
+Text-to-video diffusion models (TVDMs) (Yang et al. 2025; Wu et al. 2023; Guo et al. 2025) employ iterative denoising processes to synthesize realistic and dynamic video content directly from textual descriptions. By leveraging large-scale datasets and powerful spatiotemporal architectures (Wang and Yang 2024), they generate high-quality and contextually aligned videos that accurately reflect the semantics of the input text (Khachatryan et al. 2023). Despite significant ad-vancements, TVDMs often struggle with fine-grained control 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+over object appearance and motion patterns, limiting their ap-plicability in personalized tasks (Lee, Kwon, and Kim 2024; Wang et al. 2024b; Liu et al. 2023). To address this limitation, customized text-to-video generation (CTVG) (Jeong, Park, and Ye 2024; He et al. 2025) has been introduced to person-alize video synthesis based on user-specified concepts. This involves integrating personalized subject identities and mo-tion patterns into generated videos via the design of subject and motion adapters (Ren et al. 2025; Chen et al. 2024). However, the majority of current CTVG methods (Yang et al. 2024; He et al. 2025; She et al. 2025) are built on the premise that personalized concepts defined by users remain static and do not grow progressively over time. Nonetheless, this premise does not align with real-world scenarios, where users often seek to continuously create and synthesize video sequences with new personalized concepts ( i.e. , new subjects and motion patterns) based on their evolving experiences. To tackle this limitation, CTVG methods (Huang et al. 2025a; Zhou et al. 2024; Gu et al. 2024) generally need to retain all text-image training data associated with previous concepts to finetune pretrained TVDMs (Xing et al. 2024) using the subject and motion adapters (Wei et al. 2024b). Yet, the sub-stantial computational expenses and privacy issues (Van Le et al. 2023) can render them unfeasible as the quantity of personalized concepts gradually increases over time. If they preserve all subject and motion adapters tied to previously customized concepts and merge them to continuously adapt to new concepts (Wu, Huang, and Wei 2024; Zhong et al. 2024), they face a substantial decline in the distinct character-istics of old concepts ( i.e. , catastrophic forgetting (Lopez-Paz and Ranzato 2017; Ostapenko et al. 2019)). Besides, in prac-tical applications, users typically seek to control the contexts (i.e. , subjects and motions) linked to multiple old concepts in the generated videos by supplying additional conditions (e.g. , bounding boxes). This imposes substantial strain on the above CTVG methods (Wei et al. 2024b; Zhao et al. 2025), making them particularly vulnerable to the issue of concept neglect (Sun et al. 2024) ( i.e. , certain old concepts may be The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+3623 Task32:V32 Task8:V8  Task29:V29 Task5:V5 Task1:V1  Task35:V35 Task2:V2                       
+
+> AV12 Versus A V5 in V14 Style V1 Playing With V10 and V29 on The Beach AV32 Pe rforming V8
+> Ours  L2DM
+> Task34:V34 Task3:V3 Task14:V14 Task10:V10
+> …………………
+
+Figure 1: Results of our model in continually learning new concepts, including subjects and motions, under the CTVC setting. overlooked in the multi-concept video customization). To address the aforementioned real-world challenges, this paper introduces a novel practical problem referred to as Continual Text-to-Video Customization (CTVC). Under the CTVC setting, as illustrated in Fig. 1, we can consecutively learn new personalized concepts ( i.e. , subjects and motion patterns) to generate video sequences across a variety of text-to-video generation tasks, including single/multi-concept video customization (Huang et al. 2025b), style transfer (Gao et al. 2020) and video editing (Ceylan, Huang, and Mitra 2023). Moreover, users can control the synthesis of video contexts, comprising both subjects and motion patterns, for multi-concept video customization by specifying certain con-ditions ( e.g. , bounding boxes). As previously mentioned, there are two challenges to conduct various text-to-video synthesis tasks in CTVC: catastrophic forgetting of previ-ously learned concepts when continually learning new ones, and concept neglect when performing multi-concept video customization based on user-specified conditions. To the CTVC problem, we propose a novel Continual Customized Video Diffusion (CCVD) model, which is the first work to tackle catastrophic forgetting and concept ne-glect across a variety of CTVG tasks. First , to overcome catastrophic forgetting of previously learned personalized concepts, we develop a concept-specific attribute retention (CAR) module for training and a task-aware concept aggre-gation (TCR) strategy for testing. The CAR module incorpo-rates layer-specific concept tokens and a concept orthogonal loss to explore the unique characteristics and identity of per-sonalized concepts, while the TCR module merges all subject and motion adapters of old concepts, weighted by their rel-evance to CTVG tasks. Second , we design a controllable conditional synthesis module to address concept neglect in the multi-concept video customization task. It employs layer-specific region attention to enhance the representational ca-pacity of latent regional features and utilizes attention-guided noise estimation to control the context of personalized sub-jects and motions within the generated video, aligning with user-specified conditions. Experiments demonstrate the effec-tiveness of our CCVD. The key contributions are as follows: • We introduce a new problem termed Continual Text-to-Video Customization (CTVC), characterized by two key challenges: catastrophic forgetting and concept neglect. • We develop a Continual Customized Video Diffusion (CCVD) model, capable of continuously learning new concepts while tackling forgetting and concept neglect. • We propose a concept-specific attribute retention module and a task-aware concept aggregation strategy to mitigate catastrophic forgetting of previously learned concepts. • We devise a controllable conditional synthesis module to address concept neglect by leveraging layer-specific region attention and attention-guided noise estimation. 
+
+# Related Work 
+
+Customized text-to-video generation (CTVG) integrates user-specific subjects and motion patterns to synthesize per-sonalized videos while maintaining contextual consistency and visual quality. Following previous works (Gal et al. 2023; Dong et al. 2024b), which addresses subject-driven and style-driven concept customization by leveraging a few images to finetune Stable Diffusion (Takagi and Nishimoto 2023; Wang et al. 2024a), recent studies (Wei et al. 2024b; Jiang et al. 2024; Ren et al. 2025) have extended them into the temporal domain for customized text-to-video generation. DreamVideo (Wei et al. 2024b) introduces a two-stage learning framework that decouples the subject learning from motion learning. Mo-tionBooth (Wu et al. 2025a) incorporates subject region loss and video preservation loss to enhance alignment between the input concept and generated visual content. Additionally, (Chen et al. 2024; She et al. 2025; Liang et al. 2025) have ad-dressed the more complex challenge of multi-concept video customization. ConceptMaster (Huang et al. 2025b) tackles multi-concept video customization via decoupled concept embeddings and systematic data construction. However, ex-isting methods (Fei et al. 2025; Jiang et al. 2024) encounter the issues of catastrophic forgetting and concept neglect when continually learning new concepts for video customization. 
+
+Continual Learning (CL) (Li and Hoiem 2017; Toldo and Ozay 2022) enables models to incrementally acquire new 3624 knowledge while retaining previously learned information without retraining from scratch. Some regularization meth-ods incorporate constraint terms to limit modifications to network weights associated with previous tasks (Kirkpatrick et al. 2017; Dong et al. 2022), or employ model distillation (Li and Hoiem 2016; Wei et al. 2024a) to transfer knowledge between previous and current models. Approaches based on data replay preserve samples from old categories (Belouadah and Popescu 2019) or utilize generative models to produce synthetic data belonging to old classes (Qi et al. 2025). Struc-tural adaptation methods (Yoon et al. 2018; Douillard et al. 2022) progressively modify their architectures to incorpo-rate new information while maintaining previous knowledge. Besides, feature-based methods leverage contrastive mech-anisms (Madaan et al. 2022) or prompt techniques (Masum et al. 2024; Smith et al. 2023) to facilitate ongoing task ac-quisition. Yet, these approaches (Wei, Xu, and Deng 2025; Dong et al. 2024a) cannot be directly employed to address continual text-to-video customization problem. 
+
+# Preliminary and Problem Definition 
+
+Preliminary: Text-to-video diffusion models (TVDMs) (Wang et al. 2023a; Blattmann et al. 2023; Wang et al. 2023b; Wu et al. 2025b) use textual prompts as input to gener-ate videos that visually match the content described in the prompts. They synthesize videos in the latent feature space by introducing an encoder E(·) and a decoder D(·). Customized text-to-video generation (CTVG) (Wei et al. 2024b; Chefer et al. 2024) uses a subject adapter and a motion adapter to gen-erate customized videos by finetuning the pretrained TVDMs (Lee, Kwon, and Kim 2024; Wang et al. 2024b). Given a personalized image x and its text prompt p, the encoder E(·)
+
+projects x to a latent feature z, and the text encoder Φ( ·)
+
+encodes p to the textual embedding c = Φ( p). Here, x is a personalized pattern. The objective to synthesize a custom video for the given concept {x, p} is defined as: 
+
+LCTVG = Ez∼E (x),c,ϵ ∼N (0 ,I),t [∥ϵ − ϵθ (zt, c, t )∥22], (1) where zt is the noisy latent feature at the t-th timestep. ϵθ (·)
+
+represents a 3D UNet (Wang et al. 2023a) that predicts the noise estimation ϵθ (zt, c, t ), guiding Gaussian noise N (0 , I).In ϵθ (·), θ = θ0 + △θ and each layer contains a tempo-ral transformer block (TTB) and a spatial transformer block (STB). Here, θ0 = {W0 
+
+> l
+
+}Ll=1 denotes the parameters of pre-trained TVDMs, and △θ = {△ Wl}Ll=1 indicates the param-eters of the subject adapter or motion adapter. In the l-th (l = 1 , · · · , L ) layer of ϵθ (·), W0 
+
+> l
+
+∈ Rr×s is the pretrained weight, and △Wl ∈ Rr×s denotes the weight of the subject adapter or motion adapter. r and s are the matrix dimension. As proposed in (Wei et al. 2024b), △Wl = RlSl consists of a down-projected layer Rl ∈ Rr×b and an up-projected layer Sl ∈ Rb×s, where b is the feature dimension. As shown in Fig. 2(a), if x is a personalized subject, △Wl is placed in the STB; otherwise, it is placed in the TTB to learn the motion pattern. However, most existing CTVG methods (Wei et al. 2024b; Huang et al. 2025b) presume that the number of personalized concepts ( i.e. , subjects and motion patterns) for each user stays fixed over time. This assumption does not hold in practical scenarios, where users typically want to continuously synthesize new personalized concepts accord-ing to their evolving experiences. Furthermore, they face the challenge of catastrophic forgetting on previously learned personalized concepts and experience concept neglect when synthesizing customized videos in concept-incremental way. 
+
+Problem Definition: For the above challenges, we pro-pose a new Continual Text-to-Video Customization (CTVC) problem. Define U continuous customized text-to-video generation tasks as T = {T u}Uu=1 , where the u-th task 
+
+T u = {xui , yui , pui }nu 
+
+> i=1
+
+comprises nu images xui , concept tokens yui ∈ Y u and their corresponding text prompts pui .In this paper, pui refers to the textual description of a sub-ject or motion pattern ( e.g. , [ V∗] [ Vcat ] swims in the pool or a boy [ Vplays ] football), and yui indicates the concept token ( e.g. , [ V∗] [ Vcat ] or [ Vplays ]) in pui . Yu denotes the concept space of the u-th task, which consists of Ku new concepts yu = ∪nu
+
+> i=1
+
+yui . In CTVC, the concept space Yu
+
+of the u-th task does not overlap with any previous tasks: 
+
+Yu ∩ (∪u−1 
+
+> j=1
+
+Yj ) = ∅. It indicates that Ku new concepts in 
+
+T u are different from Pu−1 
+
+> j=1
+
+Kj previously learned concepts from ∪u−1 
+
+> j=1
+
+T j . According to users’ preference, the u-th task 
+
+T u may be one of the following versatile video customiza-tion tasks: single/multi-concept video synthesis (Huang et al. 2025b), video editing (Feng et al. 2024), and style transfer (Chen et al. 2017). Given practical and privacy concerns, we do not replay or store any data from old tasks, allowing us to learn all video customization tasks in a incremental way. CTVC aims to continually learn a sequence of concepts while alleviating forgetting and concept neglect of old concepts. 
+
+# The Proposed Model 
+
+The architecture of CCVD, designed to resolve the CTVC problem, is illustrated in Fig. 2. It comprises three key components: (a) a concept-specific attribute retention, (b) a task-aware concept aggregation strategy to mitigate catas-trophic forgetting, and (c) a controllable conditional synthesis module, which includes layer-specific region attention and attention-guided noise estimation to solve concept neglect. 
+
+Concept-Specific Attribute Retention 
+
+Motivated by (Wei et al. 2024b), if the Ku new concepts in the u-th task T u belong to subjects, we place the subject adapter in the spatial transformer block (STB) to finetune the pretrained 3D UNet ϵθ0 (·) via Eq. (1) for learning T u.Otherwise, we place the motion adapter in the temporal trans-former block (TTB) to learn personalized motion patterns in T u. After learning the u-th ( u = 1 , · · · , U ) task, we ob-tain an updated 3D UNet ϵθu (·), where θu = θ0 + △θu.Here, △θu = {△ Wul }Ll=1 denotes the updated parameters of the subject adapter or motion adapter of the u-th task. 
+
+△Wul = Rul Sul is the updated weight in the l-th layer of 
+
+ϵθu (·), Rul ∈ Rr×b and Sul ∈ Rb×s are the down-projected and up-projected layers. Intuitively, △θu is capable of cap-turing the majority of personalized concept identity in T u.In light of this, a straightforward approach to resolving the CTVC problem involves retaining all updated subject and motion adapters {△ θj }u−1 
+
+> j=1
+
+learned so far, and combining 3625 Layer -Specific Concept  Tokens         
+
+> ……
+> 𝜖 𝜃 0Concept
+> Learner
+> …
+> Subject Adapter
+> Cross
+> Attention
+> Self
+> Attention
+> Motion Adapter
+> Self
+> Attention
+> FFN
+> Δ𝜃 𝑢
+> Δ𝐖 𝑙 𝑢
+> Δ𝐖 𝑙 𝑢
+> Ω𝑢
+> Layer -Specific Concept Tokens
+> ……
+> 𝜖 𝜃 0
+> Concept
+> Learner
+> …ℒCOL
+> Ω𝑢 −1
+> Δ𝜃 𝑢 −1
+> Text Prompt During Test: V* Dog
+> Walking in Front of Eiffel Tower
+> Layer -Specific Concept  Tokens
+> Δ𝐖 𝑙
+> 𝑗
+> …
+> Concept Tokens
+> …
+> ෝ𝒚 𝑙
+> 𝑢
+> ෝ𝒚 𝑙
+> 2ෝ𝒚 𝑙
+> 1
+> Φ(⋅)
+> Relationship
+> Merge
+> (b ) Task -Aware Concept Aggregation
+> Noise
+> ෝ𝐩
+
+መ𝐡 𝑙 
+
+Ƹ
+
+𝐜 𝑙                                
+
+> ℋ
+> V1 Playing With V2 and V3 On
+> The Grass
+> V1
+> V2 V3
+> Layer -Specific Region Attention
+> Key Value
+> 𝐊 𝑙
+> 𝜅 𝐕 𝑙 𝜅 𝐟 𝑙
+> 𝜅
+> Key Value
+> 𝐊 𝑙
+> 𝜅 𝐕 𝑙 𝜅 𝐟 𝑙
+> 𝜅
+> Key Value
+> 𝐊 𝑙
+> 𝜅 𝐕 𝑙 𝜅 𝐟 𝑙
+> 𝜅
+> STB in The l -th
+> Layer
+> Attention -Guided Noise Estimation
+> 𝒬 𝑙
+> Query
+> መ𝒜 𝜅 ሿෝ𝜔 [𝜅 )EP (ෝ𝜔 [𝜅 ሿ෠𝐄 𝑡 Video
+> Sequences
+> Δ෡𝐖 𝑙
+> Video
+> Sequences
+> STB
+> Task u-1
+> (a) Concept -Specific Attribute Retention (c) Controllable Conditional Synthesis
+> V*Style
+> Task u
+> TTB
+> Task u+1
+> V*Dog
+> V*Motion
+> ℒCOL
+> The l -th  Layer
+
+Figure 2: Concept-Specific Attribute Retention. It includes (a) a concept-specific attribute retention module, (b) a task-aware concept aggregation strategy to overcome catastrophic forgetting of previous concepts during training and testing, and (c) a controllable conditional synthesis with layer-specific region attention and attention-guided noise estimation them linearly by assessing their respective contributions to learning personalized concepts. However, continually learn-ing new concepts in the CTVC setting may cause this trivial approach to suffer a significant loss of unique attributes in cer-tain personalized concepts. This issue is commonly termed catastrophic forgetting (Smith et al. 2024; Sun et al. 2024) of previously learned concepts. To alleviate catastrophic forget-ting, as depicted in Fig. 2(a), we propose a concept-specific attribute retention module. This module incorporates layer-specific concept tokens and a concept orthogonal loss to capture unique concept attributes within different tasks. 
+
+Layer-Specific Concept Tokens: Unlike DreamVideo (Wei et al. 2024b), which uses textual inversion (Gal et al. 2023; Zhang et al. 2023; Voynov et al. 2023) to apply a uni-form text prompt across all layers, we propose layer-specific concept tokens to enhance the preservation of unique at-tributes associated with old concepts. At the u-th video cus-tomization task, L layer-specific concept tokens {yui,l }Ll=1 
+
+are defined for any triplet {xui , yui , pui } ∈ T u. Specifically, given a textual description pui ([ V∗] [ Vcat ] swims in the pool), we denote the layer-specific text prompt as pui,l ([ V l 
+
+> ∗
+
+] [ V l
+
+> cat
+
+]swims in the pool), and the layer-specific concept token as 
+
+yui,l ([ V l 
+
+> ∗
+
+] [ V l
+
+> cat
+
+]) at the l-th layer of ϵθu (·). Subsequently, we initialize {pui,l }Ll=1 using pui and integrate the textual em-bedding cui,l = Φ( pui,l ), which is encoded through the text encoder Φ( ·), into the l-th layer of ϵθu (·). When we train 
+
+ϵθu (·) via Eq. (1) to synthesize customized videos, the layer-specific concept tokens are effective to explore distinctive and inherent identity attributes of previously learned concepts, thereby overcoming the catastrophic forgetting. 
+
+Concept Orthogonal Loss: Under the CTVC setting, the discriminative capacity of unique identity characteristics to differentiate between various personalized concepts may sub-stantially degrade as the continual learning of a series of video customization tasks progresses, particularly for seman-tically similar concepts. To resolve this issue, we introduce a concept orthogonal loss LCOL to perform orthogonality con-strain among different concept subspaces across video cus-tomization tasks. Specifically, the updated weight △Wul =
+
+Rul Sul ∈ Rr×s at the l-th layer of ϵθu (·) can be interpreted as comprising two key components: the concept subspace of the 
+
+u-th task Rul = [ ru, 1 
+
+> l
+
+, · · · , ru,b l ] ∈ Rr×b, and its correspond-ing weighting coefficient Sul = [ su, 1 
+
+> l
+
+, · · · , su,b l ]⊤ ∈ Rb×s.Here, ru,i l ∈ Rr is the i-th ( i = 1 , · · · , b ) basis vector of the concept space Rul and su,i l ∈ Rs denotes its linear co-efficient. When learning the u-th video customization task 
+
+T u, we want the concept subspace of the u-th task to be or-thogonal to the concept subspaces of previous tasks ∪u−1 
+
+> j=1
+
+T j :
+
+Pu−1
+
+> j=1
+
+PLl=1 tr (Rjl (Rul )⊤) = 0 . We devise an alternative op-timization approach aimed at minimizing the absolute value of the inner product among distinct subspaces. As a result, we formulate the concept orthogonal loss LCOL as follows: 
+
+LCOL =Ez∼E (x),c,ϵ ∼N (0 ,I),t 
+
+∥ϵ − ϵθu (zt, c, t )∥22+
+
+λ Xu−1
+
+> j=1
+
+XLl=1 tr (Rjl (Rul )⊤), (2) where λ is a hyper-parameter. The loss LCOL helps the layer-specific concept tokens better explore the distinctive attributes of previous concepts, especially for semantically similar ones, by reducing correlations among concept sub-spaces. Upon finishing the learning of the u-th video cus-tomization task via Eq. (2) , we obtain the task-wise concept learner Ωu = {△ Wul , byul }Ll=1 , where byul = {byu,k l }Ku 
+
+> k=1
+
+and 
+
+byu,k l is the k-th learned concept tokens at the l-th layer. 3626 Task-Aware Concept Aggregation 
+
+In order to alleviate catastrophic forgetting of previously learned concept during the testing phase, we retain all task-wise concept learners {Ωj }uj=1 learned so far, and propose a task-aware concept aggregation strategy to dynamically aggregate these concept learners for customized text-to-video generation tasks. As in Fig. 2(b), for a text prompt bp dur-ing testing, we first initialize the layer-specific text prompt 
+
+{bpl}Ll=1 using bp, and then generate layer-specific textual em-beddings bc = {bcl ∈ Rne×d}Ll=1 through the text encoder 
+
+Φ( ·). Here, ne is the number of tokens and d denotes the embedding dimension. Subsequently, we gather all concept tokens {Z l}Ll=1 from stored concept learners {Ωj }uj=1 , where 
+
+Zl = ∪uj=1 byjl ∈ Rnt comprises nt = Puj Kj layer-specific concept tokens at the l-th layer. After projecting {Z l}Ll=1 to latent embeddings {hl ∈ Rnt×d}Ll=1 using Φ( ·), we compute the average of these latent embeddings corresponding to the same task, resulting in {bhl ∈ Ru×d}Ll=1 . u is the number of tasks learned up until now. After calculating the relationships 
+
+H ∈ Ru between bhl and bcl, we leverage H to dynamically aggregate {△ Wjl }uj=1 at the l-th layer to obtain △ cWl:
+
+H = max  bcl · (bhl)⊤, △ cWl = Xuj=1 △Wjl · ζ(H)j , (3) where max( ·) is the maximization along the row axis. The normalization of H is achieved by ζ(H) = H2/∥H 2∥F ∈
+
+Ru, and ζ(H)j corresponds to the j-th element of ζ(H).
+
+Test Model: After computing △θ∗ = {△ cWl}Ll=1 via Eq. (3) , we derive a new 3D UNet ϵθ∗ (·) for testing, where 
+
+θ∗ = θ0 + △θ∗. At the l-th layer of ϵθ∗ (·), if the text prompt 
+
+bp belongs to a subject, we position △ cWl in the STB; if 
+
+bp describes a motion pattern, we place △ cWl in TTB; if bp
+
+encompasses both subject and motion, we position △ cWl
+
+in STB and TTB respectively. Particularly, ϵθ∗ (·) has incor-porated significant unique attributes of all concepts learned up until now, effectively reducing catastrophic forgetting of previously learned concepts during the testing phase. 
+
+Controllable Conditional Synthesis 
+
+When employing for multi-concept customization, it fails to produce high-fidelity videos that align with user-specified conditions ( e.g. , bounding boxes), due to concept neglect ( i.e. ,some subjects or motions are omitted in the generated videos). To tackle this issue, as depicted in Fig. 2(c), we develop a layer-specific region attention and an attention-guided noise estimation for customized multi-concept video generation. 
+
+Layer-Specific Region Attention: In addition to the ini-tial text prompt bp, users can utilize nr regional conditions 
+
+{bpκ, bbκ}nr 
+
+> κ=1
+
+to control the video context according to their preference. Here, bbκ ∈ Rnv ×4 is the bounding box, which is used to generate personalized concept associated with the 
+
+κ-th region text prompt bpκ. nv is the number of frames in the synthesized videos. After obtaining the layer-specific textual embedding bcκ = {bcκl ∈ Rne×d}Ll=1 for bpκ using Φ( ·), we leverage {bcl}Ll=1 and the new 3D UNet ϵθ∗ (·) to extract the latent features {fl ∈ Rnv ×hl×wl×d}Ll=1 for bp. wl and hl are the width and height of the feature fl. At the l-th layer, we further conduct layer-specific region attention between fl and 
+
+bcκl to derive the κ-th region feature f κl ∈ Rnv ×hκl ×wκl ×d:
+
+f κl = Aκl · Vκl = σ(Ql(Kκl )⊤/√d · Vκl , (4) where Aκl = σ(Ql(Kκl )⊤/√d ∈ Rnv ×hκl ×wκl ×ne denotes the κ-th region attention, σ(·) is the sigmoid function, wκl
+
+and hκl represent the width and height of the κ-th bounding box bbκ. Moreover, Ql ∈ Rnv ×hκl ×wκl ×d, Kκl ∈ Rne×d and 
+
+Vκl ∈ Rne×d denote the query, key and value matrices: 
+
+Ql = Γ( flwq ⊗ bmκl ), Kκl = bcκl wk, Vκl = bcκl wv , (5) where bmκl ∈ Rnv ×hl×wl represents the binary mask of the κ-th region, with all values within the κ-th bounding box bbκ assigned to 1. ⊗ denotes the Hardmard product, 
+
+Γ( ·) preserves exclusively the features located within bbκ.
+
+wq , wk, wv ∈ Rd×d are the projection matrices in ϵθ∗ (·).Subsequently, we substitute the values of fl within the bounding boxes {bbκ}nr 
+
+> κ=1
+
+with their corresponding region features {f κl }nr
+
+> κ=1
+
+, resulting in a new feature map bfl at the l-th layer. The layer-specific region attention is then applied to every layer of ϵθ∗ (·) for multi-concept video customization. 
+
+Attention-Guided Noise Estimation: Given the initial text prompt bp, motivated by (Ho and Salimans 2021), we can derive the noise estimation Et = ϵθ∗ (zt, t ) + τ ·
+
+(ϵθ∗ (zt, bc, t ) − ϵθ∗ (zt, t )) ∈ Rnv ×hL×wL×dL at the t-th timescale, by incorporating the aforementioned layer-wise region attention into ϵθ∗ (·). Here, Et is the output of the L-th layer of ϵθ∗ (·), and τ = 7 .5 is the scaling factor. wL, h L
+
+and dL represent the width, height and channel dimension of the noise estimation Et. ϵθ∗ (zt, t ) denotes the unconditional noise estimation, while ϵθ∗ (zt, bc, t ) represent noise estima-tion conditioned on bc. As a result, the κ-th ( κ = 1 , · · · , n r )region noise estimation Eκt ∈ Rnv ×hL×wL×dL is expressed: 
+
+Eκt = ϵθ∗ (zt, t ) + τ ·  ϵθ∗ (zt, [bcκ, bbκ], t ) − ϵθ∗ (zt, t ), (6) where ϵθ∗ (zt, [bcκ, bbκ], t ) represents the noise estimation based on the κ-th regional condition [bcκ, bbκ].To address the challenge of concept neglect in multi-concept video customization, we aim to place greater em-phasis on personalized concepts that are easily overlooked. In light of this, we propose an attention-guided noise es-timation module that leverages region attention to assign larger weights to easily overlooked concepts when aggregat-ing nr region estimations {Eκt }nr
+
+> κ=1
+
+. Specifically, for the κ-th (κ = 1 , · · · , n r ) region condition, we upsample L layer-specific region attentions {A κl ∈ Rnv ×hκl ×wκl ×ne }Ll=1 to 
+
+{ bAκl ∈ Rnv ×hκL×wκL×ne }Ll=1 , and average them to obtain 
+
+bAκ = 1
+
+> L
+
+PLl=1 bAκl . Subsequently, we select the maximum attention value ωκ = max( bAκ) ∈ Rnv to reweight the noise estimation Eκt . Intuitively, if the attention value ωκ of the 
+
+κ-th region ( κ = 1 , . . . , n r ) is small, it indicates that the corresponding concept is more likely to be overlooked in video customization. Thus, we assign more weight to the noise estimation with a small attention value. To achieve this, 3627 CLoRA L2DM       
+
+> Task29
+> V29
+> Task24
+> V24
+> Input Ours
+> aV29 eating pizza in a restaurant aV24 moving across the forest aV9 laying on a field full of flowers
+> Task9
+> V9
+
+Figure 3: Comparison results of single-concept video customization under the CTVC setting. we concatenate {ωκ}nr 
+
+> κ=1
+
+as ω ∈ Rnv ×nr and normalize ω
+
+as bω ∈ Rnv ×nr . To resolve concept neglect, we employ bω to aggregate nr region noise estimation to obtain bEt:
+
+bEt = Et + Xnr
+
+> κ=1
+
+ 1 − EP( bω[κ])  ⊗ Eκt ⊗ bmκL, (7) where bω[κ] ∈ Rnv is the κ-th column of bω, and EP( bω[κ]) 
+
+expands bω[κ] as Rnv ×hL×wL×dL . bmκL ∈ Rnv ×hL×wL repre-sents the binary region mask corresponding to the bounding box bbκ ∈ Rnv ×4 at the L-th layer of ϵθ∗ (·). Finally, we follow (Wei et al. 2024b) and feed bEt into UNet ϵθ∗ (·) to perform multi-concept customization via gradual denoising. 
+
+# Experiments 
+
+Implementation Details 
+
+Dataset: Inspired by (Chefer et al. 2024; Wei et al. 2024b), we introduce a new continual video customization (CVC) dataset including 35 sequential text-to-video customization tasks to evaluate the effectiveness of our model under the CTVC setting. Setups: For fair comparisons, our model and all comparative methods utilize DreamVideo (Wei et al. 2024b) as the baseline backbone. We use the Adam optimizer for training, with an initial learning rate of 1.0 × 10 −4 for textual embeddings and 1.0 × 10 −5 for the 3D UNet. We set 
+
+λ = 0 .1 in Eq. (2) , and nv = 32 to synthesize customized videos. Metrics: We perform comprehensive qualitative and quantitative evaluations across various synthesis tasks includ-ing single/multi-concept video customization, style transfer and video editing. For quantitative comparisons, we follow (Wei et al. 2024b) to utilize CLIPT, CLIPI, DINOI, TCons as evaluation metrics. Moreover, we use the forgetting of CLIPT, CLIPI, and DINOI (denoted as F-CLIPT, F-CLIPI, and F-DINOI) (Sun et al. 2024) to assess CTVC performance. Notably, more details about the CVC dataset and the compar-ison methods are provided in the supplementary material. Methods CLIPT CLIPI DINOI TCons F-CLIPT F-CLIPI F-DINO Finetuning 22.9 52.3 25.1 96.3 9.5 14.5 11.2 EWC 28.1 58.4 29.5 96.1 5.4 7.8 6.3 LWF 24.8 59.3 30.0 96.2 4.3 6.8 5.8 LoRA-M 25.5 57.8 29.0 96.1 5.2 8.4 6.2 CLoRA 28.7 60.7 31.0 96.1 3.5 5.3 4.1 L2DM 28.3 62.3 31.2 96.2 3.1 3.9 3.7        
+
+> CCVD 29.9 64.3 33.4 96.4 1.1 2.3 1.9
+
+Table 1: Results of single-concept video customization. 
+
+Qualitative Comparisons 
+
+To demonstrate the superiority of our model, as in Fig. 3–6, we conduct qualitative comparisons on single/multi-concept video customization, style transfer and video editing. 1) In Fig. 3, our model surpasses other methods in single-concept video customization, since it can mitigate forgetting by in-corporating concept-specific attribute retention module to explore unique concept identity. 2) In Fig. 4, all comparative methods fail to generate multiple concepts, while our model can leverage layer-specific region attention and attention-guided noise estimation to synthesize videos with multiple user-specified concepts. 3) CCVD achieves superior perfor-mance in video style transfer (Fig. 5), as our task-aware con-cept aggregation module can better maintain style integrity. 4) In Fig. 6, we integrate Video-P2P (Liu et al. 2024) as a plugin for editing. The large improvement of CCVD compared to other methods is attributed to the concept-specific attribute retention module, which can preserve unique concept. 
+
+Quantitative Comparisons 
+
+To conduct quantitative comparisons between our model and other methods, we follow the evaluation protocol proposed in (Chefer et al. 2024). Specifically, we set 10 prompts per concept and generate 10 videos per prompt, resulting in a total of 100 synthesized videos for performance assessment. As shown in Tab. 1, our proposed model surpasses competing methods across all evaluation metrics, which verifies the 3628 Figure 4: Comparison results of multi-concept video customization under the CTVC setting. 
+
+Figure 5: Comparisons of style transfer under CTVC setting. Methods TCA LCT COL CLIPT CLIPI DINOI F-CLIPT Baseline ✗ ✗ ✗ 25.5 57.8 29.0 5.2 Baseline w/ TCA ✓ ✗ ✗ 28.7 62.2 31.3 3.4 Ours w/o COL ✓ ✓ ✗ 29.8 63.6 33.0 1.3         
+
+> Ours (CCVD )✓✓✓29.9 64.3 33.4 1.1
+
+Table 2: Ablation of single-concept video customization. superiority of our model to resolve the CTVC problem. This indicates that our model preserves the unique identity of each learned concept via the proposed concept-specific attribute retention module and task-aware concept aggregation. 
+
+Ablation Study 
+
+To verify the efficacy of all proposed modules, we con-duct comprehensive ablation experiments in terms of layer-specific concept tokens (LCT), concept orthogonal loss (COL), task-aware concept aggregation (TCA), layer-specific region attention (LRA) and attention-guided noise estima-tion (ANE). As shown in Tab. 2, compared to “Baseline”, 
+
+Figure 6: Comparisons of video editing under CTVC setting. our model achieves significant performance improvements across all evaluation metrics after incorporating the proposed LCT, COL, and TCA modules for single-concept video cus-tomization. It illustrates that our model effectively mitigates forgetting by capturing distinctive attributes of old concepts while dynamically aggregating subject and motion adapters. 
+
+# Conclusion 
+
+In this work, we propose a new problem termed Contin-ual Text-to-Video Customization (CTVC), and develop a novel Continual Customized Video Diffusion (CCVD) model to resolve the CTVC problem. Specifically, we introduce a concept-specific attribute retention module during train-ing and a task-aware concept aggregation during testing to alleviate catastrophic forgetting. Additionally, we design a controllable conditional synthesis module to address concept neglect by incorporating layer-specific region attention and attention-guided noise estimation. Comprehensive compar-isons show that our CCVD has superiority performance. 3629 Acknowledgments 
+
+This work was supported by the National Key Re-search and Development Program of China under Grant 2024YFB4707700, and the National Natural Science Founda-tion of China under Grant U23A20343, and CAS Project for Young Scientists in Basic Research, Grant No. YSBR-041, and Liaoning Provincial “Selecting the Best Candidates by Opening Competition Mechanism” Science and Technology Program under Grant 2023JH1/10400045. 
+
+# References 
+
+Belouadah, E.; and Popescu, A. 2019. IL2M: Class Incre-mental Learning With Dual Memory. In ICCV , 583–592. Blattmann, A.; Rombach, R.; Ling, H.; Dockhorn, T.; Kim, S. W.; Fidler, S.; and Kreis, K. 2023. Align Your Latents: High-Resolution Video Synthesis with Latent Diffusion Mod-els. In CVPR , 22563–22575. Ceylan, D.; Huang, C.-H. P.; and Mitra, N. J. 2023. Pix2Video: Video Editing using Image Diffusion. In ICCV ,23149–23160. Chefer, H.; Zada, S.; Paiss, R.; Ephrat, A.; Tov, O.; Rubin-stein, M.; Wolf, L.; Dekel, T.; Michaeli, T.; and Mosseri, I. 2024. Still-Moving: Customized Video Generation without Customized Video Data. ACM Trans. Graph. , 43(6). Chen, D.; Liao, J.; Yuan, L.; Yu, N.; and Hua, G. 2017. Co-herent Online Video Style Transfer. In ICCV , 1114–1123. Chen, H.; Wang, X.; Zhang, Y.; Zhou, Y.; et al. 2024. Disen-Studio: Customized Multi-subject Text-to-Video Generation with Disentangled Spatial Control. In ACM MM .Dong, J.; Li, H.; Cong, Y.; Sun, G.; Zhang, Y.; and Van Gool, L. 2024a. No One Left Behind: Real-World Federated Class-Incremental Learning. IEEE Transactions on Pattern Analy-sis and Machine Intelligence , 46(4): 2054–2070. Dong, J.; Liang, W.; Li, H.; Zhang, D.; Cao, M.; Ding, H.; et al. 2024b. How to Continually Adapt Text-to-Image Diffu-sion Models for Flexible Customization? In NeurIPS .Dong, J.; Wang, L.; Fang, Z.; Sun, G.; Xu, S.; Wang, X.; and Zhu, Q. 2022. Federated Class-Incremental Learning. In 
+
+CVPR .Douillard, A.; Ram ´e, A.; Couairon, G.; and Cord, M. 2022. DyTox: Transformers for Continual Learning With DYnamic TOken eXpansion. In CVPR , 9285–9295. Fei, Z.; Li, D.; Qiu, D.; Wang, J.; Dou, Y.; Wang, R.; Xu, J.; Fan, M.; Chen, G.; Li, Y.; et al. 2025. Skyreels-a2: Compose anything in video diffusion transformers. arXiv preprint arXiv:2504.02436 .Feng, R.; Weng, W.; Wang, Y.; Yuan, Y.; Bao, J.; Luo, C.; et al. 2024. CCEdit: Creative and Controllable Video Editing via Diffusion Models. In CVPR , 6712–6722. Gal, R.; Alaluf, Y.; Atzmon, Y.; Patashnik, O.; Bermano, A. H.; Chechik, G.; and Cohen-or, D. 2023. An Image is Worth One Word: Personalizing Text-to-Image Generation using Textual Inversion. In ICLR .Gao, W.; Li, Y.; Yin, Y.; and Yang, M.-H. 2020. Fast Video Multi-Style Transfer. In WACV , 3211–3219. Gu, Y.; Zhou, Y.; Wu, B.; Yu, L.; Liu, J.-W.; Zhao, R.; Wu, J. Z.; Zhang, D. J.; et al. 2024. VideoSwap: Customized Video Subject Swapping with Interactive Semantic Point Correspondence. In CVPR , 7621–7630. Guo, Y.; Yang, C.; Rao, A.; Agrawala, M.; Lin, D.; and Dai, B. 2025. SparseCtrl: Adding Sparse Controls to Text-to-Video Diffusion Models. In ECCV , 330–348. He, H.; Xu, Y.; Guo, Y.; Wetzstein, G.; Dai, B.; Li, H.; and Yang, C. 2025. CameraCtrl: Enabling Camera Control for Video Diffusion Models. In ICLR .Ho, J.; and Salimans, T. 2021. Classifier-Free Diffusion Guidance. In NeurIPS Workshop .Huang, C.-P.; Wu, Y.-S.; Chung, H.-K.; Chang, K.-P.; Yang, F.-E.; and Wang, Y.-C. F. 2025a. Videomage: Multi-subject and motion customization of text-to-video diffusion models. In CVPR , 17603–17612. Huang, Y.; Yuan, Z.; Liu, Q.; Wang, Q.; Wang, X.; Zhang, R.; Wan, P.; Zhang, D.; and Gai, K. 2025b. ConceptMas-ter: Multi-Concept Video Customization on Diffusion Trans-former Models Without Test-Time Tuning. arxiv preprint arxiv:2501.04698 .Jeong, H.; Park, G. Y.; and Ye, J. C. 2024. VMC: Video Motion Customization Using Temporal Attention Adaption for Text-to-Video Diffusion Models. In CVPR , 9212–9221. Jiang, Y.; Wu, T.; Yang, S.; Si, C.; Lin, D.; Qiao, Y.; Loy, C. C.; and Liu, Z. 2024. Videobooth: Diffusion-based video generation with image prompts. In CVPR , 6689–6700. Khachatryan, L.; Movsisyan, A.; Tadevosyan, V.; Henschel, R.; Wang, Z.; Navasardyan, S.; and Shi, H. 2023. Text2Video-Zero: Text-to-Image Diffusion Models are Zero-Shot Video Generators. In ICCV , 15908–15918. Kirkpatrick, J.; Pascanu, R.; Rabinowitz, N.; Veness, J.; Des-jardins, G.; Rusu, A. A.; Milan, K.; Quan, J.; et al. 2017. Overcoming catastrophic forgetting in neural networks. Pro-ceedings of the National Academy of Sciences , 114(13): 3521– 3526. Lee, T.; Kwon, S.; and Kim, T. 2024. Grid Diffusion Models for Text-to-Video Generation. In CVPR , 8734–8743. Li, Z.; and Hoiem, D. 2016. Learning Without Forgetting. In 
+
+ECCV , 614–629. Li, Z.; and Hoiem, D. 2017. Learning without forgetting. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelli-gence , 40(12): 2935–2947. Liang, F.; Ma, H.; He, Z.; Hou, T.; Hou, J.; Li, K.; Dai, X.; Juefei-Xu, F.; Azadi, S.; Sinha, A.; et al. 2025. Movie Weaver: Tuning-Free Multi-Concept Video Personalization with Anchored Prompts. arXiv preprint arXiv:2502.07802 .Liu, J.; Wang, W.; Liu, W.; He, Q.; and Liu, J. 2023. ED-T2V: An Efficient Training Framework for Diffusion-based Text-to-Video Generation. In IJCNN , 1–8. Liu, S.; Zhang, Y.; Li, W.; Lin, Z.; and Jia, J. 2024. Video-P2P: Video Editing with Cross-Attention Control. In CVPR ,8599–8608. Lopez-Paz, D.; and Ranzato, M. 2017. Gradient episodic memory for continual learning. In NeurIPS , 6470–6479. 3630 Madaan, D.; Yoon, J.; Li, Y.; Liu, Y.; and Hwang, S. J. 2022. Representational Continuity for Unsupervised Contin-ual Learning. In ICLR .Masum, M. A.; Pratama, M.; Ramasamy, S.; Liu, L.; et al. 2024. PIP: Prototypes-Injected Prompt for Federated Class Incremental Learning. In CIKM , 1670–1679. Ostapenko, O.; Puscas, M.; Klein, T.; J ¨ahnichen, P.; and Nabi, M. 2019. Learning to Remember: A Synaptic Plasticity Driven Framework for Continual Learning. In CVPR , 11313– 11321. Qi, Z.; Tang, Y.-P.; Meng, L.; Yu, H.; Li, X.; and Meng, X. 2025. Class-wise Balancing Data Replay for Federated Class-Incremental Learning. In NeurIPS .Ren, Y.; Zhou, Y.; Yang, J.; Shi, J.; Liu, D.; Liu, F.; Kwon, M.; and Shrivastava, A. 2025. Customize-A-Video: One-Shot Motion Customization of Text-to-Video Diffusion Models. In ECCV , 332–349. She, D.; Liu, M.; Pang, J.; Wang, J.; Yang, Z.; He, W.; Zhang, G.; et al. 2025. CustomVideoX: 3D Reference Attention Driven Dynamic Adaptation for Zero-Shot Customized Video Diffusion Transformers. arXiv preprint arXiv:2502.06527 .Smith, J. S.; Hsu, Y.-C.; Zhang, L.; Hua, T.; Kira, Z.; Shen, Y.; and Jin, H. 2024. Continual diffusion: Continual customiza-tion of text-to-image diffusion with c-lora. Transactions on Machine Learning Research .Smith, J. S.; Karlinsky, L.; Gutta, V.; Cascante-Bonilla, P.; Kim, D.; et al. 2023. CODA-Prompt: COntinual Decomposed Attention-Based Prompting for Rehearsal-Free Continual Learning. In CVPR , 11909–11919. Sun, G.; Liang, W.; Dong, J.; Li, J.; Ding, Z.; and Cong, Y. 2024. Create Your World: Lifelong Text-to-Image Diffu-sion. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(9): 6454–6470. Takagi, Y.; and Nishimoto, S. 2023. High-resolution image reconstruction with latent diffusion models from human brain activity. In CVPR , 14453–14463. Toldo, M.; and Ozay, M. 2022. Bring Evanescent Represen-tations to Life in Lifelong Class Incremental Learning. In 
+
+CVPR , 16711–16720. Van Le, T.; Phung, H.; Nguyen, T. H.; Dao, Q.; Tran, N. N.; and Tran, A. 2023. Anti-DreamBooth: Protecting users from personalized text-to-image synthesis. In ICCV , 2116–2127. Voynov, A.; Chu, Q.; Cohen-Or, D.; and Aberman, K. 2023. P+: Extended Textual Conditioning in Text-to-Image Genera-tion. arxiv preprint arxiv:2303.09522 .Wang, C.; Yu, M.; Wu, L.; Meng, L.; Li, X.; and Meng, X. 2024a. InstantAS: Minimum Coverage Sampling for Arbitrary-Size Image Generation. In ACM MM , 3180–3188. Wang, J.; Yuan, H.; Chen, D.; Zhang, Y.; Wang, X.; and Zhang, S. 2023a. ModelScope Text-to-Video Technical Re-port. arXiv preprint arXiv:2308.06571 .Wang, W.; and Yang, Y. 2024. VidProM: A Million-scale Real Prompt-Gallery Dataset for Text-to-Video Diffusion Models. In NeurIPS .Wang, X.; Yuan, H.; Zhang, S.; Chen, D.; Wang, J.; et al. 2023b. VideoComposer: Compositional Video Synthesis with Motion Controllability. In CIKM .Wang, X.; Zhang, S.; Yuan, H.; Qing, Z.; Gong, B.; Zhang, Y.; Shen, Y.; Gao, C.; and Sang, N. 2024b. A Recipe for Scaling up Text-to-Video Generation with Text-free Videos. In CVPR , 6572–6582. Wei, K.; Xu, Z.; and Deng, C. 2025. Compress to One Point: Neural Collapse for Pre-Trained Model-Based Class-Incremental Learning. In AAAI , 20, 21465–21473. Wei, K.; Yang, X.; Xu, Z.; and Deng, C. 2024a. Class-incremental unsupervised domain adaptation via pseudo-label distillation. IEEE Transactions on Image Processing ,33: 1188–1198. Wei, Y.; Zhang, S.; Qing, Z.; Yuan, H.; Liu, Z.; Liu, Y.; Zhang, Y.; Zhou, J.; and Shan, H. 2024b. Dream Video: Composing Your Dream Videos with Customized Subject and Motion. In 
+
+CVPR , 6537–6549. Wu, J.; Li, X.; Zeng, Y.; Zhang, J.; Zhou, Q.; Li, Y.; Tong, Y.; and Chen, K. 2025a. Motionbooth: Motion-aware customized text-to-video generation. NeurIPS , 37: 34322–34348. Wu, J. Z.; Ge, Y.; Wang, X.; Lei, S. W.; Gu, Y.; Shi, Y.; Hsu, W.; Shan, Y.; Qie, X.; and Shou, M. Z. 2023. Tune-A-Video: One-Shot Tuning of Image Diffusion Models for Text-to-Video Generation. In ICCV , 7589–7599. Wu, T.; Zhang, Y.; Wang, X.; Zhou, X.; Zheng, G.; et al. 2025b. CustomCrafter: Customized Video Generation with Preserving Motion and Concept Composition Abilities. AAAI ,39: 8469–8477. Wu, X.; Huang, S.; and Wei, F. 2024. Mixture of LoRA Experts. In ICLR .Xing, Z.; Dai, Q.; Hu, H.; Wu, Z.; and Jiang, Y.-G. 2024. SimDA: Simple Diffusion Adapter for Efficient Video Gener-ation. In CVPR , 7827–7839. Yang, S.; Hou, L.; Huang, H.; Ma, C.; Wan, P.; Zhang, D.; Chen, X.; and Liao, J. 2024. Direct-a-Video: Customized Video Generation with User-Directed Camera Movement and Object Motion. In SIGGRAPH .Yang, Z.; Teng, J.; Zheng, W.; Ding, M.; Huang, S.; Xu, J.; Yang, Y.; Hong, W.; et al. 2025. CogVideoX: Text-to-Video Diffusion Models with An Expert Transformer. In ICLR .Yoon, J.; Yang, E.; Lee, J.; and Hwang, S. J. 2018. Lifelong Learning with Dynamically Expandable Networks. In ICLR .Zhang, Y.; Huang, N.; Tang, F.; Huang, H.; Ma, C.; Dong, W.; and Xu, C. 2023. Inversion-Based Style Transfer With Diffusion Models. In CVPR , 10146–10156. Zhao, R.; Gu, Y.; Wu, J. Z.; Zhang, D. J.; Liu, J.-W.; et al. 2025. MotionDirector: Motion Customization of Text-to-Video Diffusion Models. In ECCV , 273–290. Zhong, M.; Shen, Y.; Wang, S.; Lu, Y.; Jiao, Y.; Ouyang, S.; Yu, D.; Han, J.; and Chen, W. 2024. Multi-LoRA Composi-tion for Image Generation. arxiv preprint arxiv:2402.16843 .Zhou, Y.; Zhang, R.; Gu, J.; Zhao, N.; Shi, J.; and Sun, T. 2024. SUGAR: Subject-Driven Video Customization in a Zero-Shot Manner. arxiv preprint arxiv:2412.10533 .3631
