@@ -1,0 +1,1456 @@
+Title: 16120_Multimodal_Classificatio.pdf
+
+URL Source: https://openreview.net/pdf?id=MbQhdzAhSl
+
+Number of Pages: 17
+
+Markdown Content:
+Published as a conference paper at ICLR 2026 
+
+# MULTIMODAL CLASSIFICATION VIA TOTAL CORRELA -
+
+# TION MAXIMIZATION 
+
+Feng Yu ∗ Xiangyu Wu ∗ Yang Yang † Jianfeng Lu †
+
+Nanjing University of Science and Technology 
+
+## ABSTRACT 
+
+Multimodal learning integrates data from diverse sensors to effectively harness information from different modalities. However, recent studies reveal that joint learning often overfits certain modalities while neglecting others, leading to perfor-mance inferior to that of unimodal learning. Although previous efforts have sought to balance modal contributions or combine joint and unimodal learning—thereby mitigating the degradation of weaker modalities with promising outcomes—few have examined the relationship between joint and unimodal learning from an information-theoretic perspective. In this paper, we theoretically analyze modality competition and propose a method for multimodal classification by maximizing the total correlation between multimodal features and labels. By maximizing this ob-jective, our approach alleviates modality competition while capturing inter-modal interactions via feature alignment. Building on Mutual Information Neural Esti-mation (MINE), we introduce Total Correlation Neural Estimation ( TCNE ) to derive a lower bound for total correlation. Subsequently, we present TCMax, a hyperparameter-free loss function that maximizes total correlation through varia-tional bound optimization. Extensive experiments demonstrate that TCMax out-performs state-of-the-art joint and unimodal learning approaches. Our code is available at https://github.com/hubaak/TCMax .
+
+## 1 INTRODUCTION 
+
+Humans better perceive the world through diverse sensory inputs, i.e. , text, audio, and vision. Likewise, multimodal fusion models Yang et al. (2021); Yao & Mihalcea (2022); Li et al. (2023b); Zhang et al. (2024); Wei et al. (2024); Zong et al. (2024), which integrate different modalities, are expected to learn more robust and generalized representations than unimodal counterparts. However, recent studies Wang et al. (2020); Huang et al. (2022); Peng et al. (2022) uncover an intriguing phenomenon in multimodal classification: the best-performing unimodal network surpasses the joint learning network, which can be attributed to the differences in convergence and generalization rates among modalities. In such inconsistent convergence states cases, some dominant modalities are adequately overfitted to the training data, causing the multimodal model to overly rely on dominant modalities while neglecting others, ultimately resulting in suboptimal performance. To address it, several studies Peng et al. (2022); Xu et al. (2023); Li et al. (2023a); Fan et al. (2023); Wei et al. (2024) are committed to balancing multimodal joint learning. Representatively, OGM-GE Peng et al. (2022) modulates the gradient of modality-specific encoders according to their contribution to prediction, inhibiting modalities that converge faster. AGM Li et al. (2023a) dynamically adjusts the gradient contributions from different modalities. However, modality competi-tion Huang et al. (2022) points out that despite joint learning allowing for modality interaction, it easily causes the model to saturate dominant modalities prematurely, neglecting unimodal features that are difficult to learn but conducive to generalization. Followed by some works are proposed to harness the benefits of the unimodal learning strategy, e.g., QMF Zhang et al. (2023) explicitly incorporates a unimodal loss and a regularization term, evaluating the quality of the truncated samples into the loss function. MLA Zhang et al. (2024) decomposes joint learning into alternating unimodal learning, with a lightweight shared head for modality interaction. MMPareto Wei & Hu (2024) 
+
+> ∗Equal contribution.
+> †Corresponding author.
+
+1Published as a conference paper at ICLR 2026 considers both the direction and magnitude of gradients, ensuring that unimodal gradients do not interfere with multimodal training. Despite significant progress in existing methods, current approaches still primarily rely on joint learning or a combination of joint learning and unimodal learning, with little consideration given to the inherent alignment properties of multimodal data. However, directly integrating joint learning loss, unimodal loss, and alignment loss (i.e., contrastive learning loss) with inherently conflict-ing optimization objectives requires introducing extra hyperparameters, additional structures, and algorithmic procedures to balance their contributions during training. In this paper, through an information-theoretic analysis, we demonstrate that maximizing the total correlation between the features encoded by each modal encoder in the multimodal model and the labels avoids modality competition while learning inter-modal interactions and incorporating alignment between modalities. Inspired by Mutual Information Neural Estimation Belghazi et al. (2018), we propose the TCMax loss, which employs Total Correlation Neural Estimation to estimate the lower bound of total correlation. By maximizing this lower bound, we enhance the total correlation between features and labels. We theoretically demonstrate that the output of the model optimized by the TCMax loss possesses the same mathematical significance as that of a model trained using joint learning. Consequently, our method does not require the introduction of additional hyperparameter or structural modifications. Merely employing the TCMax loss during the training phase suffices to achieve favorable results. In summary, our contributions are as follows: • From an information-theoretic perspective, we elucidate the underlying causes of modality competition and propose that maximizing the total correlation between multimodal features and labels can amalgamate the advantages of joint learning and unimodal learning while incorporating inter-modal alignment • We introduce Total Correlation Neural Estimation and, based on this, propose the TCMax loss. Theoretically, we prove that optimizing the TCMax loss can increase total correlation and demonstrate that models utilizing TCMax are capable of estimating the joint distribution of multimodal data and the label. • Comprehensive experiments showcase the considerable improvement over previous joint and unimodal learning methods on various multimodal datasets. 
+
+## 2 RELATED WORKS 
+
+Modality Imbalance Integrating information from multimodal data is essential for comprehensively addressing and solving real-world problems Yu et al. (2025); Wu et al. (2025a;b). However, training a multimodal model using a joint learning strategy is challenging because different modalities often exhibit varying data distributions, require distinct network architectures, and have different convergence rates Wang et al. (2020). Simultaneously, joint learning makes all modalities contribute to one learning objective, causing weak modalities to be suppressed after strong modalities converge, resulting in modality competition Huang et al. (2022). Several works Peng et al. (2022); Zong et al. (2024); Wei et al. (2024); Xu et al. (2023); Li et al. (2023a) have recently been suggested to balance modalities. Representatively, OGM-GE Peng et al. (2022) and AGM Li et al. (2023a) propose balanced multimodal learning methods that correct the contribution imbalance of different modalities by encouraging intensive gradient updating from suboptimal modalities. However, rebalance methods are not able to overcome modality laziness Du et al. (2023) and fail to exploit unimodal features efficiently. Some works Zhang et al. (2023); Wei et al. (2024); Zhang et al. (2024); Wei & Hu (2024) explicitly or implicitly incorporate unimodal loss into their loss functions to avoid modality laziness. Specifically, MLA Zhang et al. (2024) decomposes the conventional multimodal joint optimization scenario into an alternating unimodal learning scenario and exchanges information using a shared head for different modalities. ReconBoost Hua et al. (2024) alternates between different modalities during the learning process, mitigating the issue of synchronous optimization limitations. MMPareto Wei & Hu (2024) balances the objectives of joint learning and unimodal learning using the Pareto method. By preventing modality laziness in multimodal learning, they achieve performance slightly higher than that of unimodal learning. 
+
+Information Theory with Multimodal Learning In information theory, mutual information quantifies the correlation between two variables in terms of their distribution. Recent works Belghazi 2Published as a conference paper at ICLR 2026 et al. (2018); Hu et al. (2024) have leveraged neural networks to estimate mutual information, bridging the gap between deep learning and information theory. In contrastive learning, the InfoNCE Oord et al. (2018) loss serves as a lower bound estimate of mutual information, providing a solid theoretical foundation for its use. As more applications Chen et al. (2020b); Radford et al. (2021) demonstrate the effectiveness of the InfoNCE loss, the validity of the underlying mutual information theory has been further validated. For more than two variables, total correlation Watanabe (1960) extends mutual information and serves as a measure of the interdependence among multiple variables. In Hwang et al. (2021), the authors applied total correlation in the Multi-View Representation Learning problem and achieved promising results, demonstrating the utility of total correlation in multi-variable scenarios. 
+
+## 3 METHOD 
+
+3.1 MOTIVATION AND PRELIMINARY 
+
+Problem Formulation. Consider a multimodal data distribution  x(1) , . . . , x (M ), y  ∼
+
+PX (1) ,..., X (M ),Y , where PX (1) ,..., X (M ),Y denotes the joint probability distribution over the modalities and labels of the train set, X (m) represents the sample space of the m-th modality, Y corresponds to the label space. For each modality m, a modality-specific encoder ψ(m)Θm : X (m) → Z (m) maps the in-put space X (m) to its corresponding embedding space Z(m) =
+
+n
+
+ψ(m)Θm
+
+ x(m) | x(m) ∈ X (m)
+
+o
+
+. The embeddings from all modalities are subsequently fed into a prediction head fθ : Z(1) ×· · ·×Z (M ) →
+
+R|Y| to integrate information across different modalities and predict the probability distribution of labels ˆp(ˆ y|Z) = Softmax (fθ (z(1) , . . . , z (M ))) ˆy , where ˆy denotes the predicted label and θ represents the parameters of the prediction head. 
+
+Joint Learning. The objective of multimodal joint learning is to minimize the distance cross-entropy between the predicted distribution and the ground truth distribution: 
+
+Ljoint = E(x(1) ,...,x (M ),y )∼PD [ℓ(y, ˆy)] = E(x(1) ,...,x (M ),y )∼PD [− log ˆ p(y|Z)] , (1) where ℓ(·, ·) is the cross-entropy loss and Z = ( z(1) , . . . , z (M )) is the multimodal feature. As the distribution of ˆy is calculated by Z, l(y, ˆy) in Equation 1 can be seen as the conditional cross-entropy under Z, denoted as l(y, ˆp|Z). Boudiaf et al. (2020) shows minimizing the conditional cross-entropy l(y, ˆp|Z) is equivalent to maximizing the mutual information I(y; Z). This implies, with joint learning strategies Peng et al. (2022); Li et al. (2023a), the multimodal model is trained by maximizing the mutual information between the multimodal feature Z and the label y.Move 
+
+Figure 1: Venn graph of an extreme case where the audio encoder has already been well-fitted. The visual component (blue) only needs to cover I(y; z(v)] |z(a)) to achieve the training objective ( Ljoint ≈ 0), therefore ends up being unfitted. 
+
+To explain the cause of modality imbalance from an information-theoretic perspective, we analyze the scenario involving two modalities (audio and visual) without loss of generality, where Z = ( z(a), z (v)). Specifically, the mul-timodal model trained via joint learning aims to maximize the mutual information: 
+
+I(y; Z) = I(y; z(a), z (v)) = I(y; z(a)) + I(y; z(v)|z(a)).
+
+(2) The mutual information between any two variables is bounded by the entropy of either variable. Moreover, since 
+
+I(y; z(v)|z(a)) ≥ 0, it follows H(y) ≥ I(y; z(a), z (v)) ≥
+
+I(y; z(a)). When the encoder of one modality learns faster than the other, assuming z(a) contains sufficient informa-tion to predict the label accurately on the train set, then 
+
+I(y; z(a)) in Equation 2 becomes close to H(y). As I(y; z(v)|z(a)) = I(y; z(a), z (v)) − I(y; z(a)) ≤
+
+H(y) − I(y; z(a)) and I(y; z(a)) ≈ H(y), the upper bound of I(y; z(v)|z(a)) tends to be quite small, making it challenging for the visual encoder to learn adequate features though maximizing 
+
+I(y; z(v)|z(a)) as it shows in Figure 1. This phenomenon of resource contention between modalities is termed modality competition Huang et al. (2022). 3Published as a conference paper at ICLR 2026 Joint Learning Unimodal Learning TCMax Alignment 
+
+Figure 2: An illustration of the relationship between joint learning, unimodal learning, and learning through maximizing the total correlation. 
+
+Unimodal Learning. In unimodal learning, each modality-specific model is trained independently and later combined into an ensemble model. Specifically, the logits of the unimodal ensemble model during prediction are equal to the sum of all modality-specific models. For mathematical consistency, we treat the unimodal ensemble model as a single entity during training. However, its prediction head can be decomposed into the sum of modality-specific prediction heads, i.e., 
+
+fθ (Z) = P 
+
+> m
+
+f (m) 
+
+> θm
+
+(z(m)). The optimization objective of unimodal learning is: 
+
+Lunimodal = E(x(1) ,...,x (M ),y )∼PD
+
+"
+
+−
+
+> M
+
+X
+
+> m=1
+
+log ˆ p(m)(y|z(m))
+
+#
+
+, (3) where ˆp(m)(y|z(m)) = Softmax (f (m) 
+
+> θ
+
+(z(m))) y is the predicted distribution of the label of the uni-modal model of the m-th modality. During training, the unimodal ensemble model maximizes the mutual information I(y; z(m)) separately for each modality m. For multimodal learning with two modalities, it maximizes: 
+
+I(y; z(a)) + I(y; z(v)). (4) As mentioned before, we assume the audio modality encoder converges faster, i.e., z(a) captures sufficient information earlier than z(v). Since I(y; z(v)) is independent of z(a), it ensures that during the learning process of the visual modality, sufficient mutual information between features and labels can be learned. Although unimodal learning avoids modality competition, its independent training paradigm prevents the model from capturing cross-modal interactions. While joint learning and unimodal learning focus on modality-label relationships (X (m) ↔ Y ) , mul-timodal datasets additionally encode cross-modal relationships (X (i) ↔ X (j)). To this end, we aim to fully utilize the prior information embedded in PX (1) ,..., X (M ),Y . While mutual information I(ξ1; ξ2)
+
+effectively measures pairwise dependencies, its multivariate extension I(ξ1; . . . ; ξn) has a limitation: it yields negative values for synergistic interactions. In contrast, total correlation (TC) Watanabe (1960) is non-negative by definition, making it more suitable for measuring multivariate dependencies. Formally: TC (ξ(1) , ξ (2) , . . . , ξ (M )) ≡DKL 
+
+ PΞ(1) ,..., Ξ(M ) ∥PΞ(1) × · · · × PΞ(M )
+
+
+
+=
+
+> M
+
+X
+
+> i=1
+
+H(ξ(i))
+
+!
+
+− H(ξ(1) , ξ (2) , . . . , ξ (M )), (5) where H is the entropy. To leverage the strengths of both joint and unimodal learning, we propose maximizing the TC across all modalities and the label. As Figure 2 shows, in the case of two 4Published as a conference paper at ICLR 2026 modalities, TC can be decomposed as: TC (z(a), z (v), y ) = 
+
+
+
+I(y; z(a), z (v))
+
+| {z }
+
+> Joint learning
+
++ I(z(a); z(v))
+
+| {z }
+
+> Alignment
+
+I(y; z(a)) + I(y; z(v))
+
+| {z }
+
+> Unimodal learning
+
++ I(z(a); z(v)|y)
+
+| {z }
+
+> Alignment
+
+. (6) This decomposition reveals that TC simultaneously captures: (1) joint modality-label dependencies (joint learning), (2) modality-modality alignment, and (3) unimodal label dependencies (unimodal learning). This ensures that the model leverages more prior information during training, thereby making the model more robust. In the following sections, we first propose a lower bound estimator for TC, then indirectly maximize TC by optimizing the TCMax loss, which is based on the estimator. 3.2 TOTAL CORRELATION NEURAL ESTIMATION 
+
+To maximize TC, we propose maximizing its lower bound. This requires a reliable estimator for the TC lower bound. We start from the lower-bound estimator for mutual information. Mutual Information Neural Estimation (MINE) Belghazi et al. (2018) provides a viable approach to estimate a lower bound of mutual information. 
+
+Theorem 1 (MINE Belghazi et al. (2018)) The mutual information between Z ∈ Z and y ∈ Y 
+
+admits the following dual representation: 
+
+I(Z; y) = sup  
+
+> T:Z×Y
+
+−→R
+
+EPZ,Y [T ] − log  EPZ ×PY
+
+eT  , (7) 
+
+where the supremum is taken over all functions T such that the two expectations are finite. As neural networks Tθ with parameter θ ∈ Θ compose a family of functions which is a subset of Z × Y − → R,we have: 
+
+I(Z; y) ≥ sup 
+
+> θ∈Θ
+
+EPZ,Y [Tθ ] − log  EPZ ×PY
+
+eTθ
+
+ . (8) Fortunately, MINE can be directly extended to Total Correlation Neural Estimation (TCNE). Note that for two variables, TC reduces to mutual information, making MINE a special case of TCNE. 
+
+Corollary 1 (TCNE) The total correlation among M + 1 variables z(1) ∈ Z (1) , . . . , z (M ) ∈ Z (M )
+
+and y ∈ Y , admits the following dual representation: 
+
+TC (z(1) , . . . , z (M ), y ) = sup  
+
+> T:Ω
+
+−→R
+
+EPZ(1) ,..., Z(M ),Y [T ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eT 
+
+, (9) 
+
+where the supremum is taken over all functions T such that the two expectations are finite and 
+
+Ω = Z1 × · · · × Z M × Y . As neural networks Tθ with parameter θ ∈ Θ compose a family of functions which is a subset of Ω −→ R, we have: 
+
+TC (z(1) , . . . , z (M ), y ) ≥ sup 
+
+> θ∈Θ
+
+EPZ(1) ,..., Z(M ),Y [Tθ ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eTθ
+
+
+
+. (10) 
+
+See the supplement material for all proofs of corollaries and propositions. 
+
+3.3 TCM AX LOSS 
+
+To align with the form in Corollary 1, we set Tθ (z(1) , . . . , z (M ), y ) = fθ (z(1) , . . . , z (M ))y , decom-posing fθ into |Y| functions of the form Z(1) × · · · × Z(M ) → R. Based on Equation 10, we propose the TCMax loss: 
+
+LTCMax = −EPZ(1) ,..., Z(M ),Y [fθ ] + log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+efθ
+
+
+
+= −EPX (1) ,..., X (M ),Y [FΘ] + log 
+
+
+
+EPX (1) ×···× PX (M ) ×PY
+
+eFΘ 
+
+,
+
+(11) where FΘ(x(1) , . . . , x (M ), y ) = fθ
+
+
+
+ψ(1) Θ1 (x(1) ), . . . , ψ (M )ΘM (x(M ))
+
+
+
+> y
+
+is the multimodal model, Θ = 
+
+{Θ1, . . . , ΘM , θ } denotes all parameters of the multimodal model. From the above derivation, we 5Published as a conference paper at ICLR 2026 consider the prediction head as a TC estimator on Z1 × · · · × Z M × Y . Similarly, the multimodal model can be regarded as an estimator on X1 × · · · × X M × Y . Combine with Equation 10, we have following proposition: 
+
+Proposition 1 The TC between the input data and labels, the TC between features and labels, and our proposed TCMax loss satisfy the following inequality: 
+
+TC (x(1) , . . . , x (M ), y ) ≥ TC (z(1) , . . . , z (M ), y ) ≥ −L TCMax . (12) Since LTCMax ≥ − TC (z(1) , . . . , z (M ), y ), minimizing LTCMax pushes −L TCMax upward, thereby in-creasing the lower bound of TC (z(1) , . . . , z (M ), y ). Since the distribution of the dataset is determined, TC (x(1) , . . . , x (M ), y ) is a fixed value and does not vary with model parameters. So far, we have not addressed the mathematical interpretation of the TCMax-trained model’s output. Next, we prove that the output of this model possesses the same capability to predict the label distribution as a multimodal model trained with joint learning. 
+
+Proposition 2 The supremum in in Equation 9 reaches its upper bound if and only if 
+
+PZ(1) ,..., Z(M ),Y = G, where G is the Gibbs distribution defined as dG = eT  
+
+> EQ[eT]
+
+dQ and 
+
+Q = PZ(1) × · · · × PZ(M ) × PY .
+
+Proposition 2 indicates that when the TC estimator in TCNE is accurate, the estimator can also accurately estimate the joint probability distribution of all variables. 
+
+Proposition 3 The two inequalities in Equation 12 simultaneously hold as equalities if and only if PX (1) ,..., X (M ),Y = ˆG, where ˆG is the Gibbs distribution defined as d ˆG = eFΘ
+
+> EQ
+
+[eFΘ ] dQ and Q =
+
+PX (1) × · · · × PX (M ) × PY .
+
+No Modifications when Predicting. Proposition 3 demonstrates that the lower bound of LTCMax is 
+
+−TC (x(1) , . . . , x (M ), y ), and when this lower bound is achieved, we have 
+
+p(y|x(1) , . . . , x (M )) = p(y, x (1) , . . . , x (M ))
+
+P 
+
+> k∈Y
+
+p(k, x (1) , . . . , x (M )) = eFΘ(x(1) ,...,x (M ),y )
+
+P 
+
+> k∈Y
+
+eFΘ(x(1) ,...,x (M ),k ) = ˆ py , (13) where p is the probability mass function of data distribution PD . Equation 13 indicates that the model trained using the TCMax loss does not require additional operations or modifications to the model structure during prediction. The only difference between our proposed method and joint learning in practice is replacing Ljoint with LTCMax during training, yet it yields more robust results. 3.4 COMPUTATIONAL COST 
+
+When training a multimodal model that includes both audio and visual modalities, a direct implemen-tation of LTCMax in a mini-batch B is: 
+
+LTCMax = − 1
+
+|B| 
+
+X
+
+> i∈B
+
+log exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> i
+
+), ψ (v)Θv (x(v) 
+
+> i
+
+)
+
+
+
+> yi
+
+P  
+
+> (j,k,y ′)∈B×B×Y
+
+exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> j
+
+), ψ (v)Θv (x(v) 
+
+> k
+
+)
+
+
+
+> y′
+
+− log |B| 2|Y| , (14) where x(m) 
+
+> i
+
+denotes the i-th sample of m-th modality. Notice that using LTCMax requires forwarding the prediction head |B| M times. Although the parameter count of the prediction head is generally much smaller compared to the encoders, for a large number of modalities M and a large batch size, this can still introduce significant additional computational overhead. To mitigate this overhead, the computation can be optimized by sampling only a certain number of negative samples (denominator) in the feature space, i.e., randomly sampling N ⊂ B ×B , where each (i, j ) ∈ N is sampled uniformly without replacement from B × B . LTCMax with sampling is: 
+
+LTCMax = − 1
+
+|B| 
+
+X
+
+> i∈B
+
+log exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> i
+
+), ψ (v)Θv (x(v) 
+
+> i
+
+)
+
+
+
+> yi
+
+P
+
+> (j,k )∈N
+
+P  
+
+> y′∈Y
+
+exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> j
+
+), ψ (v)Θv (x(v) 
+
+> k
+
+)
+
+
+
+> y′
+
+− log |N ||Y| . (15) 6Published as a conference paper at ICLR 2026 For linear fusion fθ (z(a), z (v)) = f (a) 
+
+> θa
+
+(z(a)) + f (v) 
+
+> θv
+
+(z(v)), the denominator decouples into separate sums over modalities due to the identity exp( a + b) = exp( a) exp( b). LTCMax becomes: 
+
+LTCMax = − 1
+
+|B| 
+
+X
+
+> i∈B
+
+log exp f (a) 
+
+> θa
+
+(ψ(a)Θa (x(a) 
+
+> i
+
+)) yi
+
+exp f (v) 
+
+> θv
+
+(ψ(v)Θv (x(v) 
+
+> i
+
+)) yi
+
+P 
+
+> y′∈Y
+
+P 
+
+> j∈B
+
+exp f (a) 
+
+> θa
+
+(ψ(a)Θa (x(a) 
+
+> j
+
+)) y′
+
+  P 
+
+> k∈B
+
+exp f (v) 
+
+> θv
+
+(ψ(v)Θv (x(v) 
+
+> k
+
+)) y′
+
+
+
+− log |B| 2|Y| .
+
+(16) In this way, only |B| forward passes of the prediction head are required, introducing almost no additional computational overhead with LTCMax .
+
+## 4 EXPERIMENTS 
+
+4.1 DATASETS 
+
+CREMA-D Cao et al. (2014) encompasses 7, 442 audio-visual clips from 91 actors express-ing six emotions, with emotion labels determined by 2, 443 crowd-sourced raters. Kinetics-Sounds (KS) Arandjelovic & Zisserman (2017), a subset of Kinetics Kay et al. (2017) dataset, includes 19 , 000 10 s videos across 31 human action labels, annotated manually through Mechan-ical Turk. AVE Tian et al. (2018) focuses on localizing audio-visual events in 4, 143 10 s videos across 28 labels, sourced from YouTube with frame-level labeling for both audio and visual com-ponents. VGGSound Chen et al. (2020a) is a large dataset of 309 labels, with 10 s videos that exhibit clear audio-visual correlations. It contains 152 , 638 training videos and 13 , 294 testing videos. 
+
+UCF101 Soomro (2012) comprises 13 , 320 videos from 101 action labels. The clips, ranging from 
+
+3s to 10 s, are split into a training set with 9, 537 clips and a testing set with 3, 783 clips, utilizing the official train-test split. MVSA Niu et al. (2016) (MVSA-Single) is a multimodal sentiment analysis dataset that jointly leverages text and image data for classification. 4.2 IMPLEMENTATION DETAILS 
+
+Backbone and Hyperparameter For all audio-visual datasets, we follow the same setting as in the previous study Peng et al. (2022), selecting ResNet-18 He et al. (2016) as the encoder for both audio and visual modalities, and training it from scratch. For the audio modality, inputs are converted into spectrograms McFee et al. (2015) of size 129 ×862 for the CREMA-D, AVE, and VGGSound datasets, and fbank Davis & Mermelstein (1980) acoustic features for the Kinetics-Sounds dataset. For the visual modality, we extract images from videos at 1 fps and use 3 images as input for the CREMA-D, Kinetics-Sounds, and AVE datasets, and four images as input for the VGGSound dataset. For the UCF101 dataset, we extract frames and optical flow data from the videos at 1 fps, using 3
+
+RGB frames and 10 optical flow frames for each sample. We use ResNet-18 as the backbone for both RGB and optical flow modalities and train ResNet-18 from scratch as their backbone. We utilize SGD Robbins & Monro (1951) with 0.9 momentum and 1e−4 weight decay as the optimizer for all experiments. We set (learning rate, mini-batch size, epochs) to ( 1e−3, 32 , 200 ) for CREMA-D and AVE, ( 1e−3, 64 , 200 ) for Kinetics-Sounds, ( 1e−3, 64 , 100 ) for VGGSound, and ( 1e−3, 32 , 400 )for UCF101. All of our experiments were performed on one NVIDIA Tesla V100 GPU. 4.3 COMPARISON WITH STATE -OF -THE -A RTS 
+
+Compared methods We conduct comprehensive comparisons of TCMax with several baselines and recent studies. (1) Baselines: concatenation (Concat), share predicted head (Share Head), unimodal fusion (Unimodal); (2) Recent studies: FiLM Perez et al. (2018), BiGated Kiela et al. (2018), OGM-GE Peng et al. (2022), OPM Wei et al. (2024), QMF Zhang et al. (2023), AGM Li et al. (2023a), MLA Zhang et al. (2024), MMPareto Wei & Hu (2024). 4.3.1 RESULTS OF TEST ACCURACY 
+
+Table 1 presents testing accuracy of using a single modality and combining modalities ( i.e. , Multi). 
+
+First , joint learning shows severe modality imbalance, with one modality significantly underperform-ing, and generally yields worse results than alternatives. Second , balanced joint learning methods 7Published as a conference paper at ICLR 2026 Table 1: Results of the average test accuracy(%) of three random seeds on CREMA-D, Kinetics-Sounds, AVE, VGGSound, and UCF101 datasets. Both the results of only using a single modality ("Audio" and "Visual") and the results of combining all modalities ("Multi") are listed. The best results and second best results are bold and underlined, respectively. 
+
+Methods CREMA-D Kinetics-Sounds AVE VGGSound UCF101 Audio Visual Multi Audio Visual Multi Audio Visual Multi Audio Visual Multi RGB OF Multi                                                                                                                                                                                                                   
+
+> Concat 58 .626 .568 .536 .822 .253 .548 .917 .260 .429 .510 .341 .127 .515 .846 .1
+> Share Head 63 .029 .569 .338 .729 .153 .749 .722 .461 .430 .913 .041 .831 .220 .246 .0
+> FiLM Perez et al. (2018) --65 .3--52 .6--58 .8--38 .3--44 .7
+> BiGated Kiela et al. (2018) --64 .7--49 .1--59 .3--38 .3--46 .7
+> OGM-GE Peng et al. (2022) 55 .845 .875 .235 .725 .655 .439 .519 .361 .328 .713 .242 .523 .316 .644 .2
+> AGM Li et al. (2023a) 61 .439 .071 .236 .429 .457 .744 .219 .361 .430 .514 .744 .727 .217 .646 .0
+> Unimodal Ensemble 62 .974 .982 .143 .045 .862 .354 .136 .762 .934 .826 .746 .339 .229 .251 .6
+> QMF Zhang et al. (2023) 65.5 74 .381 .444 .644 .262 .155.1 37 .065.1 34 .626 .145 .839 .231 .252 .1
+> OPM Wei et al. (2024) 61 .367 .279 .439 .144 .161 .748 .836 .263 .131 .223 .545 .938 .626 .650 .8
+> OGM-GE + OPM Wei et al. (2024) 58 .369 .880 .337 .644 .162 .548 .235 .363 .331 .623 .545 .538 .626 .948 .3
+> MLA Zhang et al. (2024) 63 .575 .681 .041 .644 .961 .153 .237 .962 .635 .325 .844 .540 .131 .051 .2
+> MMPareto Wei & Hu (2024) 65 .475.7 74 .444.8 49.4 62 .754 .041.1 63 .135 .527.5 46 .242.4 33 .055 .9
+> Ours Concat 63 .775 .082.8 41 .041 .462 .453 .833 .563 .233 .922 .047.6 37 .732 .555 .4
+> Ours Share Head 63 .073 .682 .743 .443 .363.5 54 .236 .764 .536.3 24 .347 .541 .037.2 56.0
+
+Table 2: Results of Jensen–Shannon divergence between predictions of two modalities on CREMA-D, Kinetics-Sounds, AVE, VGGSound, and UCF101 datasets. The minima and second minima results are bold and underlined, respectively. 
+
+Dataset Concat Share Head OGM-GE AGM Unimodal QMF OPM MLA MMPareto Ours Concat Ours Share Head CREMA-D 0.478 0.490 0.518 0.400 0.312 0.293 0 .337 0 .306 0.314 0.284 0.271 
+
+Kinetics-Sounds 0.543 0.560 0.551 0.499 0.459 0.455 0 .448 0 .466 0.440 0.423 0.390 
+
+AVE 0.562 0.568 0.560 0.540 0.462 0.471 0 .470 0 .468 0.465 0.452 0.406 
+
+VGGSound 0.620 0.631 0.610 0.594 0.526 0.528 0 .513 0 .528 0.539 0.513 0.473 
+
+UCF101 0.584 0.579 0.589 0.586 0.463 0.531 0 .473 0 .457 0.485 0.427 0.366 
+
+(e.g., OGM-GE, AGM) improve the weaker modality but slightly degrade the stronger one, failing to consistently surpass unimodal-loss methods. Third , unimodal-based methods prevent overfitting and sometimes outperform pure unimodal learning, while achieving the highest single-modal accuracy. 
+
+Finally , TCMax achieves the best multimodal scores, but its single-modality performance matches other unimodal-based methods—suggesting its gains stem from cross-modal synergy rather than individual improvements. 4.3.2 RESULTS OF JENSEN –S HANNON DIVERGENCE 
+
+To investigate the correlation of prediction outcomes across modalities, we calculate the average Jensen–Shannon divergence (JS-divergence) between the prediction results of two separate modalities in Table 2. This metric quantifies the degree of correlation in predictions between the two modalities, with a lower JS-divergence signifying a stronger correlation. As shown in the table, our TCMax consistently achieves the smallest JS-divergence for the single-modal predictions across all datasets, indicating that TCMax which is rooted in contrastive learning, facilitates the model to learn cross-modal representations, thereby enhancing the correlation of predictions. 4.4 FURTHER ANALYSIS 0.55      
+
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> Accuracy
+> 32 64 128 256 512 1024
+> Audio
+> Visual
+> Multi
+
+(a) CREMA-D, Batchsize 64 0.30       
+
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> Accuracy
+> 32 64 128 256 512 1024
+> RGB
+> OF
+> Multi
+
+(b) UCF101, Batchsize 32 Figure 3: Accuracy on different numbers of sampled negative pairs. 
+
+Number of Sampled Negative Pairs. 
+
+We first explore the effect of sampling dif-ferent numbers of negative pairs, as men-tioned in Equation 15. Figure 3a shows that, for the CREMA-D dataset, the ac-curacy of TCMax rises with an increase in the number of negative pair samplings, achieving optimal performance at 1024 . In contrast, on the UCF101 dataset, the best performance is observed at the maximum sampling number 256 .8Published as a conference paper at ICLR 2026 0 25 50 75 100 125 150 175 200 
+
+> Epoch
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> Train Loss
+> joint learning
+> uni-modal learning
+> TCMax
+
+(a) CREMA-D Loss 0 25 50 75 100 125 150 175 200  
+
+> Epoch
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Test Accuracy
+> joint learning
+> uni-modal learning
+> TCMax
+
+(b) CREMA-D Acc 0 50 100 150 200 250 300 350 400 
+
+> Epoch
+> 0
+> 2
+> 4
+> 6
+> 8
+> Train Loss
+> joint learning
+> uni-modal learning
+> TCMax
+
+(c) UCF101 Loss 0 50 100 150 200 250 300 350 400  
+
+> Epoch
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Test Accuracy
+> joint learning
+> uni-modal learning
+> TCMax
+
+(d) UCF101 Acc 
+
+Figure 4: Train loss and test accuracy of joint learning, unimodal learning, and TCMax on CREMA-D and UCF101 datasets. 
+
+Concat Share Head Unimodal Ours Concat CREMA-D 
+
+H(A) 0.369 0.184 0.320 0.575 
+
+H(V ) 1.076 1.229 0.746 0.890 
+
+ρ 2.913 6.674 2.331 1.549 
+
+> UCF101
+
+H(RGB ) 1.245 0.630 0.921 2.000 
+
+H(OF ) 2.244 1.170 1.259 2.265 
+
+ρ 1.802 1.856 1.368 1.132 
+
+Table 3: Results of average entropy of predictions by single modality on test sets of CREMA-D and UCF101 datasets. H(M ) denotes the entropy of predictions of the ‘M’ modality, and ρ represents the ratio of the entropy of the weak modality to the entropy of the strong modality. For CREMA-D and UCF101 datasets, ρ = H(V )/H (A)
+
+and ρ = H(OF )/H (RGB ), respectively. 
+
+TCMax Prevents Overfitting. Here, we visualize how TCMax effectively mitigates the risk of overfitting. As depicted in Figure 4, on both the CREMA-D and UCF101 datasets, TCMax loss remains consistently higher than that for joint and unimodal learning, which prevents the model parameters from updating at all. Although TCMax exhibits inferior performance compared to unimodal learning in the early stages of training, as the training progresses into the middle stage, TCMax begins to gradually presents its strengths and ultimately converges to a stable performance level. 
+
+Average Entropy of Predictions. In Table 3, we compute the average entropy predictions by single modality and the ratio between strong and weak modalities. This reflects the model’s ability to balance predictions across different modalities. Typically, a lower ratio indicates a more equitable contribution from both modalities. The table reveals that our method successfully achieves a balanced representation of the various modalities. Table 4: Result of the average test accuracy(%) of 10 random seeds on MVSA with frozen CLIP pretrained encoders. 
+
+Methods RN50 ViT-B/32 Image Text Multi Image Text Multi 
+
+Joint 75.76 73.60 81.23 76.88 74.27 82.83 Unimodal 76.74 77.16 80.02 78.54 76.97 81.77 TCMax 75.38 74.97 81.75 78.03 76.55 84.05 
+
+Analysis with Pretrained Encoders As shown in Table 4, we adopt CLIP Radford et al. (2021) as the frozen feature encoder for both image and text modalities on the MVSA dataset. During training, only the multimodal classifier is optimized while keeping the encoder parameters fixed. Our results show that: (1) Joint learning outperforms unimodal learning because the limited parameter space pre-vents overfitting; (2) TCMax maintains competitive performance by effectively modeling cross-modal interactions, similar to joint learning. 
+
+## 5 DISCUSSION 
+
+Conclusion This study investigates the causes of modality imbalance in multimodal classification tasks from an information-theoretic perspective and proposes a learning objective to maximize total correlation to fully utilize cross-modal information in multimodal datasets. We propose the Total Correlation Neural Estimation(TCNE), which employs neural networks to estimate the lower bound of total correlation. Building on this theoretical foundation, we introduce a parameter-free loss function, TCMax, for multimodal classification tasks. By maximizing total correlation, our approach enables more comprehensive utilization of prior information in multimodal datasets, thereby achieving enhanced robustness. Comparative experiments with state-of-the-art methods demonstrate the effectiveness of our approach across multiple multimodal classification benchmarks. 
+
+Limitation The current TCMax framework is primarily designed for classification tasks and cannot be directly extended to other multimodal applications such as multimodal object detection or generative tasks. Successful adaptation to these domains would require explicit definitions of input-output probability distributions. Furthermore, while TCMax establishes a foundational multimodal learning paradigm, its full potential depends on developing model architectures specifically optimized for this framework. 9Published as a conference paper at ICLR 2026 
+
+## ACKNOWLEDGEMENTS 
+
+This work is supported by the NSFC (62276131, 62506168), Natural Science Foundation of Jiangsu Province of China under Grant (BK20240081, BK20251431). The authors gratefully acknowledge financial support from the China Scholarship Council (CSC) (Grant No. 202506840036). 
+
+## REFERENCES 
+
+Relja Arandjelovic and Andrew Zisserman. Look, listen and learn. In Proceedings of the IEEE international conference on computer vision , pp. 609–617, 2017. Mohamed Ishmael Belghazi, Aristide Baratin, Sai Rajeshwar, Sherjil Ozair, Yoshua Bengio, Aaron Courville, and Devon Hjelm. Mutual information neural estimation. In International conference on machine learning , pp. 531–540, 2018. Malik Boudiaf, Jérôme Rony, Imtiaz Masud Ziko, Eric Granger, Marco Pedersoli, Pablo Piantanida, and Ismail Ben Ayed. A unifying mutual information view of metric learning: cross-entropy vs. pairwise losses. In European conference on computer vision , pp. 548–564. Springer, 2020. Houwei Cao, David G Cooper, Michael K Keutmann, Ruben C Gur, Ani Nenkova, and Ragini Verma. Crema-d: Crowd-sourced emotional multimodal actors dataset. IEEE transactions on affective computing , 5(4):377–390, 2014. Honglie Chen, Weidi Xie, Andrea Vedaldi, and Andrew Zisserman. Vggsound: A large-scale audio-visual dataset. In ICASSP 2020-2020 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pp. 721–725, 2020a. Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey Hinton. A simple framework for contrastive learning of visual representations. In International conference on machine learning , pp. 1597–1607. PMLR, 2020b. Steven Davis and Paul Mermelstein. Comparison of parametric representations for monosyllabic word recognition in continuously spoken sentences. IEEE transactions on acoustics, speech, and signal processing , 28(4):357–366, 1980. Monroe D Donsker and SR Srinivasa Varadhan. Asymptotic evaluation of certain markov process expectations for large time. iv. Communications on pure and applied mathematics , 36(2):183–212, 1983. Chenzhuang Du, Jiaye Teng, Tingle Li, Yichen Liu, Tianyuan Yuan, Yue Wang, Yang Yuan, and Hang Zhao. On uni-modal feature learning in supervised multi-modal learning. In International Conference on Machine Learning , pp. 8632–8656, 2023. Yunfeng Fan, Wenchao Xu, Haozhao Wang, Junxiao Wang, and Song Guo. Pmr: Prototypical modal rebalance for multimodal learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 20029–20038, 2023. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition ,pp. 770–778, 2016. Zhengyang Hu, Song Kang, Qunsong Zeng, Kaibin Huang, and Yanchao Yang. Infonet: Neural estimation of mutual information without test-time optimization. arXiv preprint arXiv:2402.10158 ,2024. Cong Hua, Qianqian Xu, Shilong Bao, Zhiyong Yang, and Qingming Huang. Reconboost: Boosting can achieve modality reconcilement. In Forty-first International Conference on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 , 2024. Yu Huang, Junyang Lin, Chang Zhou, Hongxia Yang, and Longbo Huang. Modality competition: What makes joint training of multi-modal network fail in deep learning?(provably). In International Conference on Machine Learning , pp. 9226–9259, 2022. 10 Published as a conference paper at ICLR 2026 HyeongJoo Hwang, Geon-Hyeong Kim, Seunghoon Hong, and Kee-Eung Kim. Multi-view represen-tation learning via total correlation objective. Advances in Neural Information Processing Systems ,34:12194–12207, 2021. Will Kay, Joao Carreira, Karen Simonyan, Brian Zhang, Chloe Hillier, Sudheendra Vijayanarasimhan, Fabio Viola, Tim Green, Trevor Back, Paul Natsev, et al. The kinetics human action video dataset. 
+
+arXiv preprint arXiv:1705.06950 , 2017. Douwe Kiela, Edouard Grave, Armand Joulin, and Tomas Mikolov. Efficient large-scale multi-modal classification. In Proceedings of the AAAI conference on artificial intelligence , volume 32, 2018. Hong Li, Xingyu Li, Pengbo Hu, Yinuo Lei, Chunxiao Li, and Yi Zhou. Boosting multi-modal model performance with adaptive gradient modulation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 22214–22224, 2023a. Yaowei Li, Ruijie Quan, Linchao Zhu, and Yi Yang. Efficient multimodal fusion via interactive prompting. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2023, Vancouver, BC, Canada, June 17-24, 2023 , pp. 2604–2613, 2023b. Brian McFee, Colin Raffel, Dawen Liang, Daniel PW Ellis, Matt McVicar, Eric Battenberg, and Oriol Nieto. librosa: Audio and music signal analysis in python. In SciPy , pp. 18–24, 2015. Teng Niu, Shiai Zhu, Lei Pang, and Abdulmotaleb El Saddik. Sentiment analysis on multi-view social data. In MultiMedia Modeling: 22nd International Conference, MMM 2016, Miami, FL, USA, January 4-6, 2016, Proceedings, Part II 22 , pp. 15–27. Springer, 2016. Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. Xiaokang Peng, Yake Wei, Andong Deng, Dong Wang, and Di Hu. Balanced multimodal learning via on-the-fly gradient modulation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 8238–8247, June 2022. Ethan Perez, Florian Strub, Harm De Vries, Vincent Dumoulin, and Aaron Courville. Film: Visual reasoning with a general conditioning layer. In Proceedings of the AAAI conference on artificial intelligence , volume 32, 2018. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In International conference on machine learning , pp. 8748–8763, 2021. Wasifur Rahman, Md Kamrul Hasan, Sangwu Lee, Amir Zadeh, Chengfeng Mao, Louis-Philippe Morency, and Ehsan Hoque. Integrating multimodal information in large pretrained transformers. In Proceedings of the conference. Association for computational linguistics. Meeting , volume 2020, pp. 2359, 2020. Herbert Robbins and Sutton Monro. A stochastic approximation method. Ann Inst Stat Math , pp. 400–407, 1951. K Soomro. Ucf101: A dataset of 101 human actions classes from videos in the wild. arXiv preprint arXiv:1212.0402 , 2012. Yapeng Tian, Jing Shi, Bochen Li, Zhiyao Duan, and Chenliang Xu. Audio-visual event localization in unconstrained videos. In Proceedings of the European conference on computer vision (ECCV) ,pp. 247–263, 2018. Weiyao Wang, Du Tran, and Matt Feiszli. What makes training multi-modal classification networks hard? In 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2020, Seattle, WA, USA, June 13-19, 2020 , pp. 12692–12702, 2020. Satosi Watanabe. Information theoretical analysis of multivariate correlation. IBM Journal of research and development , 4(1):66–82, 1960. 11 Published as a conference paper at ICLR 2026 Yake Wei and Di Hu. Mmpareto: Boosting multimodal learning with innocent unimodal assistance. In Forty-first International Conference on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 , 2024. Yake Wei, Di Hu, Henghui Du, and Ji-Rong Wen. On-the-fly modulation for balanced multimodal learning. IEEE Transactions on Pattern Analysis and Machine Intelligence , pp. 1–16, 2024. Shuang Wu, Heng Liang, Yong Zhang, Yanlin Chen, and Ziyu Jia. A cross-modal densely guided knowledge distillation based on modality rebalancing strategy for enhanced unimodal emotion recognition. In IJCAI , pp. 4236–4244, 2025a. Xiangyu Wu, Feng Yu, Yang Yang, and Jianfeng Lu. Text as any-modality for zero-shot classification by consistent prompt tuning. In ACM MM , pp. 8106–8115, 2025b. Ruize Xu, Ruoxuan Feng, Shi-Xiong Zhang, and Di Hu. Mmcosine: Multi-modal cosine loss towards balanced audio-visual fine-grained learning. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pp. 1–5, 2023. Karren Yang, Wan-Yi Lin, Manash Barman, Filipe Condessa, and J. Zico Kolter. Defending multi-modal fusion models against single-source adversaries. In IEEE Conference on Computer Vision and Pattern Recognition, CVPR 2021, virtual, June 19-25, 2021 , pp. 3340–3349, 2021. Yiqun Yao and Rada Mihalcea. Modality-specific learning rates for effective multimodal additive late-fusion. In Findings of the Association for Computational Linguistics: ACL 2022, Dublin, Ireland, May 22-27, 2022 , pp. 1824–1834, 2022. Xinlei Yu, Chengming Xu, Guibin Zhang, Zhangquan Chen, Yudong Zhang, Yongbo He, Peng-Tao Jiang, Jiangning Zhang, Xiaobin Hu, and Shuicheng Yan. Vismem: Latent vision memory unlocks potential of vision-language models. arXiv preprint arXiv:2511.11007 , 2025. Qingyang Zhang, Haitao Wu, Changqing Zhang, Qinghua Hu, Huazhu Fu, Joey Tianyi Zhou, and Xi Peng. Provable dynamic fusion for low-quality multimodal data. In International Conference on Machine Learning, ICML 2023, 23-29 July 2023, Honolulu, Hawaii, USA , volume 202, pp. 41753–41769, 2023. Xiaohui Zhang, Jaehong Yoon, Mohit Bansal, and Huaxiu Yao. Multimodal representation learning by alternating unimodal adaptation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 27456–27466, 2024. Daoming Zong, Chaoyue Ding, Baoxiang Li, Jiakui Li, and Ken Zheng. Balancing multimodal learning via online logit modulation. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence, IJCAI 2024, Jeju, South Korea, August 3-9, 2024 , pp. 5753– 5761, 2024. 12 Published as a conference paper at ICLR 2026 
+
+## A PROOFS 
+
+A.1 PROOF OF COROLLARY 1
+
+Corollary 2 (Corollary 1 restated, TCNE) The total correlation between M + 1 variables z(1) ∈Z(1) , . . . , z (M ) ∈ Z (M ) and y ∈ Y , admits the following dual representation: 
+
+TC (z(1) , . . . , z (M ), y ) = sup  
+
+> T:Ω
+
+−→R
+
+EPZ(1) ,..., Z(M ),Y [T ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eT 
+
+(17) 
+
+where the supremum is taken over all functions T such that the two expectations are finite and 
+
+Ω = Z1 × · · · × Z M × Y . As neural networks Tθ with parameter θ ∈ Θ composed a family of functions which is a subset of Ω −→ R, we have: 
+
+TC (z(1) , . . . , z (M ), y ) ≥ sup 
+
+> θ∈Θ
+
+EPZ(1) ,..., Z(M ),Y [Tθ ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eTθ
+
+
+
+(18) We follow the proof in the paper of MINE Belghazi et al. (2018) to prove TCNE. First, we begin with the Donsker-Varadhan representation theorem. 
+
+Theorem 2 (The Donsker-Varadhan representation Donsker & Varadhan (1983)) The KL divergence admits the following dual representation: 
+
+DKL (P∥Q) = sup  
+
+> T:Ω
+
+−→R
+
+EP[T ] − log  EQ[eT ] , (19) 
+
+where the supremum is taken over all functions T such that the two expectations are finite. 
+
+For a given function T , consider the Gibbs distribution defined by dG = 1 
+
+> Z
+
+eT dQ, where Z = EQ[eT ]
+
+is he partition function and T servers as the energy function in the Gibbs distribution. The right hand of Equation 19 can be written as: 
+
+EP[T ] − log  EQ[eT ] = EP [T ] − log Z = EP
+
+
+
+log eT
+
+Z
+
+
+
+= EP
+
+
+
+log dG
+
+dQ
+
+
+
+. (20) Let ∆ be the gap: 
+
+∆ ≡ DKL (P∥Q) − EP[T ] − log  EQ[eT ] , (21) with Equation 20, we can write ∆ as KL-divergence: 
+
+∆ = EP
+
+
+
+log dP
+
+dQ − log dG
+
+dQ
+
+
+
+= EP
+
+
+
+log dP
+
+dG
+
+
+
+= DKL (P∥G) . (22) The positivity of the KL-divergence gives ∆ ≥ 0. We have thus shown that for any T ,
+
+DKL (P∥Q) ≥ EP[T ] − log  EQ[eT ] , (23) The inequality is preserved upon taking the supremum over the right-hand side. The bound is tight when G = P, namely for optimal functions T ∗ taking over the form T ∗ = log dP 
+
+> dQ
+
++ Const for some constant Const ∈ R.To prove Equation 17 in Corollary 2, we replace P and Q with PZ(1) ,..., Z(M ),Y and PZ(1) × · · · × 
+
+PZ(M ) × PY in Equation 19 so we have: 
+
+DKL 
+
+ PZ(1) ,..., Z(M ),Y ∥PZ(1) × · · · × PZ(M ) × PY
+
+ =sup  
+
+> T:Ω
+
+−→R
+
+EPZ(1) ,..., Z(M ),Y [T ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY [eT ]
+
+. (24) With the KL-divergence form of total correlation: TC (z(1) , . . . , z (M ), y ) = DKL 
+
+ PZ(1) ,..., Z(M ),Y ∥PZ(1) × · · · × PZ(M ) × PY
+
+ , (25) we can proof the Equation 17 in Corollary 2. As neural networks Tθ with parameter θ ∈ Θ belongs to T T : Ω −→ R , the supremum taken over all networks Tθ is less than or equal to the supremum taken over all functions T ,TC (z(1) , . . . , z (M ), y ) = sup  
+
+> T:Ω
+
+−→R
+
+EPZ(1) ,..., Z(M ),Y [T ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eT 
+
+≥ sup 
+
+> θ∈Θ
+
+EPZ(1) ,..., Z(M ),Y [Tθ ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eTθ
+
+
+
+.
+
+(26) Thus we prove Corollary 2. 13 Published as a conference paper at ICLR 2026 A.2 PROOF OF PROPOSITION 1
+
+Proposition 4 (Proposition 1 restated) The TC between the input data and labels, the TC between features and labels, and our proposed TCMax loss satisfy the following inequality: 
+
+TC (x(1) , . . . , x (M ), y ) ≥ TC (z(1) , . . . , z (M ), y ) ≥ −L TCMax (27) We first consider the TCNE form of TC (x(1) , . . . , x (M ), y ) and TC (z(1) , . . . , z (M ), y ):TC (x(1) , . . . , x (M ), y ) = sup   
+
+> TX:Ω X
+
+−→R
+
+EPX (1) ,..., X (M ),Y [TX ] − log 
+
+
+
+EPX (1) ×···× PX (M ) ×PY
+
+eTX 
+
+,
+
+(28) TC (z(1) , . . . , z (M ), y ) = sup   
+
+> TZ:Ω Z
+
+−→R
+
+EPZ(1) ,..., Z(M ),Y [TZ ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+eTZ 
+
+,
+
+(29) where ΩX and ΩZ are the input space (including the label) and the embedding space, respectively. As modality-specific encoders are used to extract the embedding z(1 ,··· ,M ) from the input x(1 ,··· ,M ),a fix function Ψ : Ω X → ΩZ is defined here. So we can rewrite Equation 29: 
+
+TC (z(1) , . . . , z (M ), y ) = sup   
+
+> TZ:Ω Z
+
+−→R
+
+EPX (1) ,..., X (M ),Y [Ψ ◦ TZ ] − log 
+
+
+
+EPX (1) ×···× PX (M ) ×PY
+
+h
+
+eΨ◦TX
+
+i 
+
+.
+
+(30) Since {Ψ ◦ TZ |TZ : Ω Z −→ R} is a subset of {TX |TX : Ω X −→ R}, the supremum in Equation 30 is not surpass than the supremum in Equation 28. Thus, we prove the first inequality in the proposition. We first consider the form of TCMax loss to prove he second inequality: 
+
+LTCMax = −EPZ(1) ,..., Z(M ),Y [fθ ] + log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+h
+
+efθ
+
+i 
+
+. (31) As the predicted head fθ is a special case in TZ |TZ : Ω Z −→ R, therefore: TC (z(1) , . . . , z (M ), y ) = sup   
+
+> TZ:Ω Z
+
+−→R
+
+EPZ(1) ,..., Z(M ),Y [TZ ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+h
+
+eTZ
+
+i 
+
+≥EPZ(1) ,..., Z(M ),Y [fθ ] − log 
+
+
+
+EPZ(1) ×···× PZ(M ) ×PY
+
+h
+
+efθ
+
+i 
+
+= −L TCMax ,
+
+(32) thus, we prove the second inequality in the proposition. 
+
+A.3 PROOF OF PROPOSITION 2
+
+Proposition 5 (Proposition 2 restated) The supremum in in Equation 17 reaches its upper bound if and only if 
+
+PZ(1) ,..., Z(M ),Y = G, where G is the Gibbs distribution defined as dG = eT
+
+> EQ
+
+[eT ] dQ and Q = PZ(1) × · · · × 
+
+PZ(M ) × PY .
+
+The supremum in Equation 17 reaches its upper bound when the gap is equal to 0, 
+
+∆ ≡ DKL (P∥Q) − EP[T ] − log 
+
+
+
+EQ[eT ]
+
+
+
+= 0 , (33) where P = PZ(1) ,..., Z(M ),Y , Q = PZ(1) × · · · × PZ(M ) × PY . With the Gibbs distribution defined as 
+
+dG = eT 
+
+> Z
+
+dQ, we have: 
+
+0 = DKL (P∥Q) − EP [T ] − log 
+
+
+
+EQ
+
+h
+
+eT i 
+
+= DKL (P∥G) , (34) where the second equality uses Equation 22. With Gibbs’ inequality, we know DKL (P∥G) equals 0 if and only if P = Q. Thus, we prove Proposition 5. 
+
+A.4 PROOF OF PROPOSITION 3
+
+Proposition 6 (Proposition 3 restated) The two inequalities in Equation 27 simultaneously hold as equalities if and only if PX (1) ,..., X (M ),Y = ˆG, where ˆG is the Gibbs distribution defined as d ˆG = eFΘ
+
+> EQ
+
+[eFΘ ] dQ and 
+
+Q = PX (1) × · · · × PX (M ) × PY .
+
+14 Published as a conference paper at ICLR 2026 
+
+Consider the TCMax loss: 
+
+LTCMax = −EPX (1) ,..., X (M ),Y [FΘ] + log 
+
+
+
+EPX (1) ×···× PX (M ) ×PY
+
+h
+
+eFΘ
+
+i 
+
+. (35) When two inequalities in Equation 27 simultaneously hold, we have: TC (x(1) , . . . , x (M ), y ) = sup   
+
+> TX:Ω X
+
+−→R
+
+EPX (1) ,..., X (M ),Y [TX ] − log 
+
+
+
+EPX (1) ×···× PX (M ) ×PY
+
+h
+
+eTX
+
+i 
+
+= − L TCMax 
+
+=EPX (1) ,..., X (M ),Y [FΘ] − log 
+
+
+
+EPX (1) ×···× PX (M ) ×PY
+
+h
+
+eFΘ
+
+i 
+
+.
+
+(36) Hence, FΘ reaches the upper bound of the supremum. With Proposition 5, we know Equation 36 holds if and only if PX (1) ,..., X (M ),Y = ˆG. Thus, we prove the proposition. 
+
+A.5 DERIVATION OF EQUATION 14 
+
+Since batch B is sampled according to the overall data distribution, we can consider the samples (x(a) 
+
+> i
+
+, x (v) 
+
+> i
+
+, y i),
+
+∀i ∈ B as drawn from PA,V,Y , where x(a) 
+
+> i
+
+, x(v) 
+
+> i
+
+, and yi follow the marginal distributions PA, PV , and PY ,respectively. Since label distributions are generally assumed to be relatively uniform, we hypothesize PY to be a uniform distribution over Y. Thus, in calculations, PY is directly treated as uniform without relying on batch sampling results. Substituting the assumptions into Equation 11 yields: 
+
+LTCMax = − 1
+
+|B| 
+
+X
+
+> i∈B
+
+
+
+fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> i
+
+), ψ (v)Θv (x(v) 
+
+> i
+
+)
+
+
+
+> yi
+
+
+
++ log 
+
+
+
+1
+
+|B × B × Y| 
+
+X 
+
+> (j,k,y ′)∈B×B×Y
+
+exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> j
+
+), ψ (v)Θv (x(v) 
+
+> k
+
+)
+
+
+
+> y′
+
+
+
+= − 1
+
+|B| 
+
+X
+
+> i∈B
+
+log exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> i
+
+), ψ (v)Θv (x(v) 
+
+> i
+
+)
+
+
+
+> yi
+
+P  
+
+> (j,k,y ′)∈B×B×Y
+
+exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> j
+
+), ψ (v)Θv (x(v) 
+
+> k
+
+)
+
+
+
+> y′
+
+− log |B × B × Y| 
+
+= − 1
+
+|B| 
+
+X
+
+> i∈B
+
+log exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> i
+
+), ψ (v)Θv (x(v) 
+
+> i
+
+)
+
+
+
+> yi
+
+P  
+
+> (j,k,y ′)∈B×B×Y
+
+exp fθ
+
+
+
+ψ(a)Θa (x(a) 
+
+> j
+
+), ψ (v)Θv (x(v) 
+
+> k
+
+)
+
+
+
+> y′
+
+− log |B| 2|Y| ,
+
+(37) Thus, Equation 14 is obtained. 
+
+## B DETAILS OF EXPERIMENT 
+
+B.1 DETAILS OF BASELINES 
+
+Concatenation Concatenation is a straightforward approach to multimodal fusion where the features from different modalities are combined by concatenating them into a single feature vector. In our experiments, we feed the combining vector into a single fully connected layer to get the prediction, which can be denoted as 
+
+f (Xi) = W [h1(xi, 1), · · · hM (xi,M )]+ b. It can be decomposed as f (Xi) = PMm=1 {Wmhm(xi,m ) + b/M }
+
+so can be simplified during training and define the output of modality m is fm = Wmhm(xi,m )+ b/M following Peng et al. (2022). 
+
+Share Prediction Head This method uses a shared prediction head to calculate the output of every modality, then sums up all outputs from all modalities as the final output. Same as concatenation, we use a single fully connected layer as the shared head, and output can be denoted as f (Xi) = PMm=1 {W h m(xi,m ) + b/M }.Output of modality m is defined as fm = W h m(xi,m ) + b/M .
+
+FiLM Perez et al. (2018) FiLM modulates the feature from a modality using the feature from the other modality. Specifically, a FiLM layer performs a straightforward affine transformation on each feature of a neural network’s intermediate representations, modulated by an arbitrary input. The output by FiLM is denoted as 
+
+f (Xi) = g (γ (h2(xi, 2)) ◦ h1(xi, 1) + β (h2(xi, 2))) , where g, γ and β are fully connected layers and ◦ here is the Hadamard product. 
+
+15 Published as a conference paper at ICLR 2026 
+
+Gated Kiela et al. (2018) Similar to FiLM, Gated uses the feature from one modality to modulate the other. The output of Gated is denoted as f (Xi) = g (γ (h1(xi, 1)) ◦ σ (β (h2(xi, 2)))) , where g, γ and β are fully connected layers and σ is the sigmoid function. Notice the form of output by FiLM and Gated can not be decomposed into parts of modalities, so in our experiment, we deactivate a modality by inputting a zero tensor to get the single modality performance. In our experiment, audio modality is modality 1 and visual modality is modality 2 in the formula. 
+
+Unimodal Learning Naive Unimodal Learning trains each modality separately and combines them during the prediction phase. Training separately helps the encoder of each modality efficiently learn modality-specific information. However, the model is unable to tell whether inputs from different modalities come from the same sample as modalities is inputted independently during training. 
+
+B.2 DETAILS OF THE EXPERIMENT ON MVSA (T ABLE 3) 
+
+In the experiment, to align with CLIP’s prediction paradigm, we define class-specific features c(i) 
+
+> y
+
+and c(t) 
+
+> y
+
+for each class. For each label y, the model’s output logit is computed as: 
+
+fθ (fi, f t) = s(c(i) 
+
+> y
+
+, f i)
+
+τ + s(c(t) 
+
+> y
+
+, f t)
+
+τ (38) where: • θ = {c(i) 
+
+> y
+
+|y ∈ Y} ∪ { c(t) 
+
+> y
+
+|y ∈ Y} is the trainable class-specific features • fi and ft are CLIP’s output features • τ is CLIP’s temperature coefficient • s(·, ·) denotes cosine similarity Training configuration: • Total epochs: 100 • Batch size: 32 • Learning rate: 0.01 (decayed to 0.001 after epoch 70) Due to the relatively small accuracy differences observed in the experiment, we include error bounds with 95% 
+
+confidence intervals in Table 5. The results show that although the performance is very close, there is no overlap between the confidence intervals of multimodal accuracy (Multi) of TCMax and the second-best method (Joint Learning). This statistically significant difference ( p > 0.975 2 > 0.95 ) confirms that the performance gap is not caused by experimental variance. 
+
+Table 5: Result of the average test accuracy(%) of 10 random seeds on MVSA with frozen CLIP pretrained encoders. We report the 95% confidence intervals. 
+
+Methods RN50 ViT-B/32 Image Text Multi Image Text Multi 
+
+Joint 75 .76 ± 0.20 73 .60 ± 0.16 81 .23 ± 0.27 76 .88 ± 0.09 74 .27 ± 0.27 82 .83 ± 0.15 
+
+Unimodal 76.74 ± 0.07 77.16 ± 0.22 80 .02 ± 0.13 78.54 ± 0.09 76.97 ± 0.07 81 .77 ± 0.15 
+
+TCMax 75 .38 ± 0.12 74 .97 ± 0.54 81.75 ± 0.23 78 .03 ± 0.16 76 .55 ± 0.22 84.05 ± 0.15 
+
+## C POTENTIAL IN REGRESSION TASKS 
+
+Although this paper primarily focuses on the task of multimodal image classification, TCMax may also be applied to other tasks, such as regression. Here, we use a simple regression task as an example to explore the potential of TCMax in regression scenarios. We employ two sentiment analysis datasets: CMU-MOSI and CMU-MOSEI. We use MAG-BERT Rahman et al. (2020) as the baseline, which takes multimodal inputs from audio ( A), visual ( V), and text ( L) modalities and outputs a continuous value ( Y) representing the degree of positive sentiment. To train with TCMax we first define the mapping FΘ : A × V × L × Y → R in Equation 11. 
+
+16 Published as a conference paper at ICLR 2026 
+
+We modified the prediction head to output both the predicted value and its confidence: ypred = ypred (a, v, l )
+
+and cpred (a, v, l ). We define FΘ in our paper’s Equation 11 as: 
+
+FΘ(a, v, l, y ) = − (ypred (a, v, l ) − y)2
+
+σ2 + λc pred (a, v, l ), (39) where σ represents the standard deviation in the predicted Gaussian distribution, and λ is a multiplicative coefficient to facilitate analysis. Let B and Bns denote the batch and sampled negative set, respectively. Substituting this into Equation 11 yields: 
+
+LTCMax = − E(a,v,l,y )∈B 
+
+
+
+− (ypred (a, v, l ) − y)2
+
+σ2 + λc pred (a, v, l )
+
+
+
++ log E(a,v,l,y )∈B ns 
+
+
+
+exp 
+
+
+
+− (ypred (a, v, l ) − y)2
+
+σ2 + λc pred (a, v, l )
+
+ 
+
+.
+
+(40) For classification tasks where y takes discrete values, we conventionally assume a uniform distribution PY since labels typically occur with roughly equal frequency. However, in this continuous y case, we must explicitly define y’s probability distribution in Bns . For the derivation, we assume y follows a uniform distribution over interval [a, b ], yielding the following loss function: 
+
+LTCMax = 1
+
+σ2 E(a,v,l,y )∈B 
+
+(ypred (a, v, l ) − y)2| {z }
+
+> MSE
+
++ λ −E(a,v,l,y )∈B [cpred (a, v, l )] + log E(a,v,l,y )∈B ns [exp ( cpred (a, v, l ))] 
+
+| {z }
+
+> TCMax
+
++ log 
+
+Z ba
+
+exp 
+
+
+
+− (ypred (a, v, l ) − y)2
+
+σ2
+
+
+
+dy − log ( b − a).
+
+(41) By taking the limits as a → −∞ and b → +∞ (i.e., extending to R), while observing that the − log ( b − a)
+
+term becomes divergent yet vanishes during differentiation (being a constant), we obtain the final form: 
+
+LTCMax = 1
+
+σ2 E(a,v,l,y )∈B 
+
+(ypred (a, v, l ) − y)2| {z }
+
+> MSE
+
++ λ −E(a,v,l,y )∈B [cpred (a, v, l )] + log E(a,v,l,y )∈B ns [exp ( cpred (a, v, l ))] 
+
+| {z }
+
+> TCMax
+
++ lim  
+
+> a→−∞
+
+lim  
+
+> b−>+∞
+
+log 
+
+Z ba
+
+exp 
+
+
+
+− (ypred (a, v, l ) − y)2
+
+σ2
+
+
+
+dy
+
+= 1
+
+σ2 E(a,v,l,y )∈B 
+
+(ypred (a, v, l ) − y)2| {z }
+
+> MSE
+
++ λ −E(a,v,l,y )∈B [cpred (a, v, l )] + log E(a,v,l,y )∈B ns [exp ( cpred (a, v, l ))] 
+
+| {z }
+
+> TCMax
+
++ log √πσ. 
+
+(42) The resulting loss function naturally decomposes into two components: (1) The first term constrains regression accuracy (MSE); (2) The second term enforces TCMax’s cross-modal alignment constraint on (a, v, l ) triplets. When λ = 0 (eliminating cpred ), the loss reduces to conventional MSE as the second term is eliminated. Table 6 presents the experimental results on the CMU-MOSI and CMU-MOSEI datasets. After training with TCMax, the model achieves modest improvements on both datasets. This suggests that TCMax may hold potential research value for such regression tasks, and further in-depth studies will be conducted in the future. 
+
+Table 6: Result on CMU-MOSI and CMU-MOSEI datasets. For CMU-MOSI, we set σ = 0 .5, while for CMU-MOSEI, σ = 0 .75 . In all experiments, λ = 1 , and all results represent averages across three random seeds. Dataset Mehod Binary Acc ↑ F1 ↑ MAE ↓ Corr ↑
+
+CMU-MOSI Baseline (MAG-BERT) 83.36 83.21 0.7938 0.7644 TCMax 84.27 84.13 0.7775 0.7753 CMU-MOSEI Baseline (MAG-BERT) 85.14 85.10 0.5903 0.7867 TCMax 85.61 85.52 0.5889 0.7887 
+
+17

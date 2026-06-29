@@ -1,0 +1,557 @@
+Title: 10231_ICLR_Iterative_Optimizat.pdf
+
+URL Source: https://openreview.net/pdf?id=3bfseFWNUH
+
+Number of Pages: 13
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# ICLR: I TERATIVE OPTIMIZATION FOR INFORMATION 
+
+# EXTRACTION ON IN-C ONTEXT LEARNING VIA RULE 
+
+# FILTERING 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+ABSTRACT 
+
+Existing information extraction (IE) tasks, such as named entity recognition (NER) and relation extraction (RE), typically rely on fine-tuning or few-shot learn-ing methods. In few-shot learning, large language models (LLMs) demonstrate excellent performance through in-context learning (ICL), which involves guiding the model by providing a few examples or rules in the prompt. However, a ma-jor challenge with this approach is the selection and optimization of contextual information for diverse IE tasks. In this work, we introduce ICLR (Iterative Con-text Learning Rule), a control-theoretic framework that models rule optimization as an adaptive filtering problem for comprehensive information extraction. We treat rules as controllable state variables and design an observer system to mon-itor and control LLM behavior indirectly, without modifying model parameters. Our method iteratively estimates and updates the optimal rule combinations us-ing performance feedback, thereby reformulating the traditionally complex prob-lem of LLM control into a well-defined state-space optimization that generalizes across multiple IE tasks. We evaluate ICLR on both NER datasets (CoNLL03, ACE05, GENIA) and RE datasets (NYT, CoNLL04), demonstrating rapid con-vergence and superior performance with minimal training data requirements. Our approach achieves up to 10% performance improvement over state-of-the-art ICL methods while requiring no additional model training and ICLR provides the first control-theoretic foundation for understanding and optimizing in-context learning behavior in information extraction. 
+
+1 INTRODUCTION 
+
+Recent information extraction (IE) methods, such as named entity recognition (NER) and rela-tion extraction (RE), increasingly rely on in-context learning (ICL), where large language models (LLMs) (Brown et al., 2020) are guided by examples. While it’s commonly thought that LLMs learn from these specific examples, evidence suggests a different mechanism. Min et al. (2022) and Huang et al. (2025) have demonstrated that models perform well even with incorrect labels, suggesting that LLMs are more responsive to abstract structural patterns than to concrete input-output pairs. For IE tasks specifically, this phenomenon is particularly pronounced due to inherent inconsistencies in annotation definitions across datasets. This observation leads to a fundamental question: what drives effective in-context learning for tasks like information extraction? Recent work, particularly GuideNER (Huang et al., 2025), provides compelling evidence that ex-plicit annotation guidelines outperform traditional example-based approaches in NER tasks. How-ever, GuideNER’s approach of selecting top-k rules based on simple frequency heuristics has in-herent limitations in capturing the complex interdependencies between rules and their collective impact on performance across diverse IE tasks. Figure 1 illustrates this limitation: GuideNER re-quires traversing the complete dataset to identify the top-k most frequent rules, which is highly resource-intensive. In contrast, our method only needs to utilize a small portion of the dataset to automatically search for optimal particle combination strategies, thereby achieving superior per-formance. Moreover, by abstracting rules into subcategories, our method can generalize across all information extraction tasks. 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 Search  
+
+> Fill in
+> Rules
+> Generate
+> Fill in
+> Rules
+> GuideNER
+> Our method
+
+Figure 1: Comparison between GuideNER’s static rule selection and our dynamic optimiza-tion framework State Initialization & Rule Extraction          
+
+> Step 1: Initialize particle population
+> Step 2: Extract rules from training data using LLM in
+> format (c, p)
+> Step 3: Set prior weights via LLM internal belief
+> Step 4: Apply softmax normalization
+> Control Action:
+> Resampling
+> System Estimation:
+> Weight Update
+> System Observation:
+> Evaluation
+> 1. Token Likelihood
+> Probability
+> Multiplication
+> 2. Softmax Normalization
+> •Tier 1 -Performance-
+> based selection
+> •Tier 2 -Diversity
+> Mutation LLM
+
+Figure 2: ICLR algorithm overview showing the complete iterative process from initialization to resampling Building on this insight, we propose to view rules not merely as contextual information, but as 
+
+controllable state variables that define the LLM’s operational behavior for information extraction. Traditional approaches to LLM optimization face a fundamental challenge: the massive parameter space renders direct observation and control intractable. However, by treating rules as externally observable and controllable state variables, we can construct an observer system that enables sys-tematic monitoring and control of LLM behavior without parameter modification. This reformulation transforms the traditionally intractable problem of LLM control into a well-defined state-space optimization problem. Unlike internal LLM parameters, rules possess advanta-geous properties for control: external observability, semantic interpretability, systematic controlla-bility, and lower dimensionality. In this paper, we introduce ICLR (Iterative Context Learning Rule) , a control-theoretic frame-work that treats rule optimization as an adaptive filtering problem for comprehensive information extraction. Our approach iteratively estimates and updates the optimal rule state through perfor-mance feedback, creating a closed-loop system where observed IE performance directly influences subsequent rule modifications. Our key contributions are threefold: • We propose the first control-theoretic framework for ICL optimization in information ex-traction, providing a new theoretical foundation for understanding LLM behavior through external state variables; • We develop ICLR, an efficient adaptive filtering algorithm that demonstrates both rapid convergence and data efficiency, extracting optimal rule combinations with minimal train-ing samples while achieving faster optimization compared to existing methods; • We demonstrate consistent improvements over state-of-the-art methods across both NER and RE datasets while requiring no additional model training and significantly shorter prompts. 
+
+2 RELATED WORK 
+
+2.1 IN-C ONTEXT LEARNING FOR INFORMATION EXTRACTION 
+
+In-context learning has emerged as a powerful paradigm for natural language processing tasks, al-lowing large language models to adapt to new tasks through demonstration examples without pa-rameter updates (Brown et al., 2020; Wei et al., 2022; Min et al., 2022). Traditional ICL approaches for information extraction rely on example-based demonstrations, where models learn input-output 2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 mappings through pattern recognition from the provided examples (Dong et al., 2022; Li et al., 2023b). However, example-based ICL faces challenges due to inconsistent annotation definitions across datasets, making it difficult for models to learn consistent patterns from conflicting examples. Huang et al. (2025) proposed GuideNER, which replaces example-based demonstrations with LLM-generated annotation guidelines, showing that explicit rules outperform traditional example-based methods. However, GuideNER’s extension to comprehensive information extraction tasks remains underexplored, and it relies on heuristic frequency-based filtering rather than systematic optimiza-tion strategies for rule combination across diverse IE tasks. For relation extraction specifically, ICL approaches face additional challenges in capturing com-plex inter-entity dependencies and contextual relationship patterns. GPT-RE retrieves task-aware demonstrations and augments them with label-guided reasoning to boost sentence-level RE, yet per-formance remains sensitive to example quality and handling of the no-relation class (Wan et al., 2023). Wadhwa et al. (2023) show that few-shot LLMs can approach fully supervised baselines, but they also document substantial variance across prompts and evaluation protocols. To better match structured outputs, CodeIE reformulates IE as code generation and leverages code LLMs for schema-constrained predictions, but still relies on fixed label verbalizations and inherits ICL’s sensitivity to example selection (Li et al., 2023a). The need for structured rule representations that can handle both entity recognition and relation identification simultaneously presents unique optimization challenges that current methods do not adequately address. 2.2 OPTIMIZATION APPROACHES FOR LLM B EHAVIOR 
+
+The challenge of optimizing LLM behavior has been approached from various angles, which can be broadly categorized into three main directions: prompt engineering (Liu et al., 2023), fine-tuning methods (Wei et al., 2021), and retrieval-augmented approaches (Liu et al., 2021). Prompt engi-neering focuses on crafting optimal input formulations to elicit desired model behaviors without modifying model parameters. Fine-tuning approaches adapt pre-trained models to specific tasks through continued training, though this requires substantial computational resources and labeled data. Retrieval-augmented methods enhance model performance by dynamically incorporating rel-evant external information during inference. Most existing methods focus on improving demonstration selection through similarity-based re-trieval (Rubin et al., 2021) or supervised learning approaches (Li et al., 2023b). These approaches typically rely on semantic similarity metrics or learned representations to identify the most relevant examples for a given input. However, such methods often fail to account for the complex interactions between multiple examples and their collective impact on model behavior. However, these approaches face a fundamental limitation: the massive parameter space of LLMs renders direct observation and control intractable, leading to heuristic optimization strategies that lack systematic principles. Recent work has explored population-based optimization strategies for LLM reasoning. Qi et al. (2024) introduced evolutionary algorithms for multi-modal reasoning, using genetic operators to balance quality and diversity in solution generation. While their approach demonstrates the potential of population-based methods, it focuses on reasoning path optimization rather than systematic rule optimization for structured prediction tasks like NER. Despite these advances, existing optimization approaches remain limited by the ”black box” nature of LLMs. Current methods either require extensive computational resources for parameter modifi-cation or rely on heuristic strategies without theoretical foundations. The application of systematic control frameworks to LLM optimization, particularly for ICL rule selection, remains largely un-explored, presenting opportunities for more principled optimization approaches that treat rules as external state variables. 
+
+3 METHODOLOGY : ICLR 
+
+Our ICLR framework consists of a comprehensive control-theoretic approach for rule optimiza-tion, as illustrated in Figure 2 and Figure 3. Figure 2 shows the algorithmic overview with the 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 Particle    
+
+> Training dataset
+> Sentence 1
+> Sentence 2
+> Sentence n
+
+Particle Generator               
+
+> Prompt:
+> List 3typical
+> subcategories
+> people usually
+> think of when
+> they hear
+> ‘Person’
+> Person:
+> name, full
+> name, athlete,
+> individual,
+> public figure
+> Person: full name
+> Person: athlete
+> Person: individual
+> Person: president
+
+Posterior Probability 
+
+Calculator         
+
+> Training data:
+> Ilian Simeonov
+> +
+> Label:
+> Person: name,
+> full name...
+> Person: name
+> Output:
+> Ilian Simeonov
+> :person
+> Answer
+> Label :
+> probability
+
+Retain       
+
+> full name: 0.54
+> athlete :0.84
+> father: 0.58
+> politician: 0.49
+
+...  individual: 0.62             
+
+> name :0.68
+> Training data:
+> R.Irani not out
+> 6
+> Prompt:
+> List 5typical
+> subcategories
+> related to
+> ‘Person’ in this
+> context.
+> Person: player
+> Person: all-
+> rounder
+
+Resampler    
+
+> Person: politician
+> Player: 0.82
+> All-rounder: 0.78
+
+New Particle           
+
+> Person: father
+> Person: full name
+> Person: politician
+> Person: all-rounder
+> Person: athlete
+> Person: player
+> Training dataset
+> Sentence n+1
+> Sentence n+2
+> Sentence 2n
+
+... 
+
+> Discard
+> LLM
+
+Figure 3: Overall framework of ICLR showing the particle-based rule optimization pipeline with iterative generation (Particle Generator), evaluation(Posterior Probability Calculator), selection (Re-tain), and mutation (Resampler) phases guided by LLM performance feedback. four key steps of our adaptive filtering process, while Figure 3 presents the overall system archi-tecture demonstrating the particle-based optimization flow. Figure 3 illustrates the particle-based rule optimization process. First, in the Particle Generator stage, the LLM generates several typical subcategories related to the target concept (e.g., Person), which, together with their labels, form a batch of “particles.” The red particles in the figure represent those retained from the previous round, while the green particles represent the newly generated ones in the current round. Next, in the Pos-terior Probability Calculator stage, the model matches these particles with samples from the training dataset and computes their confidence scores on the current batch, thereby obtaining the posterior probabilities of each particle. In the Retain stage, high-confidence particles are preserved, while low-confidence ones are discarded. To maintain diversity, the process proceeds to the Resampler stage, where new or mutated particles are generated based on new training data and prompts to supplement and expand the particle set. Finally, in the New Particle stage, the newly generated and retained par-ticles are combined and fed into the next batch of training data for further updating and evaluation. Through this iterative process, the particle set is progressively optimized, resulting in a more robust and efficient rule collection. 3.1 PROBLEM FORMULATION 
+
+Given a pre-trained large language model M and a target dataset D = {(xi, y i)}Ni=1 with training split Dtrain and test split Dtest , our goal is to find an optimal rule list R∗ that maximizes the model’s information extraction performance on the test set. 3.1.1 DATASET -S PECIFIC OPTIMIZATION 
+
+Since different datasets have varying data distributions and annotation conventions, we need to adapt the rule selection to each specific dataset. Using only the training portion Dtrain , we extract and optimize a rule list R∗ that is tailored to both the dataset characteristics and the specific LLM’s behavior. 3.1.2 ICL-BASED EXTRACTION 
+
+For any input x, the extraction process follows: 
+
+ˆy = M(Prompt (x, R t)) (1) where M is the pre-trained LLM, Prompt (x, R t) constructs the input prompt by combining text x
+
+with the optimal rule configuration Rt, and ˆy is the predicted extraction output. 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 3.1.3 OPTIMIZATION OBJECTIVE 
+
+We seek to find the optimal rule configuration that maximizes performance on unseen data. Fol-lowing standard machine learning practice, we split the available training data into training and validation sets, and optimize rules based on validation performance: 
+
+R∗ 
+
+> t
+
+= arg max 
+
+> Rt
+
+1
+
+|D val |
+
+X
+
+> (x,y )∈D val
+
+F (M(Prompt (x, R t)) , y ) (2) where Rt = {(p(t) 
+
+> i
+
+, c i, w (t) 
+
+> i
+
+)}Ni=1 represents a rule configuration with N particles at iteration t,where p(t) 
+
+> i
+
+is the i-th subcategory pattern (particle), ci is its corresponding entity label, and w(t)
+
+> i
+
+is the confidence weight, F (·, ·) is a performance metric (e.g., F1 score). The rule extraction and initial population are derived from Dtrain , while the optimization objective is evaluated on the held-out validation set Dval to prevent overfitting. Final evaluation is performed on Dtest .3.1.4 CHALLENGES WITH EXISTING APPROACHES 
+
+While existing rule-based ICL methods like GuideNER have demonstrated the effectiveness of an-notation guidelines over examples, they lack systematic optimization strategies for rule selection and combination. Current approaches rely on heuristic frequency-based filtering, which fails to capture the complex interdependencies between rules and their collective impact on IE performance. 3.1.5 CONTROL -T HEORETIC REFORMULATION 
+
+Traditional LLM optimization faces a fundamental challenge: the massive parameter space (billions of parameters) renders direct observation and control intractable. We address this by treating rules as a low-dimensional, observable interface to the LLM system. Recent findings suggest that in-context learning operates as a rule-based inference system, where the quality of rules—not examples—determines performance. This motivates reformulating the op-timization as a control system problem, where rules serve as externally controllable state variables: 
+
+Rt+1 = f (Rt, u t) (Rule Evolution) (3) 
+
+yt = h(Rt) (Performance Observation) (4) where Rt represents the rule configuration at iteration t, ut denotes control actions (rule modifica-tions), and yt is the observed IE performance. 3.2 ADAPTIVE RULE FILTERING ALGORITHM 
+
+The discrete, combinatorial nature of rule spaces and nonlinear performance mappings makes clas-sical control methods inappropriate. We develop an adaptive filtering approach that iteratively esti-mates optimal rule configurations through performance feedback. As illustrated in Figure 2, our approach follows a systematic particle filtering process: 3.2.1 PARTICLE -BASED STATE REPRESENTATION 
+
+In our framework, each particle represents a subcategory pattern (e.g., ”person names with academic titles”), and each rule consists of a particle paired with its corresponding entity label (e.g., ”person names with titles” → PER). At time step t, the complete rule configuration is: 
+
+Rt = {(p(t) 
+
+> i
+
+, c i, w (t) 
+
+> i
+
+)}Ni=1 (5) as defined in Equation (2), where each tuple represents a complete rule with its associated weight. Our adaptive filtering approach optimizes the mapping relationships by filtering out noisy or ineffec-tive subcategory patterns while retaining those that contribute most to extraction performance. The 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 ”filtering” terminology reflects the need to reduce noise in particle weights and identify the most reliable pattern-label mappings. The final output combines the best-performing particles from the evolved population to form an optimized rule list containing multiple complementary rules across different entity types. The filtering process consists of four steps: 
+
+0. Initialization (Rule Extraction): We initialize the particle population by extracting initial rules from the training dataset using the GuideNER approach. For each input-label pair (xj , y j ) in the training set, we use LLM to summarize rule patterns: 
+
+p(0)  
+
+> i
+
+= LLM extract (xj , y j , prompt summary ) (6) The initial particles are assigned prior weights based on their alignment with LLM’s internal rule representations: 
+
+w(0)  
+
+> i
+
+= softmax (LLM confidence (p(0)  
+
+> i
+
+, θ )) (7) where LLM confidence (p(0)  
+
+> i
+
+, θ ) represents the average logits of the LLM’s output when using rule p(0) 
+
+> i
+
+as a guideline, reflecting the model’s confidence in the rule’s effectiveness. 
+
+1. Evaluation (ICL-based Observation): Each particle is evaluated through ICL-based IE infer-ence on a validation subset. The LLM uses the complete rule (particle + label) as an annotation guideline to perform information extraction: 
+
+y(t) 
+
+> i
+
+= softmax 
+
+
+
+> |Ti|
+
+Y
+
+> j=1
+
+P (tj |context , (p(t) 
+
+> i
+
+, c i)) 
+
+ (8) where P (tj |context , (p(t) 
+
+> i
+
+, c i)) represents the probability of generating token tj in the ICL-based IE output sequence Ti when using rule (p(t) 
+
+> i
+
+, c i) as the guideline. This likelihood-based evaluation serves as the observation step in our control system, providing probabilistic performance feedback for each rule hypothesis. 
+
+2. Weight Update (Bayesian Posterior): Particle weights are updated using Bayesian inference, combining prior knowledge with observed performance: 
+
+w(t) 
+
+> i
+
+∝ w(t−1)  
+
+> i
+
+· p(y(t) 
+
+> i
+
+|p(t) 
+
+> i
+
+) = w(t−1)  
+
+> i
+
+· exp( β · y(t) 
+
+> i
+
+) (9) where w(t−1)  
+
+> i
+
+represents the prior weight and p(y(t) 
+
+> i
+
+|p(t) 
+
+> i
+
+) is the likelihood of observing performance 
+
+y(t) 
+
+> i
+
+given rule p(t) 
+
+> i
+
+. The parameter β controls the selection pressure in the likelihood function. 
+
+3. Multi-level Resampling with Rule Mutation: We employ an ICL-based resampling strategy that includes rule generation and mutation, adapting the LLM-guided mutation approach from Qi et al. (2024): • Tier 1 (Performance-based Selection): Remove particles with weights below threshold based on ICL evaluation results • Tier 2 (Diversity Mutation): Apply semantic mutations to existing particles using ICL prompting. Each selected particle undergoes controlled semantic mutation through LLM-guided rule generation: 
+
+p(t|t−1)  
+
+> i
+
+= LLM mutate (p(t−1)  
+
+> i
+
+, u t) (10) Three mutation strategies are employed: 
+
+– Refinement: Increase specificity 
+
+– Generalization: Increase coverage 
+
+– Contextualization: Generate domain-specific rule variants 
+
+Component Assignment for New Particles: For newly generated or mutated particles, the three components are obtained as follows: 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 • Pattern ( p(t) 
+
+> i
+
+): Generated through LLM mutation as shown in Equation (10) • Label ( c(t) 
+
+> i
+
+): Inherited from the parent particle to maintain semantic consistency • Weight ( w(t) 
+
+> i
+
+): Assigned based on perplexity under the LLM: 
+
+w(t) 
+
+> i
+
+= softmax (−PPL (p(t) 
+
+> i
+
+)) (11) where PPL (p(t) 
+
+> i
+
+) = exp( − 1 
+
+> |p(t)
+> i|
+
+P 
+
+> j
+
+log P (tj |t<j )) is the perplexity of particle p(t) 
+
+> i
+
+computed as the exponentiated negative log-likelihood per token. Lower perplexity indicates that the rule text is more consistent with the model’s learned patterns. This integrated resampling process ensures that the particle population evolves systematically while maintaining the diversity necessary for effective exploration of the rule space. 
+
+4 EXPERIMENT 
+
+We conduct extensive experiments on multiple Information Extraction tasks to evaluate the effec-tiveness of our proposed approach. For fairness, we follow previous work and adopt F1-score as the evaluation metric throughout our experimental analysis. Our comprehensive evaluation demon-strates the superior performance of our method across diverse IE datasets, including NER and RE, and validates the generalization of our approach. 4.1 DATASETS 
+
+For named entity recognition, we evaluate on three datasets: CoNLL-2003(Tjong Kim Sang & De Meulder, 2003) is a standard benchmark containing news articles from the Reuters corpus, with four entity types: Person (PER), Location (LOC), Organization (ORG), and Miscellaneous (MISC). While ACE 2005(Walker et al., 2006) focuses on entity detection and classification in news and con-versational data. And GENIA(Kim et al., 2003) is a biomedical NER dataset containing abstracts from the MEDLINE database. For relation extraction, we utilize two established benchmarks: NYT(Riedel et al., 2010) (New York Times) dataset, which contains news articles with distant supervision for relation extraction between entity pairs. And CoNLL04(Roth & Yih, 2004) is a manually annotated dataset that provides both entity and relation annotations. This diverse collection of datasets allows us to demonstrate the effectiveness of our approach across different domains, including news, biomedical, general text, as well as different task formulations, thereby providing comprehensive evidence of our method’s robustness and generalizability. 4.2 EXPERIMENTS SETUP 
+
+All experiments are conducted on a computing cluster equipped with H100 GPUs for computational acceleration. They are implemented using PyTorch 2.6.0 and transformers 4.51.3. We employ four foundation models with varying scales, languages, and training datasets: Qwen2.5-3B, Qwen2.5-7B, Llama3.1-8B and Pixtral-12B. This selection allows us to investigate the impact of different model size (3B, 7B, 8B and 12B parameters) on our method’s performance. All models are tested with temperature set to 0.0 and random seed fixed at 42 to ensure reproducibility of the experiments and stability when generating posterior probabilities. In addition, during the computation of prior probabilities, all models are evaluated in eval mode to disable dropout and other stochastic behav-iors. This configuration ensures consistent experimental conditions and enables direct performance comparison across different models and datasets. 4.3 BASELINES 
+
+For baseline comparisons, we adopt the most widely-used ICL approaches in IE domain. This means that we do not employ any fine-tuned models or models with built-in chain-of-thought capabilities (e.g., Qwen3). We rely entirely on the models’ internal information extraction abilities to learn from 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 context. Our baseline methods include: GuideNER(Huang et al., 2025), the current state-of-the-art method, assists in-context learning by enabling the model to learn from the internal relationships within examples. However, GuideNER is specifically designed for NER tasks only, so in the fol-lowing comparisons, we only evaluate GuideNER’s performance on NER datasets. Therefore, in subsequent comparison results on non-NER tasks, GuideNER is represented with ”—” to indicate its inapplicability. The other baseline is CodeIE(Li et al., 2023a), which employs a sophisticated ex-ample selection process to enhance model performance. It is a strong baseline, featuring a carefully designed example selection strategy that is model-agnostic and consistently improves performance across different architectures and tasks. Additionally, we test the direct input-output (IO) approach, where the dataset is run on the original model without any examples or demonstrations, serving as the most fundamental baseline. This experimental design ensures that all baseline methods operate under the same paradigm of pure in-context learning, enabling fair comparison of different approaches’ effectiveness.                                                                                         
+
+> Method Model NER RE Token Cost CoNLL03 ACE05 GENIA NYT CoNLL04 IO Qwen-2.5-3b 60.29 20.43 30.43 7.00 3.05 285 Qwen-2.5-7b 62.37 36.53 45.20 10.62 4.32 Llama-3.1-8b 47.67 36.49 31.79 11.05 4.10 Pixtral-12B 31.98 25.51 14.02 10.47 0.00 CodeIE Qwen-2.5-3b 61.26 25.52 40.73 10.38 5.59 1172 Qwen-2.5-7b 65.32 42.43 47.59 15.43 10.56 ∗
+> Llama-3.1-8b 56.20 40.98 41.26 14.66 9.20 Pixtral-12B 34.28 26.54 16.53 15.12 5.43 GuideNER Qwen-2.5-3b 63.32 27.43 41.49 ——506 Qwen-2.5-7b 65.10 41.57 47.43 ——Llama-3.1-8b 61.38 44.97 42.86 ——Pixtral-12B 34.76 27.64 18.03 ——ICLR Qwen-2.5-3b 65.12 35.46 46.98 11.47 4.42 501 Qwen-2.5-7b 72.83 46.94 51.36 15.47 8.46 Llama-3.1-8b 69.14 53.10 50.15 15.18 8.93 Pixtral-12B 45.54 32.87 30.65 19.6 5.75
+
+Table 1: Performance comparison of different methods (IO, CodeIE, GuideNER, and ICLR) across Qwen-2.5, Llama-3.1, and Pixtral models on NER (CoNLL03, ACE05, GENIA) and RE (NYT, CoNLL04) benchmarks. The best result for each dataset is highlighted in bold with ∗. Gray shading indicates significant test p-value smaller than 0.05 when compared with IO, CodeIE and GuideNER. 4.4 MAIN RESULTS 
+
+Our experimental results, shown in Table1, reveal several key findings that provide important in-sights into the effectiveness and limitations of in-context learning for information extraction tasks. We observe that current ICL effectiveness remains constrained by models’ inherent capabilities, though parameter count does not necessarily correlate with performance. Despite Pixtral-12B having more parameters than Qwen-2.5-7B, it consistently underperforms across all tasks, suggesting that training data quality and architectural design may be more critical than raw parameter scale. What’s more, our method demonstrates substantial performance improvements over current state-of-the-art ICL approaches across all experimental tasks. ICLR achieves consistent gains ranging from 7.7% to 18.1% relative improvement on NER tasks, with particularly notable results on CoNLL03 where we achieve 72.83 F1 score compared to GuideNER’s 65.10 using Qwen2.5-7B. For relation extraction tasks, our method shows even more pronounced advantages, delivering up to 87% relative improvement on challenging datasets like NYT with Pixtral-12B. From a computational efficiency perspective, ICLR achieves comparable token consumption to GuideNER (501 vs 506 tokens) while delivering superior performance, and remains 57% more effi-cient than CodeIE (1172 tokens). 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 Finally, our approach demonstrates superior generalizability compared to current state-of-the-art methods. While GuideNER is specifically designed and limited to NER tasks, our method suc-cessfully extends to comprehensive information extraction scenarios, including both named entity recognition and relation extraction tasks. As evidenced in our experimental results, ICLR achieves consistent performance improvements across diverse IE tasks, enabling seamless adaptation across different information extraction paradigms. For a complete understanding of the operational me-chanics of our method, detailed execution steps of all components are provided in Appendix A. 1 3 5 7 9 11 13 15         
+
+> Context length (sentence)
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> F1 Score (%)
+> Impact of Context length in observation step on Performance
+> CoNLL03
+> GENIA
+> ACE05
+> Impact of Context Length 100 300 500 1000 2000 3000 4000 5000
+> Size of Training Set
+> 30
+> 40
+> 50
+> 60
+> 70
+> F1 Score (%)
+> The impact of number of training data on performance
+> CoNLL03
+> GENIA
+> ACE05 Impact of Training Data Quantity
+
+Figure 4: Performance Analysis: Token consumption and performance under different conditions. 4.5 PARAMETER SENSITIVITY ANALYSIS 
+
+Since ICLR functions as a unified sequential framework with tightly coupled components that pre-clude conventional ablation studies, we perform extensive parameter analysis on two key factors: context window length and training data size. 4.5.1 IMPACT OF CONTEXT WINDOW LENGTH ON ICLR P ERFORMANCE 
+
+The context window length determines how much historical information our method considers when computing posterior probabilities at each observation step. Figure 4 shows that performance im-proves significantly from single-sentence to four-sentence contexts due to smoother joint likelihood functions that provide more stable gradients. However, performance declines beyond 9 sentences as excessive observations lead to overly averaged particle weights, preventing effective updates. 4.5.2 IMPACT OF AMOUNT OF TRAINING DATA QUANTITY ON ICLR P ERFORMANCE 
+
+Our experimental results demonstrate distinct performance saturation patterns across different datasets. As shown in Figure 4, our method exhibits rapid performance convergence with relatively small training sets. Specifically, on CoNLL03, performance reaches approximately 63% F1 score with just 100 training samples and plateaus around 65-66% with 300+ samples. Similarly, GE-NIA achieves 50% F1 with 100 samples and stabilizes around 55-57% with larger training sets. ACE05 shows a more gradual improvement from 40% to 45% F1 score. Notably, performance gains become marginal beyond 1000 training samples across all datasets, suggesting our method can achieve near-optimal performance with limited supervision, making it particularly suitable for resource-constrained scenarios. 
+
+5 CONCLUSION 
+
+In this paper, we propose ICLR, a general framework that can efficiently traverse training sets and rapidly extract specific relationships from training data using particle-based methods. We have con-ducted extensive experiments to demonstrate the effectiveness of our approach. Additionally, we acknowledge the limitations of our method, such as the generation of a large number of particles to achieve rapid convergence, which increases inference burden and computational costs. Therefore, our future research will focus on improving particle utilization efficiency to enhance the overall system performance. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+REFERENCES 
+
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, et al. Language models are few-shot learners. Advances in neural information processing systems , 33:1877–1901, 2020. Qingxiu Dong, Lei Li, Damai Dai, Ce Zheng, Jingyuan Ma, Rui Li, Heming Xia, Jingjing Xu, Zhiyong Wu, Tianyu Liu, et al. A survey on in-context learning. arXiv preprint arXiv:2301.00234 ,2022. Shizhou Huang, Bo Xu, Yang Yu, Changqun Li, and Xin Alex Lin. Guidener: Annotation guidelines are better than examples for in-context named entity recognition. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pp. 24159–24166, 2025. J-D Kim, Tomoko Ohta, Yuka Tateisi, and Jun’ichi Tsujii. Genia corpus—a semantically annotated corpus for bio-textmining. Bioinformatics , 19(suppl 1):i180–i182, 2003. Peng Li, Tianxiang Sun, Qiong Tang, Hang Yan, Yuanbin Wu, Xuan-Jing Huang, and Xipeng Qiu. Codeie: Large code generation models are better few-shot information extractors. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 15339–15353, 2023a. Xiaonan Li, Kai Lv, Hang Yan, Tianyang Lin, Wei Zhu, Yuan Ni, Guotong Xie, Xiaoling Wang, and Xipeng Qiu. Unified demonstration retriever for in-context learning. arXiv preprint arXiv:2305.04320 , 2023b. Jiachang Liu, Dinghan Shen, Yizhe Zhang, Bill Dolan, Lawrence Carin, and Weizhu Chen. What makes good in-context examples for gpt-3? arXiv preprint arXiv:2101.06804 , 2021. Pengfei Liu, Weizhe Yuan, Jinlan Fu, Zhengbao Jiang, Hiroaki Hayashi, and Graham Neubig. Pre-train, prompt, and predict: A systematic survey of prompting methods in natural language pro-cessing. ACM computing surveys , 55(9):1–35, 2023. Sewon Min, Xinxi Lyu, Ari Holtzman, Mikel Artetxe, Mike Lewis, Hannaneh Hajishirzi, and Luke Zettlemoyer. Rethinking the role of demonstrations: What makes in-context learning work? arXiv preprint arXiv:2202.12837 , 2022. Biqing Qi, Zhouyi Qian, Yiang Luo, Junqi Gao, Dong Li, Kaiyan Zhang, and Bowen Zhou. Evo-lution of thought: Diverse and high-quality reasoning via multi-objective optimization. arXiv preprint arXiv:2412.07779 , 2024. Sebastian Riedel, Limin Yao, and Andrew McCallum. Modeling relations and their mentions with-out labeled text. In Joint European conference on machine learning and knowledge discovery in databases , pp. 148–163. Springer, 2010. Dan Roth and Wen-tau Yih. A linear programming formulation for global inference in natural language tasks. 2004. Ohad Rubin, Jonathan Herzig, and Jonathan Berant. Learning to retrieve prompts for in-context learning. arXiv preprint arXiv:2112.08633 , 2021. Erik F. Tjong Kim Sang and Fien De Meulder. Introduction to the CoNLL-2003 shared task: Language-independent named entity recognition. In Proceedings of the Seventh Conference on Natural Language Learning at HLT-NAACL 2003 , pp. 142–147, 2003. URL https://aclanthology. org/W03-0419/. Somin Wadhwa, Silvio Amir, and Byron C Wallace. Revisiting relation extraction in the era of large language models. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 15566–15589, 2023. Christopher Walker, Stephanie Strassel, Julie Medero, and Kazuaki Maeda. Ace 2005 multilingual training corpus. (No Title) , 2006. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Zhen Wan, Fei Cheng, Zhuoyuan Mao, Qianying Liu, Haiyue Song, Jiwei Li, and Sadao Kurohashi. Gpt-re: In-context learning for relation extraction using large language models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 3534–3547, 2023. Jason Wei, Maarten Bosma, Vincent Y Zhao, Kelvin Guu, Adams Wei Yu, Brian Lester, Nan Du, Andrew M Dai, and Quoc V Le. Finetuned language models are zero-shot learners. arXiv preprint arXiv:2109.01652 , 2021. Jason Wei, Yi Tay, Rishi Bommasani, Colin Raffel, Barret Zoph, Sebastian Borgeaud, Dani Yo-gatama, Maarten Bosma, Denny Zhou, Donald Metzler, et al. Emergent abilities of large language models. arXiv preprint arXiv:2206.07682 , 2022. 
+
+A CASE STUDY 
+
+We present a case study using a CoNLL-2003 sentence to illustrate our three-stage workflow: par-ticle generator, posterior probability calculator, and resampler. Here, x represents label sequences, 
+
+N denotes the number of generation rules, and Y represents input text. It is worth noting that the following case studies present simplified examples to illustrate our framework’s workflow. All ex-periments follow the technical specifications detailed in Section 3. A.1 CASE STUDY 1: P ARTICLE GENERATOR Prompt Template:   
+
+> Create subcategories for: X
+> Format: {"X": {subcategory}}
+> Output Rules:
+> "organization": ["sports tesm", "city", "company", "name", "financial institution",... ]
+> "person": ["name", "full name", "athlete", "individual", "public figure" ],...
+> Input:
+> X:Person, Organization, Location, ...
+
+Figure 5: Case study showing the prompt template for subcategory generation. The template guides the model to generate semantic subcategories for named entity labels, demonstrated with organiza-tion and person entity types. Particle generation serves as the initial step in our framework to obtain initial particles and compute their corresponding prior probabilities. We demonstrate this process using the label ”organization” as an example. As shown in Figure5, our prompt template instructs the model to act as a subcat-egory generation expert, decomposing broad entity labels into semantically distinct subcategories with associated probability weights. For the ”organization” label, the system generates diverse sub-categories such as ”sports team”, ”city”, ”company”, ”name”, and ”financial institution”. Each sub-category represents a different semantic interpretation of how organizations might appear in text, with the probability weights serving as prior probabilities that reflect their typical occurrence fre-quency. A.2 CASE STUDY 2: P OSTERIOR PROBABILITY CALCULATOR 
+
+Following particle generation, we compute posterior probabilities by evaluating how well each gen-erated rule performs on the actual classification task. Figure6 illustrates this process using the input text ”EU rejects German call to boycott British lamb.” The system applies the previously generated subcategory rules to identify entities in the given text. The likelihood of each particle is calculated 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Prompt Template:     
+
+> Classify entities in the text into predefined categories.
+> Label: Person, Organization, Location, ...
+> Input: Y
+> Output: Structured entity-category pairs
+> Model Output Rules:
+> "organization": ["sports team", "city", "company", "name", "financial institution",... ]
+> "person": ["name", "full name", "athlete", "individual", "public figure",... ]
+> Input Text:
+> Eu rejects German call to boycott British lamb.
+> Model Output Rules and Calculated Posterior Probability:
+> "organization": ["sports team: 0.9277", "city: 0.7073", "company: 0.4751", "name: 0.7891", "financial institution:
+> 0.6779",... ]
+> "person": ["name: 0.6850", "full name: 0.5437", "athlete: 0.1327", "individual: 0.6227", "public figure: 0.7104",... ]
+
+Figure 6: Case study demonstrating posterior probability calculation through likelihood estimation. The model evaluates generated rules against input text to compute particle posterior probabilities based on classification accuracy. based on the model’s ability to correctly identify and classify entities according to the generated rules. The posterior probability calculation applies Bayes’ theorem to update particle weights based on how well each rule matches the observed entity patterns in the input text. For instance, the ”or-ganization” subcategories show varying performance scores: ”sports team: 0.9277”, ”city: 0.7073”, ”company: 0.4751”, demonstrating how different semantic interpretations receive different posterior weights based on their effectiveness. This likelihood-based evaluation ensures that particles with bet-ter classification performance receive higher posterior probabilities, enabling the system to focus on the most promising labeling hypotheses for subsequent resampling. A.3 CASE STUDY 3: R ESAMPLER 
+
+The final stage employs an LLM-based resampling mechanism that performs context-aware particle mutation. As shown in Figure7, given the input text ”He said further scientific study was required and if it was found that action was needed it should be taken by the European Union,” the sys-tem generates contextually relevant subcategories. The resampling process works as follows: the LLM analyzes the specific context and mutates the original particles to better fit the observed text patterns. For the ”organization” label, the system generates context-specific subcategories such as ”educational institution,” ”non-governmental organization,” ”research institution,” and ”financial in-stitution,” which are more relevant to the scientific and policy context of the input. Prior probabilities are computed to indicate higher prior probability. For instance, ”educational institution: 0.340369” and ”non-governmental organization: 0.297805” receive relatively high priors due to their contex-tual relevance. This perplexity-based weighting ensures that contextually appropriate mutations are favored during the resampling process. 
+
+B USE OF LLM S
+
+In this paper, we employed Large Language Models (LLMs) as core components of our proposed ICLR framework in three specific stages. First, we utilized LLMs for rule extraction and particle generation to create initial subcategory patterns from training data, ensuring systematic rule discov-ery. Second, we leveraged LLMs for performance evaluation through in-context learning inference, where models assess rule effectiveness on validation datasets. Third, we employed LLMs for rule mutation and resampling to generate semantically diverse rule variants during the optimization pro-cess. 12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 Prompt Template: 
+
+Classify the label into more specific subcategories based on the provided context. 
+
+Label: X 
+
+Context Text: Y 
+
+Output: List of relevant subcategories 
+
+Model output: 
+
+"organization": ["educational_institution ", " non_governmental_organization ", " research_institution ", 
+
+"financial_institution ", " sports_team ",... ]
+
+"person": ["celebrity ", " family_member ", " colleague ", " fictional_character ", " historical_figure ",... ]
+
+Input Text: 
+
+He said further scientific study was required and if it was found that action was needed it should be taken by the 
+
+European Union . 
+
+Prior Probability: 
+
+"organization": ["educational_institution : 0.340369 ", " non_governmental_organization : 0.297805 ", 
+
+"research_institution : 0.144011 ", " financial_institution : 0.141820 ", " sports_team : 0.046757 ",... ]
+
+"person": ["celebrity : 0.258245 ", " family_member : 0.060173 ", " colleague : 0.036731 ", " fictional_character :
+
+0.370841 ", " historical_figure : 0.251535 ",... ]
+
+Figure 7: Case study demonstrating the resampling stage with particle mutation. Additionally, we used LLMs to assist with writing and language improvement throughout the manuscript preparation process. This included grammar checking, sentence structure optimization, and clarity enhancement to improve the overall readability of our work. However, all core research ideas, methodological contributions, experimental designs, and conclusions remain entirely our own intellectual work. 13

@@ -1,0 +1,622 @@
+Title: 7134_DistillMatch_Leveraging_K.pdf
+
+URL Source: https://openreview.net/pdf?id=64xbSPBy31
+
+Number of Pages: 13
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# DISTILL MATCH : LEVERAGING KNOWLEDGE DIS -
+
+# TILLATION FROM VISION FOUNDATION MODEL FOR 
+
+# MULTIMODAL IMAGE MATCHING 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+ABSTRACT 
+
+Multimodal image matching seeks pixel-level correspondences between images of different modalities, crucial for cross-modal perception, fusion and analysis. However, the significant appearance differences between modalities make this task challenging. Due to the scarcity of high-quality annotated datasets, existing deep learning methods that extract modality-common features for matching per-form poorly and lack adaptability to diverse scenarios. Vision Foundation Model (VFM), trained on large-scale data, yields generalizable and robust feature repre-sentations adapted to data and tasks of various modalities, including multimodal matching. Thus, we propose DistillMatch, a multimodal image matching method using knowledge distillation from VFM. DistillMatch employs knowledge distilla-tion to build a lightweight student model that extracts high-level semantic features from VFM to assist matching across modalities. To retain modality-specific infor-mation, it extracts and injects modality category information into the other modal-ity’s features, which enhances the model’s understanding of cross-modal correla-tions. Furthermore, we design V2I-GAN to boost the model’s generalization by translating visible to pseudo-infrared images for data augmentation. Experiments show that DistillMatch outperforms existing algorithms on public datasets. 
+
+1 INTRODUCTION 
+
+Multimodal images, like visible and infrared images from different sensors, can provide richer scene information Jiang et al. (2021); Zhou et al. (2022). They are crucial for advanced visual tasks in-cluding medical image analysis Li et al. (2025), remote sensing image processing Xiao et al. (2024); Li et al. (2019), and autonomous driving Zhou et al. (2021). However, the variations in imaging positions lead to geometric normalization issues in multimodal images, such as scale, rotation, and viewpoint changes, making precise analysis difficult for computers. Multimodal image matching enhances the accuracy and robustness of visual tasks by establishing correspondences across modal-ities, thereby promoting the development of multimodal perception technologies and expanding its application. The imaging principles of Multimodal images are distinct, leading to significant discrepancies in texture, contrast, and intensity Tang et al. (2022); Li et al. (2013). These modal differences reduce the feature extraction accuracy and limit the effectiveness of traditional matching methods. Cur-rent deep-learning methods focus on extracting modality-common features for matching, discarding modality-specific information and limiting feature representation Hou et al. (2024); Shi et al. (2023); Deng et al. (2023); Liu et al. (2024); Deng & Ma (2023). Besides, due to the scarcity of large-scale, high-quality annotated datasets, models are mostly trained on single-modality and small-scale unan-notated multimodal datasets, resulting in poor generalization and adaptability to diverse scenarios, which restrict the practical application of multimodal image matching. To tackle these issues, we propose DistillMatch for multimodal image matching via knowledge dis-tillation from VFM in Figure 1 (a). VFM like DINOv2 Oquab et al. (2023), trained on extensive data, can extract high-level, modality-independent semantic features, which are resistant to modal differences and noise. Basic feature extractors yield texture features with local geometric informa-tion for matching, which are not robust to modal differences. Thus, we use features from VFM 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 (a)  Framework of DistillMatch          
+
+> Restormer
+> Transformer
+> MLP 𝑳 𝒄𝒆
+> C
+> C
+> TransferA TransferB
+> ෠𝒇 𝒗𝒊𝒔
+> 𝒄𝒍𝒄 ෡𝑭 𝒗𝒊𝒔
+> 𝒅
+> ෠𝒇 𝒊𝒓
+> 𝒄𝒍𝒄 ෡𝑭 𝒊𝒓
+> 𝒅
+> 𝑭 𝒗𝒊𝒔
+> 𝒔
+> 𝑭 𝒊𝒓
+> 𝒔
+> 𝒇 𝒗𝒊𝒔
+> 𝒄𝒍𝒄
+> 𝒇 𝒊𝒓
+> 𝒄𝒍𝒄
+> ෩𝑭 𝒗𝒊𝒔
+> ෩𝑭 𝒊𝒓
+> 𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖
+> 𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖
+> ෩𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖
+> ෩𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖
+> 𝑭 𝒊𝒓
+> 𝟏 /𝟐
+> 𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟐
+> (b) Category -Enhanced Feature Guidance Module (CEFG)
+> Layer Norm  𝑸
+> 𝑲
+> softmax
+> MLP
+> 𝑽
+> Projection
+> 𝑭 𝑻
+> 𝑪𝑨𝑨
+> 𝑭 𝑻
+> 𝑸
+> 𝑲
+> softmax
+> 𝑽
+> Reshape
+> Reshape 𝑭 𝑺 :𝑭 𝒔𝒕𝒖
+> 𝑭 𝑻 :෩𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖
+> 𝑭 𝑻
+> 𝑺𝑻𝑭𝑨
+> 𝑭 𝑻
+> 𝑺𝑨𝑨
+> (c) Semantic and Texture Feature Aggregation Module (STFA)
+> ViT
+> Encoder
+> ResNet
+> 𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖
+> ViT
+> Decoder
+> STFA Up -Sample
+> +ResNet
+> VIS/IR
+> RoPE
+> DINOv2
+> CEFG
+> 𝑭 𝒔𝒕𝒖
+> 𝑭 𝑫𝑰𝑵𝑶
+> ෩𝑭 𝑹𝒆𝒔
+> 𝟏 /𝟖 𝑭 𝑻
+> 𝑺𝑻𝑭𝑨
+> 7/8
+> Down -Sample
+> Knowledge Distillation Loss
+> 𝑭 𝟏 /𝟖 𝑭 𝟏 /𝟒 𝑭 𝟏 /𝟐
+> Matching Module
+
+Figure 1: Overview of DistillMatch, CEFG and STFA. (a) Framework of DistillMatch includes KD-VFM and matching module. (b) Structure of CEFG module. (c) Structure of STFA module. to guide extractor to focus on semantically similar regions. DistillMatch transfers VFM’s seman-tic knowledge into a lightweight student model via online knowledge distillation, which inherits semantic understanding and adapts to matching tasks. To retain modality-specific information, we design a Category-Enhanced Feature Guidance Module (CEFG) that injects modality category rep-resentation from one modality into another’s features, enhancing texture features’ understanding of cross-modal correlations. Then, STFA aggregates semantic and enhanced texture features to inte-grate their advantages. For matching, a coarse-to-fine matching module is used to establish subpixel-level correspondences. To address data scarcity, we propose V2I-GAN for visible-to-infrared image translation for data augmentation. Extensive experiments on public datasets show DistillMatch out-performs state-of-the-art algorithms. Anonymized source code can be found in the Reproducibility Statement. The paper has the following contributions: • We design a lightweight student model that uses online knowledge distillation to learn high-level semantic understanding from VFM, overcoming modal differences. • We design a Category-Enhanced Feature Guidance Module. It injects modality category represen-tation to enhance understanding of cross-modal correlations. • We propose V2I-GAN for visible-to-infrared image translation, overcoming the limited training data issue. 
+
+2 RELATED WORKS 
+
+2.1 DATA AUGMENTATION BASED MATCHING METHODS 
+
+To address the scarcity of annotated data in multimodal image matching, researchers used the meth-ods of data augmentation Deng et al. (2024); Zhang et al. (2025a). They generate high-quality synthetic or pseudo-multimodal datasets for mixed training to boost performance Zhu et al. (2017); Han et al. (2024). He et al. proposed a general large-scale pre-training framework for data aug-mentation He et al. (2025), that integrates cross-modal signals from various data sources, enabling model to recognize and match fundamental image structures. Jiang et al. introduced MINIMA, a unified image matching framework Ren et al. (2025). They designed a data engine to expand single-modal RGB images into multimodal data and built a new MD-syn dataset. MD-syn can directly train any advanced matching pipeline, significantly improving their performance in multi-modal matching. Liu et al. constructed a real infrared-visible image dataset MTV Liu et al. (2022), using UAV-captured images, 3D reconstruction technology, and semi-supervised generation meth-ods, and retrained LoFTR Sun et al. (2021) for multimodal matching. 2.2 PRE -TRAINED AND FINE -TUNED MATCHING METHODS 
+
+To overcome modal differences and extract cross-modal high-level features, researchers pre-train feature extractors on large-scale data and fine-tune them for multimodal matching Zhou et al. (2022); Yagmur et al. (2024). Pre-training doesn’t require datasets with matching annotations, and can use data from other domains, reducing data collection and annotation costs. Tuzcuo˘ glu et al. proposed XoFTR Tuzcuo˘ glu et al. (2024), which uses masked image modeling for pre-training and fine-tunes with pseudo-infrared images. Zhang et al. introduced SemaGlue Zhang et al. (2025b), which com-bines semantic information from pre-trained segmentation model and image geometric features, enhancing semantic understanding in matching. Zhang et al. proposed SDME Zhang & Ma (2024), 2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 Concat            
+
+> Self -
+> Attention
+> Cross -Attention
+> LoFTR  Fine
+> Matching Layer
+> LoFTR  Coarse
+> Matching Layer
+> Coarse
+> Matching Layer
+> Channal
+> Concatenation
+> MLP + Tanh
+> Concat
+> Conv  𝟏  × 𝟏
+> Conv 3 × 𝟑  𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟐
+> 𝒇 𝒗𝒊𝒔
+> 𝟓 ×𝟓
+> 𝑭 𝒊𝒓
+> 𝟏 /𝟐 𝒇 𝒊𝒓
+> 𝟓 ×𝟓
+> ෡𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟖 ෡𝑭 𝒊𝒓
+> 𝟏 /𝟖
+> 𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟖 𝑭 𝒊𝒓
+> 𝟏 /𝟖
+> 𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟖 ෡𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟖 ෩𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟖 ෩𝑭 𝒊𝒓
+> 𝟏 /𝟖
+> 𝒇 𝒗𝒊𝒔
+> 𝟏 ×𝟏 𝒇 𝒊𝒓
+> 𝟏 ×𝟏
+> 𝑭 𝒊𝒓
+> 𝟏 /𝟖 ෡𝑭 𝒊𝒓
+> 𝟏 /𝟖 𝑭 𝒗𝒊𝒔
+> 𝟏 /𝟒 𝑭 𝒊𝒓
+> 𝟏 /𝟒
+> 𝒇 𝒗𝒊𝒔
+> 𝟑 ×𝟑 𝒇 𝒊𝒓
+> 𝟑 ×𝟑
+> ෨𝒇 𝒗𝒊𝒔
+> 𝟑 ×𝟑
+> ෨𝒇 𝒊𝒓
+> 𝟑 ×𝟑
+
+( )   
+
+> ˆ ˆ ,fijM
+> 5 × 5
+
+( )               
+
+> ,i j fMf
+> PfcMM=
+> 𝜹 𝒗𝒊 ,𝜹 𝒊𝒓 ,෡𝑪 𝒗𝒊 ,෡𝑪 𝒊𝒓 =
+> ෡𝑪 𝒗𝒊 +𝜹 𝒗𝒊 ,෡𝑪 𝒊𝒓 +𝜹 𝒊𝒓
+> (a) KD -VFM (b) Coarse -level Matching Module (d) Subpixel Refinement Module
+> (c) Fine -Level Matching Module
+> KD -
+> VFM
+> ෠𝒇 𝒗𝒊𝒔
+> 𝟓 ×𝟓 ෠𝒇 𝒊𝒓
+> 𝟓 ×𝟓
+> ෠𝒇 𝒗𝒊𝒔
+> 𝟓 ×𝟓
+> ෠𝒇 𝒊𝒓
+> 𝟓 ×𝟓
+> Concat
+> Self -
+> Attention
+> Cross -Attention
+
+( )
+
+> ,i j 0M1M0P1P
+
+( )    
+
+> ,i j 01cMMM=
+
+( )   
+
+> ,cijM
+> (1/8)2∙ 𝐻 𝑖𝑟  ∙ 𝑊 𝑖𝑟
+
+Figure 2: Overview of matching module. (a) is KD-VFM. (b) is coarse-level matching module, which predicts coarse-level matches at the 1/8 scale. (c) is fine-level matching module, which uses 1/2 and 1/4 scale features based on the coarse-level matches to predict fine-level matches. (d) is subpixel refinement module, which refines fine matches at the subpixel level. which performs initial registration via sparse feature matching prediction and refines results through dense direct alignment. It can fine-tune model pre-trained on single-modal datasets using small mul-timodal datasets. Sun et al. proposed DenseAffine for extracting affine correspondences Sun et al. (2025), introducing a geometry-constrained loss function combined with dense matches to supervise networks in learning geometric information. DenseAffine uses ResNet50 He et al. (2016) encoder pre-trained on ImageNet-1K Deng et al. (2009), fine-tuning only the Refiner module’s weights. Liu et al. proposed LiftFeat Liu et al. (2025), a lightweight network that uses pseudo surface normal labels from pre-trained monocular depth estimation model to extract 3D geometric feature. It en-hances 2D feature description discrimination by fusing 3D with 2D descriptors. 2.3 VFM B ASED MATCHING METHODS 
+
+VFM, trained on large-scale image datasets, excels in representation and semantic understanding Xue et al. (2023); Edstedt et al. (2024); Zhang & Zhao (2024); Xue et al. (2025). Many researchers use VFM to capture cross-modal semantic features for matching, overcoming modal differences and reducing reliance on large-scale annotated data. Cadar et al. proposed SCFeat Cadar et al. (2024), enhancing local feature matching with semantic features from model like DINOv2. It optimizes descriptors by fusing texture and semantic features through a semantic reasoning module. Wu et al. introduced SAMFeat Wu et al. (2023), which uses the Segment Anything Model (SAM) Kirillov et al. (2023) as a teacher model. Through knowledge distillation, contrastive learning, and edge attention guidance, SAMFeat extracts semantic information from SAM to optimize local feature descriptors. Lu et al. proposed JamMa Lu & Du (2025), an ultra-lightweight feature matching method based on joint Mamba. Using the linear Mamba Gu & Dao (2023) model and JEGO scan-merge strategy, it achieves efficient image matching. 
+
+3 METHODOLOGY 
+
+DistillMatch has four modules: KD-VFM, CEFG, STFA module, and matching modules from coarse to fine. We also propose an image translation method V2I-GAN for data augmentation. 3.1 FEATURE EXTRACTION MODULE BASED ON KNOWLEDGE DISTILLATION OF VFM To leverage the high-level semantic cues from VFM, we design the KD-VFM module, which can aggregate high-level semantic information into basic feature extractors. The structure of KD-VFM is shown in Figure 1 (a). 
+
+Feature Extraction: Given two multimodal images from the same scene, e.g., visible and infrared image Ivis/ir , they are input to KD-VFM. KD-VFM has three different branches. The first branch is a multibranch and multiscale ResNet, which processes Ivis/ir and generates basic texture features 
+
+F 1/2
+
+Res ∈ RB×C1× H 
+
+> 2
+
+× W 
+
+> 2
+
+, F 1/4
+
+Res ∈ RB×C2× H 
+
+> 4
+
+× W 
+
+> 4
+
+and F 1/8
+
+Res ∈ RB×C3× H 
+
+> 8
+
+× W 
+
+> 8
+
+, where H and W are image’s height and width, and C1 = 128 , C 2 = 196 , C 3 = 256 . The second branch uses a ViT-S/14 variant of the DINOv2 model augmented with register tokens. It generates high-level semantic 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 features FDIN O . Prior to feeding images into this branch, they are downsampled to 7/8 of original resolution. The output FDIN O ∈ RB×C4× H   
+
+> 14 ×W
+> 14
+
+are interpolated to the 1/8 of original resolution using bilinear interpolation to obtain FDIN O ∈ RB×C4× H   
+
+> 8×W
+> 8
+
+, where C4 = 384 .
+
+Distillation of VFM: DINOv2 is a Transformer-based pretrained VFM trained on large-scale datasets with strong generalization and can capture rich and robust semantic information from im-ages. However, its complex architecture leads to high computation and slow inference, limiting deployment in resource-constrained scenarios. To solve this and avoid loading DINOv2’s pretrained weights, we propose a lightweight vision transformer Dosovitskiy et al. (2021) as student model in the third branch, trained to distill knowledge from the teacher model’s output Ftea = FDIN O .In multimodal image matching, different modalities have different feature distributions and noise characteristics. Though FDIN O has broad generalizability, it may not fully adapt to domain-specific matching scenarios, potentially underutilizing task-relevant information. Thus, we propose an on-line feature distillation framework. The student model is fine-tuned on task-specific datasets and losses, enabling it to learn matching-oriented features in training, enhancing algorithmic stability. In student model, the input image is divided into fixed-size patches and embedded into a high-dimensional embedding space with 2D sinusoidal-cosine positional encoding to generate initial fea-ture FP ∈ RB×P ×C4 , where P = 1600 . The encoder has multiple transformer blocks, each with a multi-head self-attention layer and a feed-forward network, while the decoder has a similar structure. The model ultimately outputs the refined feature Fstu ∈ RB×C4× H   
+
+> 8×W
+> 8
+
+.To effectively distill high-quality features from DINOv2 to student model, we design a compre-hensive feature alignment loss that integrates three methods. The mean squared error (MSE) loss quantifies the discrepancy between Fstu and Ftea using MSE: 
+
+LM SE = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Ftea 
+
+∥Ftea ∥2
+
+− Fstu 
+
+∥Fstu ∥2
+
+> 22
+
+, (1) where N = BHW/ 64 is the dimensionality of the flattened feature vectors. LM SE enforces nu-merical proximity between Fstu and Ftea at the pixel level. Gram matrix loss quantifies feature similarity by comparing the Gram matrices of Fstu and Ftea :
+
+LGram = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥G(Ftea ) − G(Fstu )∥22, (2) where G(F ) = F F T 
+
+> HW
+
+. N is the number of elements in Gram matrix. LGram enforces spatial-relationship preservation between Fstu and Ftea .The Kullback-Leibler (KL) divergence loss quantifies discrepancy in the probabilistic distribution between Fstu and Ftea :
+
+LKL = DKL (Ftea ∥ Fstu ), (3) where DKL (·) is the KL divergence operator. LKL enforces probabilistic distribution alignment between Fstu and Ftea .The complete knowledge distillation loss is formulated as: 
+
+LKD = α · LM SE + β · LGram + γ · LKL , (4) where α, β and γ are the weights. 3.2 CATEGORY -E NHANCED FEATURE GUIDANCE MODULE 
+
+Modal differences cause the texture features extracted by KD-VFM exhibiting significant diver-gence, making it hard to establish correspondence of them across same regions in different modal-ities. To mitigate modal differences and enhance the understanding of cross-modal correlations, we propose the Category-Enhanced Feature Guidance Module (CEFG). As shown in Figure 1 (b), CEFG uses an encoder composed of restormer and transformer layers. The restormer processes input F 1/2
+
+> Res
+
+, and produces shallow features F svis/ir ∈ RB×N ×C3 (N = 1600 ), which contain low-level image details. We initialize a learnable category feature f clc vis/ir ∈ RB×1×C3 and concate-nate it with F svis/ir . The combined features are then processed through two transformer layers 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 and split into deep-level features bF dvis/ir ∈ RB×N ×C3 and modality category representation heads 
+
+bf clc vis/ir ∈ RB×1×C3 . bf clc vis/ir is used to characterizes the image’s modality category. To ensure that bf clc vis/ir precisely represents the modality-aware information, we use MLP and optimize it with cross-entropy loss Lce :
+
+Lce = CE (Pvis , [0 , 1]) + CE (Pir , [1 , 0]) (5) where CE (·) is the cross-entropy function and Pvis/ir is the MLP prediction. Lce enforces the MLP’s output to accurately predict modality category labels. As modal difference persists between bF dvis and bF dir , they cannot be directly matched. Conven-tional methods extract common cross-modal features from them for matching, but they discard modality-specific or non-shared information, compromising the feature representational capac-ity. To solve this, we directly inject bf clc ir/vis as global feature information into bF dvis/ir through element-wise summation, and then input them separately into two Transformer blocks with non-shared parameters (TransferA and TransferB) to obtain the category-enhanced feature eFvis/ir :
+
+eFvis = T ransf erA ( bF dvis + bf clc ir ), eFir = T ransf erB ( bF dir + bf clc vis ).To guide texture features through category-enhanced features, we directly fuse eFvis/ir with F 1/8
+
+> Res
+
+via element-wise addition, and input it into convolutional layers to obtain enhanced texture features 
+
+eF 1/8
+
+> Res
+
+. This operations not only enhance the model’s comprehension of cross-modal correlations but also preserve non-shared information. 3.3 SEMANTIC AND TEXTURE FEATURE AGGREGATION MODULE 
+
+Texture feature FT = eF 1/8 
+
+> Res
+
+excels at capturing local geometric information but lacks semantic com-prehension. Semantic feature FS = Fstu demonstrates strong scene-level semantic understanding yet suffers from insufficient resolution for fine-level matching. To aggregate the strengths of both features and enhance representational capacity and matching precision, we design the Semantic and Texture Feature Aggregation Module (STFA), which contains Channel Attention Aggregation (CAA) module and Spatial Attention Aggregation (SAA) module. As shown in Figure 1 (c), the CAA module first aligns the channel and spatial dimensions of FS
+
+with FT by bilinear interpolation and channel compression. The aligned features are then reshaped and input to MLP and layer-normalization, yielding F LN S/T = LN  M LP (FS/T ) ∈ RB×N ×C ,where LN (·) is layer-normalization. Finally, F LN S is used as the query, and F LN T is used as the key and value to perform cross-attention aggregation along the channel dimension and obtain F CAA T .CAA achieves soft channel-dimension alignment, enabling semantic features to adaptively focus on channels relevant to texture features, thereby enhancing feature consistency. SAA has a similar structure to CAA. First, F CAA T and FT are fed into convolutional projection layers to generate: Q = P roj q (FT ), K = P roj k(F CAA T ), V = P roj v (F CAA T ) ∈ RB×C×N .Then perform spatial attention aggregation along the spatial dimension and obtain F SAA T . Fi-nally, perform residual connection between F SAA T and the original feature to obtain F ST F A T =
+
+FT + reshape (F SAA T ) ∈ RB×C× H   
+
+> 8×W
+> 8
+
+. SAA enables texture features to acquire spatially relevant information from semantic features, achieving feature fusion. 3.4 MATCHING MODULE FROM COARSE TO FINE 
+
+Coarse-level Matching Module (CMM): CMM uses feature F 1/8 
+
+> vis
+
+and F 1/8 
+
+> ir
+
+from STFA to pre-dict matches at the 1/8 scale. As shown in Figure 2 (b), it first applies linear self-attention and cross-attention in LoFTR to interact F 1/8 
+
+> vis
+
+and F 1/8 
+
+> ir
+
+, outputting ˆF 1/8 
+
+> vis
+
+and ˆF 1/8 
+
+> ir
+
+. The similarity matrix S is computed as: S(i, j ) = 1 
+
+> γ
+
+·
+
+D
+
+Linear ( ˆF 1/8 
+
+> vis
+
+), Linear ( ˆF 1/8 
+
+> ir
+
+)
+
+E
+
+, where Linear (·) is the linear layer, and γ is the temperature parameter. The matching probability matrix is obtained by: 
+
+Pk∈(0 ,1) (i, j ) = sof tmax (S(i, ·)) j . Using the threshold θc, high-confidence elements are filtered out to obtain coarse-level matches Mc.5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 𝑀𝐼𝑁𝐼𝑀𝐴 𝐸LoFTR  𝐷𝑖𝑠𝑡𝑖𝑙𝑙𝑀𝑎𝑡𝑐ℎ 𝑆𝐴𝑀𝐹𝑒𝑎𝑡 𝑆𝑒𝑚𝑎𝐺𝑙𝑢𝑒 𝐽𝑎𝑚𝑀𝑎  𝑀𝐼𝑁𝐼𝑀𝐴 LoFTR  𝑀𝐼𝑁𝐼𝑀𝐴 𝑋oFTR 
+
+> (a)
+> (b)
+
+Figure 3: The qualitative and quantitative results of image matching. (a) Comparison experimen-tal results for JamMa, SemaGlue, SAMFeat, MINIMA ELoFTR , MINIMA LoFTR , MINIMA XoFTR and DistillMatch (left to right), using images from the UAV remote sensing images, indoor scenes, night-time conditions, haze and mist scenes (top to bottom). (b) The quantitative comparison results for zero-shot experiments of unknown modalities. 
+
+Fine-level Matching Module (FMM): FMM refines matches based on Mc and the 1/2 and 1/4
+
+scale features. As shown in Figure 2 (c), it first preprocesses F 1/2 and F 1/4 to improve feature interaction. Then, it extracts local windows of 1 × 1, 3 × 3, and 5 × 5 from the preprocessed features and performs a series of concatenation, self-attention, cross-attention, and splitting operations to pass information among these windows. For each (˜ i, ˜j) in Mc, it computes the similarity matrix Sf
+
+between the processed windows { ˆf 5×5 
+
+> vis
+
+, ˆf 5×5 
+
+> ir
+
+} and applies double softmax to obtain the fine-level match probability matrix P f : P f (i, j ) = sof t max ( Sf (i, ·)) j ·sof t max ( Sf (·, j )) i. Matches with 
+
+P f (i, j ) > θ f are selected as the fine-level matches Mf .
+
+Subpixel Refinement Module (SRM): SRM refines fine-level matches to subpixel accuracy. As Figure 2 (d) shows, it concatenates { ˆf 5×5 
+
+> vis
+
+, ˆf 5×5 
+
+> ir
+
+} at fine-level match (ˆ i, ˆj) and predict local subpixel offsets by: {δvis , δ ir } = Tanh( M LP ( ˆf 5×5 
+
+> vis
+
+| ˆf 5×5 
+
+> ir
+
+)) for each match. Adding these offsets to the coordinates of (ˆ i, ˆj) to obtain subpixel-level matches: { ˆCvis , ˆCir } = {Cvis + δvis , C ir + δir } ,where {Cvis , C ir } is the coordinate of (ˆ i, ˆj) before SRM. 3.5 IMAGE TRANSLATION FOR DATA AUGMENTATION 
+
+Current research suffers from the lack of large-scale visible-infrared image datasets from same scenes, and the high cost of manual annotation of matching landmarks. These factors constrain re-strict improvements in multimodal matching tasks. To address this, we propose a visible-to-infrared image translation framework (V2I-GAN). V2I-GAN directly leverages mature benchmark datasets from visible image matching domains to synthesize abundant paired <visible, pseudo-infrared >
+
+data with correspondence annotations. Critically, as image translation preserves geometric struc-tures without deformation or viewpoint changes, the synthesized data faithfully inherits both match-ing labels and scene diversity from the original datasets. Based on PearlGAN’s framework Luo et al. (2022); Zhu et al. (2017), we construct V2I-GAN for visible-to-infrared image translation, and train it on FMB dataset Liu et al. (2023). The architecture has two generators ( GV I , GIV ) and two discriminators ( DV and DI ). Specifically, GV I transforms 
+
+Ivis into Ipse ir , while GIV does the opposite. DI distinguishes real Iir from pseudo Ipse ir (from GV I ), whereas DV distinguishes real Ivis from pseudo Ipse vis (from GIV ). The generator uses an encoder-decoder structure. The encoder extracts multi-scale texture information by convolutional layers and down-sampling blocks, while the decoder reconstructs target-domain images via up-sampling mod-ules and feature fusion blocks. Critically, we integrate STFA in the encoder to aggregate features from DINOv2, significantly enhancing semantic comprehension of original image and the semantic consistency of generated images. Furthermore, we add a structured gradient alignment loss between input image and its semantic segmentation map to further enhance the semantic consistency. Fig-6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 (b) (a) 
+
+Figure 4: The qualitative results of image translation and zero-shot experiments. (a) The qualitative results of image translation. Column 1 and 5 are visible images. Column 2 and 6 are infrared images. Column 3 and 7 are the translation results of PearlGAN. Column 4 and 8 are the translation results of V2I-GAN. (b) The qualitative results for zero-shot experiments, using images of optical-depth, optical-map, optical-optical, optical-SAR, PD-T1-T2 and retina (left to right). Line 1 are the results of MINIMA XoFTR . Line 2 are the results of DistillMatch. ure 4 (a) shows the image translation results. V2I-GAN’s pseudo-infrared images are more like real infrared images than PearlGAN’s. 3.6 SUPERVISION 
+
+The loss function of DitillMatch consists of the knowledge distillation loss in Equation (4), cross-entropy loss in Equation (5) and matching loss. The matching loss mainly consists of three parts: 
+
+Coarse-level Matching Loss: we use focus loss (FL) to supervise the matching probability matrix 
+
+Pk∈(0 ,1) in CMM: 
+
+Lc = α · F L (P0, ˆP0) + β · F L (P1, ˆP1), (6) where ˆP0 and ˆP1 are the GT matching matrices for CMM. α and β are the weights for balancing. 
+
+Fine-level Matching Loss: We design the fine-level matching loss to supervise P f in FMM: 
+
+Lf = 1
+
+Mc
+
+X
+
+> (ˆ i, ˆj)∈Mc
+
+F L (P f 
+
+> ˆi, ˆj
+
+, ˆP f 
+
+> ˆi, ˆj
+
+), (7) where ˆP f 
+
+> ˆi, ˆj
+
+is the GT fine-level matching matrix for (ˆ i, ˆj).
+
+Subpixel Refinement Loss: Given predicted matches’ homogeneous coordinates (ˆ xvi , ˆxir ), the subpixel refinement loss is computed by symmetric polar distance function: 
+
+Lsub = 1
+
+|Mc|
+
+X 
+
+> (ˆ xvi ,ˆxir )
+
+ˆxTvi E ˆxir 
+
+> 2
+
+( 1
+
+∥ET ˆxvi ∥20:2 
+
++ 1
+
+∥E ˆxir ∥20:2 
+
+), (8) 
+
+where E is the GT essential matrix from the camera pose. ∥v∥0:2 denotes the first two elements of the vector v. The total matching loss is: Lmatch = λcLc + λf Lf + λsub Lsub . The overall loss is: 
+
+Ltotal = λKD LKD + λce Lce + Lmatch .
+
+4 EXPERIMENTS 
+
+4.1 IMPLEMENTATION DETAILS 
+
+In training, we employ the MegaDepth dataset Li & Snavely (2018) as our benchmark. For data augmentation, we perform randomized adjustments to hue, saturation, and value intensities across input images, and leverage V2I-GAN to translate one image from each pair into pseudo-infrared image. Training is conducted using the AdamW optimizer with a learning rate of 6 × 10 −3, a batch size of 1, a total of 20 epochs, and 120 hours of training on 3 NVIDIA GeForce RTX 4090 GPUs. The thresholds in the matching network are set to: θc = 0 .3, θf = 0 .1. The settings in the loss function are set to: λc = 0 .5, λ f = 0 .3, λ sub = 10 4, λs = 1 , λ vis ac = λir ac = 0 .25 ,
+
+α = 100 , β = 0 .5, γ = 0 .25 , λ KD = 0 .1, λ ce = 0 .1.4.2 RELATIVE POSE ESTIMATION 
+
+Dataset and Evaluation Metrics: To evaluate the performance of DistillMatch for relative pose estimation in visible-infrared images, we test it on the METU-VisTIR dataset Tuzcuo˘ glu et al. (2024). DistillMatch processes the input images and generates matched point pairs. We use RANSAC Fischler & Bolles (1981) with a threshold of 3 to filter correct matching point pairs. During testing, the longer image side is set to 640 pixels to standardize sizes. 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Table 1: Quantitative results of relative pose estima-tion in METU-VisTIR dataset, and the values to the left and right of ’/’ are the results for cloud-cloud and cloud-sunny scenarios respectively (bold fonts indicate the maximum values).                                         
+
+> Method AUC of cloud-cloud and cloud-sunny @5 ◦@10 ◦@20 ◦
+> SAMFeat 0.084/0.083 0.141/0.312 0.323/0.931 SDME 0/0 0/0 0.198/0.222 SCFeat 0.069/0.335 0.489/1.404 2.400/4.284 SemaGlue 0.035/0.092 0.248/0.416 1.105/1.559 LiftFeat 0.131/0.173 0.561/0.699 2.176/2.818 DenseAffine 1.465/2.094 3.656/5.900 8.057/12.21 MTV-LoFTR 0.086/0.220 0.391/0.6128 1.800/2.307 JamMa 0.058/0.029 0.571/0.389 2.877/2.334 XoFTR 18.39/9.523 33.18/22.09 48.43/36.83 MINIMA LoFTR 19.15/10.47 35.78/24.84 52.29/41.98 MINIMA ELoFTR 6.872/5.248 17.79/14.11 35.10/28.59 MINIMA XoFTR 22.47/10.68 38.95/25.50 55.30/43.33 DistillMatch 23.13 /12.45 41.10 /26.86 58.41 /44.47
+
+We evaluate the methods independently on cloudy-cloudy and cloudy-sunny sce-narios of the dataset. We use the area under curve (AUC) at 5 ◦, 10 ◦ and 20 ◦
+
+thresholds as evaluation metrics, measur-ing the maximum angular deviation from the GT in rotation and translation. We compared DistillMatch with the following publicly available methods: SAMFeat Wu et al. (2023), SDME Zhang & Ma (2024), SCFeat Cadar et al. (2024), SemaGlue Zhang et al. (2025b), LiftFeat Liu et al. (2025), DenseAffine Sun et al. (2025), MTV-LoFTR Liu et al. (2022), JamMa Lu & Du (2025), XoFTR Tuzcuo˘ glu et al. (2024), MINIMA LoFTR , MINIMA ELoFTR 
+
+Wang et al. (2024) and MINIMA XoFTR Ren et al. (2025). 
+
+Results: As shown in Table 1, Distill-Match achieves significantly higher AUC than other algorithms at all thresholds for the cloudy-cloudy and cloudy-sunny datasets. The performance on the cloudy-sunny dataset is lower than on the cloudy-cloudy dataset, due to increased image feature variation from light and temperature differences, which makes matching and pose estimation more challeng-ing. Figure 3 (a) illustrates the qualitative results. 4.3 HOMOGRAPHY TRANSFORMATION ESTIMATION 
+
+Dataset and Evaluation Metrics: To evaluate the homography estimation performance of Distill-Match, we conducted experiments on four visible-infrared datasets covering distinct scenarios: (1) UAV remote sensing images Liu et al. (2022), (2) indoor scenes SMT/COPPE/Poli/UFRJ (2021), (3) nighttime conditions Gonz´ alez et al. (2016), and (4) haze and mist scenes Xie & Jin (2023). We randomly generate a unique homography matrix and apply it as GT to the original image. The ho-mography matrices include random translations of [−10% , 10%] , rotations of [−20 , −20] , scaling of [0 .8, 1.2] , shear angles of [−0.1, 0.1] , and perspective transformations of [−0.003 , 0.003] . For UAV remote sensing dataset, we evaluate matching performance by calculating the mean reprojec-tion error of four corner points, adopting AUC under thresholds of 3, 5 and 10 pixels. For the other datasets, AUC is computed at thresholds of 5, 10 and 20 pixels. 
+
+Results: As evidenced by Table 2 and Figure 3 (a), DistillMatch achieves significantly higher AUC values than competing methods across most thresholds on all datasets, with the performance gap widening progressively as thresholds increase. Figure 3(a) demonstrates that DistillMatch precisely aligns feature points between source and target images. This alignment preserves geometric consis-tency and structural integrity in transformed images despite scale variations, viewpoint distortions, and rotational changes. 4.4 ZERO -SHOT EXPERIMENTS OF UNKNOWN MODALITIES 
+
+Dataset and Evaluation Metrics: In addition to matching visible and infrared images, we also con-ducted zero-shot matching on several unknown modalities, including: (1) optical-SAR image pairs, (2) optical-map image pairs, (3) optical-depth image pairs Li et al. (2023), (4) pairwise combinations of PD, T1, and T2 images, (5) retina image pairs, and (6) cross-temporal image pairs Jiang et al. (2021). The evaluation metrics are: (1) Number of Correct Matches (NCM): A match is accepted as correct if its residual under the GT transformation is less than 5 pixels. (2) Root Mean Square Error (RMSE): The RMSE between the matches extracted by the algorithm and those under the GT transformation. 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 Table 2: Quantitative results of homography estimation in visible-infrared dataset. The best and second of each category are masked as bold and underline, respectively.                                                                                                                                                                 
+
+> Method UAV Indoor Night Haze @3px @5px @10px @5px @10px @20px @5px @10px @20px @5px @10px @20px SAMFeat 3.666 10.85 24.43 0.384 0.666 1.122 000.561 01.462 3.710 SDME 4.327 10.85 21.13 0.309 0.639 1.090 00.279 1.272 0.657 0.945 2.283 SCFeat 5.799 16.68 36.43 0.328 2.406 12.97 00.406 6.533 00.922 4.929 SemaGlue 0.567 1.416 4.365 0.384 0.886 2.003 0.397 0.476 1.015 1.004 3.377 7.043 LiftFeat 8.732 24.28 45.34 0.870 2.978 11.69 01.644 10.49 01.047 6.477 DenseAffine 5.626 11.95 21.25 00000.281 1.213 01.263 3.142 MTV-LoFTR 16.75 29.20 44.91 0.314 1.707 5.940 02.248 11.40 0.687 2.133 6.249 JamMa 00.878 8.676 0.450 6.275 19.74 02.965 15.57 01.250 2.703 XoFTR 16.93 35.88 59.33 2.755 15.62 29.66 0.363 3.152 21.17 6.214 24.66 45.43 MINIMA LoFTR 17.32 35.01 58.40 2.867 16.63 33.50 03.026 20.84 3.606 13.83 30.43 MINIMA ELoFTR 14.27 32.05 57.44 2.978 15.23 32.37 02.641 17.82 3.516 17.32 38.47 MINIMA XoFTR 19.58 37.65 60.37 4.793 18.44 29.46 0.347 3.256 22.81 7.719 26.77 51.35
+> DistillMatch 20.53 40.12 64.62 5.257 22.94 43.33 0.466 3.585 22.19 9.208 28.99 51.07
+
+Results: Quantitative results are shown in Figure 3 (b). Due to the large modality gap and extreme difficulty of optical-SAR image pairs, most algorithms perform poorly. Nevertheless, our Distill-Match still has advantage. On optical-map and cross-temporal image pairs, DistillMatch slightly lags behind MINIMA XoFTR in terms of RMSE. However, DistillMatch achieves leading NCM across all datasets, demonstrating its robust matching capability even on unknown modalities. We attribute this primarily to the generalizable representation power of DINOv2-distilled features, and the cross-modal correlation enhancement by the CEFG. This indicates that DistillMatch possesses strong extensibility, and only needs to adapt the image translation algorithm’s modality to handle diverse multimodal matching tasks. Qualitative results in Figure 4 (b) further validate that DistillMatch can establish a high quantity and proportion of correct matches on real-world multimodal image pairs. 4.5 ABLATION STUDY 
+
+Table 3: Ablation study of DistillMatch. All experi-ments are performed in the cloud-sunny scenarios of the METU-VisTIR dataset.                 
+
+> SAA CAA KD-VFM CEFG V2I-GAN AUC 20.05/35.94/51.98
+> !21.11/37.30/52.40
+> !!21.71/38.58/54.38
+> !!!22.26/40.55/56.94
+> !!!!23.12/40.24/57.40
+> !!!!!23.13/41.10/58.41
+
+To verify the effectiveness of Distill-Match’s modules and data augmentation, we perform the ablation experiments in METU-VisTIR dataset with results in Ta-ble 3. SAA and CAA are the spatial and channel attention aggregation mod-ule. KD-VFM is feature extraction mod-ule based on knowledge distillation of VFM. V2I-GAN indicates data augmenta-tion with V2I-GAN. A checkmark shows a module’s presence. The first line is the result of baseline. The second and third lines directly aggregate the VFM features without knowledge distillation. The results show that the absence of either component degrades matching performance, underscoring their importance for cross-modal feature learning. 
+
+5 CONCLUSION 
+
+In this study, we propose a multimodal image matching method named DistillMatch. By leverag-ing knowledge distillation from VFM, it tackles modal differences and data scarcity. DistillMatch uses a lightweight student model to extract high-level semantic features from VFM for multimodal matching, and introduces a CEFG to retain modality-specific information and boost the model’s un-derstanding of cross-modality correlations. Moreover, to enhance the model’s generalization ability, we design V2I-GAN for visible-to-infrared image translation as data augmentation. Experiments demonstrate that DistillMatch outperforms state-of-the-art algorithms on public datasets. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+6 REPRODUCIBILITY STATEMENT 
+
+To support the reproducibility of our work, we have taken the following measures: (1) Details of our proposed algorithm are fully described in Section 3 of the main paper, with imple-mentation details provided in Section 4.1. (2) Anonymized source code, including training scripts and evaluation procedures, is available are available at https://anonymous.4open.science/r/DistillMatch-503A and 
+
+https://anonymous.4open.science/r/V2I-GAN-E3B3 .(3) The meanings of the mathematical symbols used in paper are shown in Table 4 of Appendix A.1. (4) All datasets used in our experiments are publicly available; The detailed pre-processing proce-dure has been elaborately described in the Appendix A.2. (5) The configuration and details of the training can be found in Appendix A.3. 
+
+REFERENCES 
+
+Felipe Cadar, Guilherme Potje, Renato Martins, C´ edric Demonceaux, and Erickson R Nascimento. Leveraging semantic cues from foundation vision models for enhanced local feature correspon-dence. In Proceedings of the Asian Conference on Computer Vision , pp. 1268–1283, 2024. Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 248–255, 2009. Xin Deng, Enpeng Liu, Shengxi Li, Yiping Duan, and Mai Xu. Interpretable multi-modal image registration network based on disentangled convolutional sparse coding. IEEE Transactions on Image Processing , 32:1078–1091, 2023. Xin Deng, Enpeng Liu, Chao Gao, Shengxi Li, Shuhang Gu, and Mai Xu. CrossHomo: Cross-modality and cross-resolution homography estimation. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(8):5725–5742, 2024. Yuxin Deng and Jiayi Ma. ReDFeat: Recoupling detection and description for multimodal feature learning. IEEE Transactions on Image Processing , 32:591–602, 2023. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszko-reit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representations , pp. 1–12, 2021. Johan Edstedt, Georg B¨ okman, M˚ arten Wadenb¨ ack, and Michael Felsberg. Dedode: Detect, don’t describe—describe, don’t detect for local feature matching. In Proceedings of the International Conference on 3D Vision , pp. 148–157, 2024. Martin A. Fischler and Robert C. Bolles. Random sample consensus: A paradigm for model fitting with applications to image analysis and automated cartography. Commun. ACM , 24:381–395, 1981. Alejandro Gonz´ alez, Zhijie Fang, Yainuvis Socarras, Joan Serrat, David V´ azquez, Jiaolong Xu, and Antonio M L´ opez. Pedestrian detection at day/night time with visible and FIR cameras: A comparison. Sensors , 16(6):820, 2016. Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 , 2023. Zhen Han, Chaojie Mao, Zeyinzi Jiang, Yulin Pan, and Jingfeng Zhang. Stylebooth: Image style editing with multimodal instruction. arXiv preprint arXiv:2404.12154 , 2024. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recog-nition. In Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 770–778, 2016. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Xingyi He, Hao Yu, Sida Peng, Dongli Tan, Zehong Shen, Hujun Bao, and Xiaowei Zhou. MatchAnything: Universal cross-modality image matching with large-scale pre-training. arXiv preprint arXiv:2501.07556 , 2025. Zhuolu Hou, Yuxuan Liu, and Li Zhang. POS-GIFT: A geometric and intensity-invariant feature transformation for multimodal images. Information Fusion , 102:102027, 2024. Xingyu Jiang, Jiayi Ma, Guobao Xiao, Zhenfeng Shao, and Xiaojie Guo. A review of multimodal image matching: Methods and applications. Information Fusion , 73:22–71, 2021. Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C Berg, Wan-Yen Lo, et al. Segment Anything. In Proceed-ings of the International Conference on Computer Vision , pp. 3992–4003, 2023. Huafeng Li, Dayong Su, Qing Cai, and Yafei Zhang. Bsafusion: A bidirectional stepwise feature alignment network for unaligned medical image fusion. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pp. 4725–4733, 2025. Jiayuan Li, Qingwu Hu, and Mingyao Ai. RIFT: Multi-modal image matching based on radiation-variation insensitive feature transform. IEEE Transactions on Image Processing , 29:3296–3310, 2019. Jiayuan Li, Qingwu Hu, and Yongjun Zhang. Multimodal image matching: A scale-invariant algo-rithm and an open dataset. ISPRS Journal of Photogrammetry and Remote Sensing , 204:77–88, 2023. Zhao-Liang Li, Hua Wu, Ning Wang, Shi Qiu, Jos´ e A Sobrino, Zhengming Wan, Bo-Hui Tang, and Guangjian Yan. Land surface emissivity retrieval from satellite data. International Journal of Remote Sensing , 34(9-10):3084–3127, 2013. Zhengqi Li and Noah Snavely. Megadepth: Learning single-view depth prediction from internet photos. In Proceedings of the Computer Vision and Pattern Recognition , pp. 2041–2050, 2018. Jinyuan Liu, Zhu Liu, Guanyao Wu, Long Ma, Risheng Liu, Wei Zhong, Zhongxuan Luo, and Xin Fan. Multi-interactive feature learning and a full-time multi-modality benchmark for image fusion and segmentation. In Proceedings of the International Conference on Computer Vision ,pp. 8081–8090, 2023. Yepeng Liu, Wenpeng Lai, Zhou Zhao, Yuxuan Xiong, Jinchi Zhu, Jun Cheng, and Yongchao Xu. Liftfeat: 3d geometry-aware local feature matching. arXiv preprint arXiv:2505.03422 , 2025. Yuxiang Liu, Yu Liu, Shen Yan, Chen Chen, Jikun Zhong, Yang Peng, and Maojun Zhang. Amulti-view thermal–visible image dataset for cross-spectral matching. Remote Sensing , 15(1): 174, 2022. Yuyan Liu, Wei He, and Hongyan Zhang. GRiD: Guided refinement for detector-free multimodal image matching. IEEE Transactions on Image Processing , 33:5892–5906, 2024. Xiaoyong Lu and Songlin Du. JamMa: Ultra-lightweight local feature matching with joint mamba. In Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 14934–14943, 2025. Fuya Luo, Yunhan Li, Guang Zeng, Peng Peng, Gang Wang, and Yongjie Li. Thermal infrared image colorization for nighttime driving scenes with top-down guided attention. IEEE Transactions on Intelligent Transportation Systems , 23(9):15808–15823, 2022. Maxime Oquab, Timoth´ ee Darcet, Th´ eo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, Pierre Fernandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, et al. Dinov2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193 , 2023. Jiangwei Ren, Xingyu Jiang, Zizhuo Li, Dingkang Liang, Xin Zhou, and Xiang Bai. MINIMA: Modality invariant image matching. In Proceedings of the Computer Vision and Pattern Recogni-tion Conference , pp. 23059–23068, June 2025. 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Lukui Shi, Ruiyun Zhao, Bin Pan, Zhengxia Zou, and Zhenwei Shi. Unsupervised multimodal remote sensing image registration via domain adaptation. IEEE Transactions on Geoscience and Remote Sensing , 61:1–11, 2023. IPqM-Instituto de Pesquisa da Marinha SMT/COPPE/Poli/UFRJ, IME-Instituto Militar de Engen-haria. Visible-infrared database, 2021. URL https://www02.smt.ufrj.br/˜fusion/ .Accessed: 2025-06-13. Jiaming Sun, Zehong Shen, Yuang Wang, Hujun Bao, and Xiaowei Zhou. LoFTR: Detector-free local feature matching with transformers. In Proceedings of the Conference on Computer Vision and Pattern Recognition , pp. 8922–8931, 2021. Pengju Sun, Banglei Guan, Zhenbao Yu, Yang Shang, Qifeng Yu, and Daniel Barath. Learning affine correspondences by integrating geometric constraints. In Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 27038–27048, 2025. Linfeng Tang, Jiteng Yuan, Hao Zhang, Xingyu Jiang, and Jiayi Ma. PIAFusion: A progressive infrared and visible image fusion network based on illumination aware. Information Fusion , 83: 79–92, 2022. ¨Onder Tuzcuo˘ glu, Aybora K¨ oksal, Bu˘ gra Sofu, Sinan Kalkan, and A Aydin Alatan. XoFTR: Cross-modal feature matching transformer. In Proceedings of the Conference on Computer Vision and Pattern Recognition , pp. 4275–4286, 2024. Yifan Wang, Xingyi He, Sida Peng, Dongli Tan, and Xiaowei Zhou. Efficient loftr: Semi-dense local feature matching with sparse-like speed. In Proceedings of the Conference on Computer Vision and Pattern Recognition , pp. 21666–21675, 2024. Jingqian Wu, Rongtao Xu, Zach Wood-Doughty, Changwei Wang, Shibiao Xu, and Edmund Y Lam. Segment anything model is a good teacher for local feature learning. arXiv preprint arXiv:2309.16992 , 2023. Yun Xiao, Chunlei Zhang, Yuan Chen, Bo Jiang, and Jin Tang. ADRNet: Affine and deformable registration networks for multimodal remote sensing images. IEEE Transactions on Geoscience and Remote Sensing , 62:1–13, 2024. Jiayu Xie and Xin Jin. Thermal infrared guided color image dehazing. In Proceedings of the International Conference on Image Processing , pp. 2465–2469, 2023. Fei Xue, Ignas Budvytis, and Roberto Cipolla. Sfd2: Semantic-guided feature detection and de-scription. In Proceedings of the Conference on Computer Vision and Pattern Recognition , pp. 5206–5216, 2023. Fei Xue, Sven Elflein, Laura Leal-Taix´ e, and Qunjie Zhou. MATCHA: Towards matching anything. In Proceedings of the Computer Vision and Pattern Recognition Conference , pp. 27081–27091, 2025. Ismail Can Yagmur, Hasan F Ates, and Bahadir K Gunturk. Xpoint: A self-supervised visual-state-space based architecture for multispectral image registration. arXiv preprint arXiv:2411.07430 ,2024. Kaining Zhang and Jiayi Ma. Sparse-to-dense multimodal image registration via multi-task learning. In Proceedings of the 41st International Conference on Machine Learning , number 2458, pp. 59490 – 59504, 2024. Shihua Zhang, Zizhuo Li, Kaining Zhang, Yifan Lu, Yuxin Deng, Linfeng Tang, Xingyu Jiang, and Jiayi Ma. Deep learning reforms image matching: A survey and outlook. arXiv preprint arXiv:2506.04619 , 2025a. Shihua Zhang, Zhenjie Zhu, Zizhuo Li, Tao Lu, and Jiayi Ma. Matching while perceiving: Enhance image feature matching with applicable semantic amalgamation. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pp. 10094–10102, 2025b. 12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 Yesheng Zhang and Xu Zhao. MESA: Matching everything by segmenting anything. In Proceedings of the Conference on Computer Vision and Pattern Recognition , pp. 20217–20226, 2024. Kaichen Zhou, Changhao Chen, Bing Wang, Muhamad Risqi U Saputra, Niki Trigoni, and Andrew Markham. Vmloc: Variational fusion for learning-based multimodal camera localization. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , volume 35, pp. 6165–6173, 2021. Shili Zhou, Weimin Tan, and Bo Yan. Promoting single-modal optical flow network for diverse cross-modal flow estimation. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 36, pp. 3562–3570, 2022. Jun-Yan Zhu, Taesung Park, Phillip Isola, and Alexei A Efros. Unpaired image-to-image translation using cycle-consistent adversarial networks. In Proceedings of the International Conference on Computer Vision , pp. 2223–2232, 2017. 
+
+A APPENDIX 
+
+A.1 LIST OF MATHEMATICAL SYMBOLS 
+
+The meanings of the mathematical symbols used in the article are shown in Table 4.                                                     
+
+> F1/2
+> Res , F 1/4
+> Res andF 1/8
+> Res Features processed by ResNet at 1/2,1/4and 1/8resolution.
+> FDIN O Features processed by DINOv2
+> Fstu The refined features output by the student model
+> Ftea The features output by the teacher model, and Ftea =FDIN O
+> Fsvis/ir The shallow features output by Restormer
+> bfclc vis/ir The feature output by modality category representation heads
+> eFvis/ir The category-enhanced features
+> eF1/8
+> Res The enhanced texture features
+> FCAA TThe features after alignment in the channel dimension
+> FSAA TThe features after spatial dimension alignment
+> FST F A TThe features output by STFA module.
+> SThe similarity matrix between {F1/8
+> vis , F 1/8
+> ir }
+> Pk∈(0 ,1) , P fThe coarse-level and fine-level matching probability matrix
+> Mc, M fThe final coarse-level and fine-level matching set
+> SfThe similarity matrix between {ˆf5×5
+> vis ,ˆf5×5
+> ir }
+> θc, θ fThe threshold for coarse-level and fine-level matching
+> {δvis , δ ir }The local subpixel offsets for each match
+> C∗,ˆC∗(ˆ i, ˆj)coordinates before and after subpixel refinement
+
+Table 4: List of Symbols. A.2 DATASET SETUP 
+
+Two parts of data are needed for training and testing DistillMatch, the original dataset, i.e., MegaDepth and METU-VisTIR, and the offline generated dataset indices. The dataset indices store scenes, image pairs, and other metadata within each dataset used for training. We use depth maps provided in the original MegaDepth dataset as well as undistorted images, corresponding camera intrinsics and extrinsics preprocessed by D2-Net. During the training phase, we use V2I-GAN to randomly perform image translation on one of the images in the image pair. A.3 TRAINING CONFIGURATION AND DETAILS 
+
+The knowledge distillation and matching process training of DistillMatch are carried out simultane-ously, without any pre-training and fine-tuning steps. This online distillation method is beneficial for learning features in DINOv2 that are more suitable for multimodal image matching. Detailed train-ing environment details and configurations can be found at: https://anonymous.4open. science/r/DistillMatch-503A/requirements.txt and https://anonymous. 4open.science/r/DistillMatch-503A/environment.yaml .13

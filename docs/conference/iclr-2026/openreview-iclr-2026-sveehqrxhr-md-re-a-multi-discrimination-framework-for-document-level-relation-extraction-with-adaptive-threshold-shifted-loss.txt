@@ -1,0 +1,1005 @@
+Title: 10951_MD_RE_A_Multi_Discrimina.pdf
+
+URL Source: https://openreview.net/pdf?id=SveEhQrxhR
+
+Number of Pages: 22
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# MD-RE: A MULTI -D ISCRIMINATION FRAMEWORK FOR DOCUMENT -L EVEL RELATION EXTRACTION WITH ADAPTIVE THRESHOLD SHIFTED LOSS 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+ABSTRACT 
+
+Document-level relation extraction (DocRE) aims to identify relations for an en-tity pair within a document. Existing methods can be broadly classified into two categories: direct encoding of the entire document or enhancement using extracted evidence sentences. However, the former often introduces noise unrelated to rela-tions, while the latter is heavily dependent on the quality of evidence extraction. Moreover, these DocRE models typically use an adaptive threshold to predict all potential relations for an entity pair. As a result, class imbalance in DocRE of-ten leads the model to learn a high threshold for an entity pair, which in turn causes the model to frequently predict that the entity pair has no relation. To address these issues, we propose a Multi-Discrimination framework ( MD-RE )that does not rely on evidence sentences. MD-RE employs three discriminators with dynamically adjusted thresholds to independently predict relations, and ag-gregates their outputs via a weighted fusion strategy. Furthermore, we propose an Adaptive Threshold Shifted Loss ( ATSL ), which encourages lower thresh-old to alleviate the high false negative rate resulting from class imbalance. Ex-periments on three datasets demonstrate that our MD-RE framework with ATSL achieves new state-of-the-art results. Moreover, ATSL significantly improves the performance of various existing DocRE models. In addition, combining other losses with MD-RE also yields competitive results. Our code is available at 
+
+https://anonymous.4open.science/r/MD-RE .
+
+1 INTRODUCTION 
+
+Document-level relation extraction (DocRE) aims to extract relations for an entity pair from multiple sentences within a document. Since entities may span multiple sentences, the model needs reason over more complex contexts and handle more relation types, making DocRE more challenging than sentence-level relation extraction. DocRE supports tasks such as knowledge graph Mondal et al. (2021), information retrieval Zeng et al. (2024), and question answering Liu et al. (2024). Most existing DocRE models are based on Transformer or graph-based architectures. Representative methods, such as ATLOP Zhou et al. (2021), employ localized context pooling to guide attention toward relation-relevant regions, while KD-DocRE Tan et al. (2022a) enhances multi-hop relation modeling via axial attention. In addition, some graph-based methods construct graphs and use graph neural networks to reason about relations between entities (Peng et al., 2022; Sun et al., 2023). Most of these models use the entire document as input context, but studies (Huang et al., 2021a;b) suggest that this may introduce noise irrelevant to relations. To mitigate this issue, recent works (Xie et al., 2022; Ma et al., 2023; Lu et al., 2023) propose extracting evidence sentences relevant to a given entity pair. However, these methods depend on the quality of evidence extraction and often exhibit limited effectiveness in low-resource scenarios (e.g., without evidence annotations). To address these challenges, we propose a Multi-Discrimination framework ( MD-RE ), which does not rely on evidence sentences and reduces noise from the entire document through multi-discrimination perspectives. Specifically, MD-RE employs three discriminators with varying re-call rates, each adopting a different threshold to determine the existence of relations for an entity pair. Higher-recall discriminators apply lower thresholds to retain more candidate relations, whereas 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 lower-recall ones use higher thresholds to filter them more strictly. To enable each discriminator to use a different threshold for an entity pair, we propose a Loss-aware Negative Selection (LNS) method: for each batch, we retain all positive examples 1 and select the top-k negative examples based on their loss. By reducing the number of negative examples, we can initially adjust the threshold and recall rate of each discriminator .(a) 
+
+> (b)
+
+Figure 1: (a) Impact of ATSL threshold bias on the logits of the threshold and the positive class. (b) Re-call changes across different threshold bias of ATSL. Furthermore, in order to more flexibly ad-just the threshold and recall rate of each dis-criminator by introducing different thresh-old biases, we propose a novel Adaptive 
+
+Threshold Shifted Loss (ATSL). The exist-ing DocRE models usually employ an adap-tive threshold loss (ATL) Zhou et al. (2021) to predict relations for an entity pair, where a relation exists if its predicted logit exceeds the threshold. In the meantime, real-world datasets often face class imbalance 2. This imbalance drives the model to learn a higher threshold for an entity pair, which in turn causes the model to frequently predict that the entity pair has no relation. An intuitive method is to lower the threshold at the ini-tial stage of prediction, allowing more en-tity pairs to be classified as having relations. 
+
+Motivated by this idea , we propose the ATSL, which introduces threshold biases based on the ATL loss, and improves the recall rate by lowering the threshold, thereby reducing the high false negative rate caused by class imbalance. In addition, we further observe that ATSL loss has two key capabil-ities that enable the discriminators to flexibly control both thresholds and recall rates: 1) ATSL can flexibly adjust the boundary between the positive class and the threshold, giving the model a more fine-grained logit judgment ability. In Fig. 1(a) , as the threshold bias increases, both the threshold and the positive class logit decrease, while the boundary between the positive class and the thresh-old shrinks; 2) ATSL also enables flexible control of the recall rate. In Fig. 1(b) , increasing the threshold bias leads to an increase in recall. The contributions of our work are as follows: • We propose a Multi-Discrimination framework (MD-RE) for DocRE, consisting of three discrim-inators with different discrimination criteria. Unlike previous methods, MD-RE framework does not rely on evidence sentences and effectively reduces document-level noise by incorporating multiple discrimination perspectives. • We propose a Loss-aware Negative Selection (LNS) method to initially adjust the threshold and recall rate of each discriminator, and design a weighted fusion strategy to aggregate their outputs, aiming to achieve better prediction performance. • We propose ATSL, a novel loss that introduces threshold biases to more flexibly adjust the thresh-old and recall rate of each discriminator and effectively mitigate class imbalance. • Results on three datasets show that our MD-RE framework with ATSL loss achieves state-of-the-art performance. Notably, MD-RE framework and ATSL loss are independent yet comple-mentary, each capable of improving DocRE . ATSL loss consistently enhances performance and generalizes well across different baselines (average +2.52 F1). Moreover, even without ATSL loss, MD-RE framework with only ATL loss still outperforms the baseline model by +3.04 F1. 
+
+2 RELATED WORK 
+
+Document-Level Relation Extraction. DocRE methods can be broadly categorized into: (1) di-rectly encoding the entire document, such as GAIN Zeng et al. (2020), ATLOP Zhou et al. (2021), DocuNet Zhang et al. (2021), KMGRE Jiang et al. (2022), KD-DocRE Tan et al. (2022a), TTM-RE Gao et al. (2024), ABRE Xu et al. (2024), and VaeDiff-DocRE Tran et al. (2025); (2) introducing      
+
+> 1An entity pair is a positive example if it has at least one relation; otherwise, it’s a negative example .
+> 2Class imbalance: negative examples significantly outnumber positive ones. For instance, in the Re-DocRED Tan et al. (2022b) dataset, about 94% of entity pairs have no relation.
+
+2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 Training stage            
+
+> Localized Context Pooling
+> Relation Classifier
+> Transformer-Based
+> Posion Embs
+> Token Embs
+> Segment Embs
+> PTTH NTmaximize minimize
+> High Threshold Bias
+> Adaptive Threshold Shifted Loss
+> [1] Lark Force was an
+> [2] Under the command
+> Recall Discriminator
+> Document Encoder
+> Loss-aware Negative Selection
+> D
+> PTTH NT
+> maximize minimize
+> Medium Threshold Bias
+> Adaptive Threshold Shifted Loss
+> Coarse Discriminator
+> Document Encoder
+> PTTH NTmaximize minimize
+> Low Threshold Bias
+> Adaptive Threshold Shifted Loss
+> Fine Discriminator
+> Document Encoder
+
+Inference stage 
+
+> Recall
+> Discriminator
+> Coarse Discriminator
+> Fusion
+> logit rrecall (e h,e t;D)
+> logit rcoarse (e h,e t;D)
+> [1]  Lark Force was an
+> [2]  Under the command
+> D
+> Fine Discriminator
+> logit rfine (e h,e t;D)
+> Medium Threshold
+> Low Threshold
+> High Threshold
+> P570
+> P161
+> P58 P577
+> P17
+> P69
+> P19
+> P175
+> P57
+
+Figure 2: Overview of our MD-RE framework. In training, three discriminators with distinct deci-sion criteria apply different thresholds to determine whether a relation exists for an entity pair. The combination of Loss-aware Negative Selection (LNS) and Adaptive Threshold Shifted Loss (ATSL) enables more effective dynamic adjustment of the threshold and recall for each discriminator. In inference, we adopt a weighted fusion strategy to integrate the outputs of three discriminators. evidence sentences, including Eider Xie et al. (2022), SAIS Xiao et al. (2022), DREEAM Ma et al. (2023), and AA Lu et al. (2023). In addition, due to false negatives in DocRED Yao et al. (2019), we evaluate robustness by testing on the revised version, Re-DocRED Tan et al. (2022b), after training on DocRED. Effective methods include SSR-PU Wang et al. (2022), CAST Tan et al. (2023), and P3M Wang et al. (2024). 
+
+Loss for DocRE. DocRE typically employs the ATL Zhou et al. (2021) loss, which adaptively assigns a threshold to each entity pair, considering a relation to exist only when its predicted logit surpasses the threshold. Based on this, Tan et al. (2022a); Zhou & Lee (2022) find that the class imbalance is prevalent in DocRE. To address this, some subsequent studies have enhanced ATL, including Balanced-Softmax Zhang et al. (2021), AML Wei & Li (2022), AFL Tan et al. (2022a), SSR-PU Wang et al. (2022), NCRL Zhou & Lee (2022), PEMSCL Guo et al. (2023), HingeABL Wang et al. (2023) and CMM Duan et al. (2025). The above losses mitigate class imbalance via decision boundary optimization but lack flexible threshold and recall adjustment, limiting their ef-fectiveness. To this end, we propose the Adaptive Threshold Shifted Loss ( ATSL ). 
+
+3 METHODOLOGY 
+
+Our MD-RE framework in Fig. 2 consists of four main parts: Document Encoding module, Dis-crimination and Loss-aware Negative Selection module, Fusion module, and our loss ATSL. 3.1 PROBLEM FORMULATION 
+
+The goal of DocRE is to predict relations R ∪ { NA } for entity pairs (eh, e t)nh,t =1 , h ̸ = t within a document D. Here, {ei}ni=1 denotes the set of entities in the document, and eh and et refer to the head and tail entities, respectively. R is a predefined set of relations, while NA indicates the absence of any relation. For an entity pair T =(eh, e t), the positive classes PT ⊆ R correspond to relations expressed by any entity mention pair, whereas the negative classes NT ⊆ R represent relations not expressed between them. If T expresses no relations, PT is empty, and NT = R.3.2 DOCUMENT ENCODING MODULE 
+
+The token sequence of a document D is denoted as T D = {ti}|TD |
+
+i=1 , where a special token “*” is inserted at the beginning and end of each entity mention. Following ATLOP Zhou et al. (2021) and DREEAM Ma et al. (2023), we obtain token-level hidden states H ∈ R|TD |× d and attention weights A ∈ R|TD |×| TD | by averaging outputs and last-head attentions from the last three encoder layers, 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 respectively, where d is the hidden size: H, A = PLM (TD ) (1) The embedding he for each entity e is obtained by aggregating information from all its mentions Me = {mi}|Me| 
+
+> i=1
+
+, where H mi denotes the embedding of the special token “*” that marks the starting position of the i-th mention: 
+
+he = log 
+
+> |Me|
+
+X
+
+> i=1
+
+exp( Hmi ) (2) Then we use the localized context pooling method to compute ch,t from token embeddings H and cross-token attention A, where A h and A t represent attention for entities eh and et, and ⊗ denotes element-wise product. 
+
+ch,t = H⊤ Ah ⊗ At
+
+A⊤ 
+
+> h
+
+At
+
+(3) The localized context ch,t is concatenated with the heh and het individually. Here, ∥ denotes con-catenation, Wh, W t are trainable weights, and bh, b t are the biases for head and tail entities. Finally, 
+
+zh and zt are fed into a bilinear classifier to compute the relation logits logit h,t for the (eh, e t):
+
+zh = tanh( Wh[heh ∥ch,t ] + bh)
+
+zt = tanh( Wt[het ∥ch,t ] + bt) (4) logit h,t = z⊤ 
+
+> h
+
+Wr zt + br (5) 3.3 DISCRIMINATION AND LOSS -AWARE NEGATIVE SELECTION MODULE 
+
+The core idea of our MD-RE framework is to progressively refine candidate relations through mul-tiple stages. To achieve this, we employ three discriminators with distinct criteria, each applying a differently adjustable threshold to determine whether relations exist between an entity pair. The 
+
+motivation for designing the three discriminators and the details of each one are described in the corresponding sections below. 
+
+Recall Discriminator. This discriminator is designed to achieve a high recall rate by applying lower thresholds to retain more candidate relations. Specifically, given an entity pair, we obtain its logit h,t (see Eq. (5) ), and then evaluate it using our ATSL loss (see Section 3.5 ). By adjusting the hyperparameter λ of ATSL, we can flexibly control the threshold and recall rate of the discriminator. 
+
+Loss-aware Negative Selection. After the recall discriminator, there are still a large number of negative samples, most of which are easy for the model to classify. This causes the model to focus on trivial instances while overlooking harder, more informative ones. To address this, we introduce the Loss-aware Negative Selection ( LNS ) method. By applying LNS, we effectively reduce the impact of too many negative samples, which helps to improve the performance of subsequent coarse and fine discriminators. In addition, LNS can also cooperate with ATSL loss to further dynamically adjust the threshold and recall of each discriminator . Specifically, for each batch, we retain all positive examples and select the Top-k negative examples based on their loss, defined as: 
+
+k = min( ρ · |S pos |, |S neg |)
+
+Sneg-hard = Top-k (Sneg ) (6) Here, Spos and Sneg denote the sets of positive and negative examples within the batch, respectively. 
+
+ρ controls the ratio of selected negatives relative to the number of positives. 
+
+Coarse Discriminator. Subsequently, we feed all positive samples along with the negative samples selected by the LNS method into the coarse discriminator, and incorporate the ATSL loss to dynami-cally set a moderate threshold for each entity pair. This discriminator aims to further filter candidate relations at a coarse granularity. 
+
+Fine Discriminator. The fine discriminator is trained similarly to the coarse discriminator but with a higher threshold. It applies stricter criteria than the coarse discriminator to further refine candidate relations and improve prediction reliability. 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 3.4 FUSION MODULE 
+
+Since the three discriminators use different decision criteria, we design a weighted fusion strategy to effectively integrate their outputs and make the final decision, fully leveraging their respective strengths. Specifically, if the recall discriminator predicts that a triplet (h, r, t ) has the NA , indi-cating the absence of a relation, we accept this prediction. Otherwise, if all three discriminators predict the existence of a triplet (h, r, t ), we directly accept the prediction; if not, we compute a fused logit, where logit recall 
+
+> h,r,t
+
+, logit coarse  
+
+> h,r,t
+
+, and logit fine  
+
+> h,r,t
+
+denote the relation logit of r predicted by three discriminators for an entity pair. logit final  
+
+> h,r,t
+
+= logit recall  
+
+> h,r,t
+
++ logit coarse  
+
+> h,r,t
+
++ logit fine  
+
+> h,r,t
+
+(7) We further define the final adaptive threshold based on the threshold of each discriminator. Similarly, logit recall 
+
+> h, TH ,t
+
+, logit coarse 
+
+> h, TH ,t
+
+, and logit fine  
+
+> h, TH ,t
+
+represent the threshold logits of the three discriminators. logit final  
+
+> h, TH ,t
+
+= α · logit recall  
+
+> h, TH ,t
+
++ logit coarse  
+
+> h, TH ,t
+
++ logit fine  
+
+> h, TH ,t
+
+(8) A relation r exists if logit final  
+
+> h,r,t
+
+> logit final 
+
+> h, TH ,t
+
+. The method leverages complementary decision patterns of discriminators to improve performance. Since the recall discriminator plays a more dominant role in controlling recall, we apply the weighting factor α only to its threshold. 3.5 ATSL L OSS DESIGN 
+
+An Empirical Analysis of ATL. As shown in Eq. (9) , the Adaptive Threshold Loss (ATL) Zhou et al. (2021) divides the set R of predefined relations into two subsets: the positive classes PT and the negative classes NT , with an external threshold class TH used to distinguish between them. The objective is to encourage the logits of PT to be higher than that of the TH class, and the logits of 
+
+NT to be lower than that of the TH class.                    
+
+> L1=−X
+> r∈P T
+> log exp( logit r)
+> P
+> r′∈P T∪{ TH }exp( logit r′)
+> !
+> L2=−log exp( logit TH )
+> P
+> r′∈N T∪{ TH }exp( logit r′)
+> !
+> LAT L =L1+L2
+
+(9) Wang et al. (2023)’s analysis finds a significant difference in the number of relations between PT and 
+
+NT , with NT being larger, causing L2 to dominate the loss calculation. Building on this analysis, we find that the dominance of L2 stems not only from the imbalance between PT and NT , but more fundamentally from the overwhelming proportion of negative examples. When no relation exists between an entity pair, PT is empty, resulting in no contribution from L1, and the loss is solely determined by L2. Since most entity pairs have no relation, L2 dominates. Building on this and Wang et al. (2023), we reformulate L2 as in Eq. (10) . When logit r′ − logit TH → −∞ , L2 → 0,indicating that logit TH ≫ logit r′ . This implies ATL assigns relatively high thresholds to entity pairs                
+
+> L2=−log exp( logit TH )
+> P
+> r′∈N T∪{ TH }exp( logit r′)
+> !
+> =−log 11 + P
+> r′∈N Texp( logit r′−logit TH )
+> !
+
+(10) 
+
+Adaptive Threshold Shifted Loss. As analyzed above, we extend the findings of Wang et al. (2023) and further reveal the limitations: when the number of entity pairs with no relations significantly exceeds the number of entity pairs with relations (class imbalance), the logit of threshold class TH increases and eventually surpasses the logits of many candidate relations, leading to a large number of false negative predictions. To address this issue, we introduce a threshold bias λ > 0 in the TH class to ensure that:                      
+
+> L′
+> 2=−log exp( logit TH +λ)exp( logit TH +λ) + P
+> r′∈N Texp( logit r′)
+> !
+> =−log 11 + P
+> r′∈N Texp( logit r′−(logit TH +λ))
+> !
+
+(11) 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 Minimizing L′ 
+
+> 2
+
+requires that: logit r′ − (logit TH + λ) → −∞ (12) Consequently, we have: logit TH + λ ≫ logit r′
+
+logit TH ≫ logit r′ − λ (13) This shows that λ effectively reduces the logit TH in the optimization process. From Eq. 13 , adding 
+
+λ to the target logit boosts its value in the softmax calculation, allowing the model to achieve the same margin with a smaller logit TH .Similarly, we add a threshold bias β to the other part of loss L′
+
+> 1
+
+, as shown in Eq. (14) . When L′ 
+
+> 1
+
+→ 0,it implies that logit TH + β − logit r → −∞ . From this, we can derive that logit TH + β ≪ logit r .                          
+
+> L′
+> 1=−X
+> r∈P T
+> log exp( logit r)exp( logit TH +β) + P
+> r′∈P Texp( logit r′)
+> !
+> =−X
+> r∈P T
+> log 11 + exp( logit TH +β−logit r) + P
+> r′∈P T,r ′̸=rexp( logit r′−logit r)
+> !
+
+(14) Minimizing ATSL implies the following margin constraints between logits, which ensure a positive margin between classes and theoretically improve generalization Vapnik (1998), as shown in Eq. (15) . More theoretical proof of ATSL loss is detailed in Appendix A. 
+
+logit r − logit TH ≥ β, ∀r ∈ P T , logit TH − logit r′ ≥ λ, ∀r′ ∈ N T . (15) Finally, we obtain the Adaptive Threshold Shifted Loss ( ATSL ), as shown in Eq. (16) .
+
+L′ 
+
+> 1
+
+= − X
+
+> r∈P T
+
+log exp( logit r )exp( logit TH + β) + P 
+
+> r′∈P T
+
+exp( logit r′ )
+
+!
+
+L′ 
+
+> 2
+
+= − log exp( logit TH + λ)exp( logit TH + λ) + P 
+
+> r′∈N T
+
+exp( logit r′ )
+
+!
+
+LAT SL = L′ 
+
+> 1
+
++ L′
+
+> 2
+
+(16) 
+
+4 EXPERIMENTAL SETUP 
+
+Implementation Details. Our experiments are implemented using PyTorch Paszke (2019) and Transformers Wolf et al. (2020), using BERT base Devlin et al. (2019) and RoBERTa large Liu et al. (2019) as encoders. See Appendix B.1 for details. 
+
+Datasets and Metrics. We experiment on the DocRED Yao et al. (2019), DWIE Zaporojets et al. (2021), and Re-DocRED Tan et al. (2022b) datasets, which are detailed in Appendix B.2 . We follow Zhou et al. (2021) and evaluate using F1 and Ign-F1, where F1 represents the standard F1, while 
+
+Ign-F1 is computed by excluding relational facts shared between the train and dev/test sets. 
+
+5 MAIN RESULTS AND ANALYSIS 
+
+We conduct experiments to answer questions about our main contributions: MD-RE and ATSL. • Q1: How does MD-RE framework with ATSL loss perform? (Section 5.1) • Q2: How effective is our ATSL loss when applied to different models? (Section 5.2) • Q3: How does the performance of our ATSL loss compare to other losses? (Section 5.2) • Q4: An ablation study. (Section 5.3) 5.1 MAIN RESULTS 
+
+Results on Re-DocRED. As shown in Table 1 , our MD-RE framework consistently outperforms all strong baselines and the previous SOTA models. Specifically, with the BERT base encoder, MD-RE 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 Table 1: Results on Re-DocRED. The underlined values indicate the results of the previous SOTA. † from Lu et al. (2023), * from original paper, ⋄ from Zhang et al. (2023), ‡ from Tran et al. (2025), and △ our reproduced results. Model Dev Test F1 Ign-F1 F1 Ign-F1 with BERT base 
+
+ATLOP Zhou et al. (2021) 74.22 ⋄ 73.35 ⋄ 74.02 ⋄ 73.22 ⋄
+
+DocuNET Zhang et al. (2021) 74.65 ⋄ 73.68 ⋄ 74.49 ⋄ 73.60 ⋄
+
+KD-DocRE Tan et al. (2022a) 74.69 ⋄ 73.76 ⋄ 74.55 ⋄ 73.67 ⋄
+
+DREEAM Ma et al. (2023) 74.58 △ 73.74 △ 74.23 △ 73.42 △
+
+CAST Tan et al. (2023) - - 74.67 ‡ 73.32 ‡
+
+SA-KD Zhang et al. (2023) 75.85 ⋄ 75.03 ⋄ 75.77 ⋄ 74.85 ⋄
+
+ABRE Xu et al. (2024) 76.26 * 75.54 * 76.30 * 75.70 *
+
+VaeDiff-DocRE Tran et al. (2025) 75.89 ‡ 74.96 ‡ 75.07 ‡ 74.13 ‡
+
+MD-RE (ours) 77.70±0.10 76.46±0.07 77.80±0.04 76.63±0.02 
+
+with RoBERTa large 
+
+ATLOP Zhou et al. (2021) 77.63 † 76.88 † 77.73 † 76.94 †
+
+DocuNET Zhang et al. (2021) 78.16 † 77.53 † 77.92 † 77.27 †
+
+KD-DocRE Tan et al. (2022a) 78.65 † 77.92 † 78.35 † 77.63 †
+
+PEMSCL Guo et al. (2023) 79.89 † 79.02 † 79.86 † 79.01 †
+
+AA Lu et al. (2023) 81.15 † 80.04 † 81.20 † 80.12 †
+
+TTM-RE Gao et al. (2024) 78.13 * 78.05 * 79.95 * 78.20 *
+
+VaeDiff-DocRE Tran et al. (2025) 79.19 ‡ 78.35 ‡ 79.03 ‡ 78.22 ‡
+
+MD-RE (ours) 81.44±0.12 80.38±0.12 81.49±0.05 80.45±0.06 
+
+achieves F1 of 77.70 and 77.80 on the dev and test sets, respectively, outperforming the previous SOTA model ABRE by 1.44 and 1.50. Similarly, with the RoBERTa large encoder, MD-RE achieves F1 of 81.44 and 81.49 on the dev and test sets, respectively, outperforming the SOTA model AA by 0.29 points on both splits. 
+
+Results on DWIE. As shown in Table 2 , MD-RE consistently outperforms baseline models on DWIE dataset, reaching 73.81 F1 and 68.37 Ign-F1 on the dev set, and 78.32 F1 and 71.28 Ign-F1 on the test set. Compared with strong baseline MILR, MD-RE improves F1 and Ign-F1 on the test set by 1.81 and 1.44, respectively. Notably, MD-RE also surpasses the recent DREEAM model, further demonstrating its effectiveness across challenging DocRE benchmarks. Table 2: Results on DWIE with BERT base . * from Jiang et al. (2022), ⋄ from original paper, and ‡ from ours. Model Dev Test F1 Ign-F1 F1 Ign-F1 GAIN * 62.55 58.63 67.57 62.37 ATLOP * 69.96 63.57 74.36 67.56 KMGRE * 71.40 65.56 76.71 69.94 MILR ⋄ 72.05 67.18 76.51 69.84 DREEAM ‡ 72.40 65.93 74.66 67.27 TTM-RE ‡ 64.51 56.62 65.01 54.71 MD-RE (ours) 73.81±0.32 68.37±0.36 78.32±0.12 71.28±0.10 
+
+Table 3: Results on DocRED using RoBERTa large . * from Wang et al. (2024); † from Tan et al. (2023). Model Test F1 Ign-F1 ATLOP Zhou et al. (2021) * 45.19 45.09 DocuNET Zhang et al. (2021) † 45.99 45.88 KD-DOcRE Tan et al. (2022a) † 47.57 47.32 SSR-PU Wang et al. (2022) * 59.50 58.68 CAST Tan et al. (2023) † 65.32 64.25 P3M Wang et al. (2024) * 64.34 63.16 MD-RE (ours) 65.93±0.04 64.96±0.03 
+
+Results on DocRED. To evaluate the weakly supervised generalization ability of MD-RE, we train on the incomplete dataset DocRED and test on the fully annotated dataset Re-DocRED. Table 3 
+
+shows that the MD-RE achieves the best results among all compared methods, with an F1 of 65.93 and an Ign-F1 of 64.96 on the test set. Compared to the previous competitive model CAST, MD-RE obtains gains of 0.61 F1 and 0.71 Ign-F1. When compared with other strong baselines such as P 3Mand SSR-PU, MD-RE’s improvement ranges from a minimum of 1.59 to a maximum of 6.43. 5.2 RESULTS OF ATSL 
+
+Different DocRE Models with ATSL. To evaluate the generality of our loss, we apply ATSL to different models by replacing their original losses . ATLOP and DREEAM use ATL loss, DocuNet uses Balanced-Softmax loss, KD-DocRE uses AFL loss, and TTM-RE uses S-PU loss. Table 4 
+
+shows that the ATSL loss significantly improves the performance of all baseline models. Specifi-7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Table 4: Performance of different DocRE models using ATSL loss. * from Lu et al. (2023), △ from Zhang et al. (2023), ⋄ from original paper, and † our reproduced results. ” with ATSL ” indicates replacing the original loss with our ATSL loss. Model Dev Test F1 F1 with ATSL Ign-F1 Ign-F1 with ATSL F1 F1 with ATSL Ign-F1 Ign-F1 with ATSL Re-DocRED with BERT base                                                                                                                                                                 
+
+> ATLOP Zhou et al. (2021) 74.22 △76.23 (+2.01) 73.35 △74.83 (+1.48) 74.02 △76.48 (+2.46) 73.22 △75.12 (+1.90) DocuNet Zhang et al. (2021) 74.65 △76.26 (+1.61) 73.68 △74.81 (+1.13) 74.49 △76.45 (+1.96) 73.60 △75.07 (+1.47) KD-DocRE Tan et al. (2022a) 74.69 △76.70 (+2.01) 73.76 △75.52 (+1.76) 74.55 △76.65 (+2.10) 73.67 △75.50 (+1.83) DREEAM Ma et al. (2023) 74.58 †76.08 (+1.50) 73.74 †74.81 (+1.07) 74.23 †76.14 (+1.91) 73.42 †74.92 (+1.50) TTM-RE Gao et al. (2024) 76.21 †80.16 (+3.95) 74.74 †79.05 (+4.31) 76.33 †80.51 (+4.18) 74.89 †79.48 (+4.59) Re-DocRED with RoBERTa large
+> ATLOP Zhou et al. (2021) 77.63 *80.35 (+2.72) 76.88 *79.22 (+2.34) 77.73 *80.40 (+2.67) 76.94 *79.29 (+2.35) DocuNet Zhang et al. (2021) 78.16 *79.76 (+1.60) 77.53 *78.78 (+1.25) 77.92 *79.85 (+1.93) 77.27 *78.91 (+1.64) KD-DocRE Tan et al. (2022a) 78.65 *79.06 (+0.41) 77.92 *78.07 (+0.15) 78.35 *78.76 (+0.41) 77.63 *77.78 (+0.15) DREEAM Ma et al. (2023) 77.60 †79.56 (+1.96) 77.20 †78.62 (+1.42) 77.94 ⋄79.86 (+1.92) 77.34 ⋄78.96 (+1.62) TTM-RE Gao et al. (2024) 78.13 ⋄82.57 (+4.44) 78.05 ⋄81.70 (+3.65) 79.95 ⋄82.36 (+2.41) 78.20 ⋄81.53 (+3.33)
+
+cally, the TTM-RE model with BERT base achieves improvements of 4.18 in F1 and 4.59 in Ign-F1 on the test set. Similarly, the ATLOP model with RoBERTa large achieves gains of 2.67 in F1 and 
+
+2.35 in Ign-F1. Moreover, our loss achieves an average improvement of 2.52 in F1 on the BERT test set, and 2.23 in F1 on the RoBERTa dev set. These results demonstrate the generality of ATSL in enhancing different DocRE models. 
+
+ATSL vs. Other Loss. To verify the effectiveness of ATSL compared to other losses , we evaluate them using the ATLOP and BERT base encoder. Table 5 shows that ATSL achieves 76.48 in F1 and 75.12 in Ign-F1, outperforming other losses. Specifically, compared to the current SOTA CMM loss, ATSL improves F1 and Ign-F1 by 0.36 each, and achieves an average improvement of 2.62 F1 over other losses. These results clearly demonstrate its effectiveness in the DocRE task. Table 5: Results of different losses on Re-DocRED test set. * from Wang et al. (2023), † from Duan et al. (2025). Using ATLOP Zhou et al. (2021) and BERT base for encoding. Loss Function F1 Ign-F1 ATL Zhou et al. (2021) * 73.29 72.46 Balanced-Softmax Zhang et al. (2021) * 73.68 72.85 AML Wei & Li (2022) * 72.60 71.78 AFL Tan et al. (2022a) * 74.15 73.20 HingeABL SAT Wang et al. (2023) * 73.46 72.61 HingeABL MeanSAT Wang et al. (2023) * 74.68 72.90 HingeABL Wang et al. (2023) * 75.15 73.84 CMM Duan et al. (2025) † 76.12 74.76 ATSL (Our Loss) 76.48 (0.36 ↑) 75.12 (0.36 ↑)Table 6: An ablation study on the Re-DocRED dev set using BERT base as the encoder, where 
+
+w/o denotes removal and w indicates inclusion. Model F1 Ign-F1 MD-RE (ours) 77.70 76.46 
+
+w /o ATSL w ATL 77.25 76.18 
+
+w /o LNS 77.52 76.27 
+
+w /o Weighted w Pipeline 72.83 72.27 
+
+w /o Weighted w Add 77.02 75.53 
+
+w /o Coarse Discriminator 77.18 75.67 
+
+w /o Fine Discriminator 76.38 74.58 
+
+only Recall Discriminator 76.23 74.83 5.3 ABLATION STUDY 
+
+We perform an ablation study to assess each component’s impact. See Table 6 for results, with further details in Appendix C .
+
+w /o ATSL w ATL. Replacing ATSL loss with ATL loss slightly reduces performance. On the one hand, ATSL can be better combined with LNS; on the other hand, ATSL alleviates class imbalance. 
+
+w /o LNS. After removing LNS, the F1 drops by 0.18, indicating that removing it does not affect MD-RE’s ability to set different thresholds for individual discriminators, thanks to the ATSL loss. In addition, the negative samples selected by LNS also bring a slight performance gain. 
+
+w /o Weighted w Pipeline. Replacing the weighted fusion with a pipeline fusion severely reduces performance, as it only retains triplets unanimously judged as true by all three discriminators, dis-carding many potential relations. 
+
+w /o Weighted w Add. Replacing the weighted fusion with a union fusion results in a performance drop. Results indicate that the weighted fusion module effectively integrates information from dif-ferent discriminators and exploits their complementary capabilities. 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 
+
+w /o Coarse Discriminator. Removing the coarse discriminator results in a slight decrease of 0.52 in the F1. This suggests that the coarse discriminator brings a slight improvement. 
+
+w /o Fine Discriminator. Removing the fine discriminator results in a slightly larger performance drop than removing the coarse one, with the F1 decreasing by 1.32. This suggests that the fine discriminator contributes more to refining the process. 
+
+only Recall Discriminator. Using only the recall discriminator leads to a drop in performance. This shows that the recall discriminator captures many candidates but lacks the refinement of the other two discriminators. Consequently, many false positives are retained, reducing overall precision. 
+
+6 FURTHER ANALYSIS 
+
+To further investigate our method’s performance, we answer the following research questions: • Q5: How does our MD-RE compare to other models under the same loss? (Section 6.1) • Q6: Does the ATSL loss alleviate the class imbalance? (Section 6.2) • Q7: How resource-efficient is MD-RE with ATSL compared to other models? (Section 6.3) • Q8: What is the training cost of our ATSL loss? (Section 6.4) • Q9: How does MD-RE framework perform on long documents? (Appendix D.1) • Q10: How does the number of discriminators affect the MD-RE framework? (Appendix D.2) • Q11: How does hyperparameter λ influence the performance of ATSL loss? (Appendix D.3) • Q12: How does hyperparameter α affect MD-RE performance with ATSL loss? (Appendix D.4) • Q13: Case Study and Error Analysis. (Appendix D.5) 6.1 MD-RE VS . B ASELINES UNDER SAME LOSSES 
+
+To verify the effectiveness and generalizability of the MD-RE framework, Table 7 compares MD-RE with strong baselines under the same losses. Under the ATL loss, MD-RE significantly outperforms ATLOP, achieving a 3.04 and 2.80 improvement in F1 and Ign-F1, respectively. Similarly, when trained with the PEMSCL loss, MD-RE surpasses VaeDiff-DocRE by 2.33 in F1 and 1.96 in Ign-F1. Within MD-RE, these methods improve F1 by an average of 2.23. These consistent improvements across losses demonstrate MD-RE’s effectiveness and generalizability. Table 7: MD-RE vs. baselines under same losses, all using BERT base on the Re-DocRED test set. Loss + Model F1 Ign-F1 ATL loss Zhou et al. (2021) + ATLOP 74.02 73.22 + MD-RE (ours) 77.06 (3.04 ↑) 76.02 (2.80 ↑)AFL loss Tan et al. (2022a) + KD-DocRE 74.55 73.67 + MD-RE (ours) 77.41 (2.86 ↑) 76.19 (2.52 ↑)NCRL loss Xu et al. (2024) + ABRE 76.30 75.70 + MD-RE (ours) 76.99 (0.69 ↑) 75.97 (0.27 ↑)PEMSCL loss Tran et al. (2025) + VaeDiff-DocRE 75.07 74.13 + MD-RE (ours) 77.40 (2.33 ↑) 76.09 (1.96 ↑)6.2 ANALYZING THE CLASS IMBALANCE 
+
+To illustrate the effectiveness of our ATSL in alleviating class imbalance, we apply ATSL to various models and examine false negatives (FN), false positives (FP), and AUC. As shown in Table 8, ATSL substantially reduces FN and the FN/(FN + FP) ratio across all models, effectively mitigating false negatives caused by class imbalance. More importantly, ATSL consistently improves AUC, with an average gain of 4.53, and achieves the largest increases in BERT base TTM-RE (from 68.05 to 73.55) and RoBERTa large ATLOP (from 65.61 to 72.50). These improvements in AUC suggest that ATSL not only reduces false negatives but also improves overall discriminative ability and robustness under class imbalance. We also observe that FP increases in some models, but the overall performance gain remains substantial. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 Table 8: Experimental results on class imbalance on Re-DocRED dev set. FN (False Negative): Predicts a positive example as negative. FP (False Positive): Predicts a negative example as positive. FN NA: Predicts a positive example as negative, and the predicted label is NA. Model FN ↓ FP ↓ FN NA FN / (FN + FP) AUC ↑                                                                                       
+
+> BERT base Encoder ATLOP Zhou et al. (2021) 5833 1942 5054 0.75 60.81 ATLOP + ATSL (ours) 4181 4029 3467 0.51 67.66 (6.85 ↑)DocuNet Zhang et al. (2021) 5777 1955 4971 0.75 63.90 DocuNet + ATSL (ours) 4111 4154 3428 0.50 68.04 (4.14 ↑)TTM-RE Gao et al. (2024) 4413 3745 3724 0.54 68.05 TTM-RE + ATSL (ours) 3710 3107 2898 0.54 73.55 (5.50 ↑)VaeDiff-DocRE Tran et al. (2025) 5180 2525 4358 0.67 66.28 VaeDiff-DocRE + ATSL (ours) 4313 3354 3664 0.56 69.18 (2.90 ↑)Model FN ↓FP ↓FN NA FN / (FN + FP) AUC ↑
+> RoBERTa large Encoder ATLOP Zhou et al. (2021) 5205 1741 4405 0.75 65.61 ATLOP + ATSL (ours) 3695 2951 3052 0.56 72.50 (6.89 ↑)DocuNet Zhang et al. (2021) 5126 1833 4203 0.74 67.73 DocuNet + ATSL (ours) 4069 2592 3362 0.61 70.32 (2.59 ↑)TTM-RE Gao et al. (2024) 4245 2526 3504 0.63 70.04 TTM-RE + ATSL (ours) 3766 2156 3020 0.64 74.09 (4.05 ↑)VaeDiff-DocRE Tran et al. (2025) 4974 1874 4099 0.73 68.12 VaeDiff-DocRE + ATSL (ours) 4146 2636 3467 0.61 71.46 (3.34 ↑)
+
+6.3 RESOURCE EFFICIENCY 
+
+To assess the resource efficiency of MD-RE, Table 9 presents a comparison of memory usage and training time. MD-RE demonstrates favorable efficiency, requiring only 17.63 GiB of memory, which is lower than that of TTM-RE (without evidence), as well as Eider and SAIS (both of which use evidence). Its training time of 81.80 minutes is also significantly shorter than that of KD-DocRE and TTM-RE, both of which do not use evidence. Table 9: Resource usage under BERT base on Re-DocRED (batch size 4). * from Ma et al. (2023). Method Memory Training Time F1 (GiB) (Min) without evidence ATLOP 10.37 55.80 74.02 KD-DocRE 14.71 169.59 74.55 TTM-RE 20.30 208.37 -with evidence Eider 43.10 * - -SAIS 46.20 * - -DREEAM 13.46 59.02 74.23 MD-RE (ours) 17.63 81.80 77.80 
+
+Table 10: Training time comparison of ATSL and other losses on the ATLOP backbone with BERT base , trained for 30 epochs on Re-DocRED (batch size 4). Loss Function Approx. Training Time ATL Zhou et al. (2021) 59.71 minutes Balanced-Softmax Zhang et al. (2021) 57.27 minutes AML Wei & Li (2022) 54.50 minutes AFL Tan et al. (2022a) 60.45 minutes HingeABL SAT Wang et al. (2023) 58.39 minutes HingeABL MeanSAT Wang et al. (2023) 60.81 minutes HingeABL Wang et al. (2023) 59.87 minutes ATSL (Ours) 57.12 minutes 6.4 TRAINING COST OF ATSL L OSS 
+
+To evaluate the training cost of the proposed ATSL, we compare the training time of ATSL and sev-eral other losses. As shown in Table 10 , ATSL requires 57.12 minutes, which is largely comparable to other existing losses. For example, ATL and HingeABL require 59.71 and 59.87 minutes, re-spectively, while Balanced-Softmax and AML complete training in 57.27 and 54.50 minutes. These results indicate that incorporating ATSL does not introduce any notable computational overhead. 
+
+7 CONCLUSION 
+
+We propose a novel MD-RE framework that incorporates three discriminators with different deci-sion criteria. By leveraging unique characteristics of each discriminator, we integrate their outputs using a weighted fusion method. This design alleviates the issue of introducing noise unrelated to the relation from the entire document and does not rely on evidence sentences. In addition, we propose a novel multi-label classification loss, ATSL, which effectively mitigates class imbalance. Notably, MD-RE and ATSL are independent yet complementary, each capable of improving DocRE on its own without interdependence. Extensive experiments show the effectiveness and general ap-plicability of both MD-RE framework and ATSL loss. 
+
+REFERENCES 
+
+Stephen P Boyd and Lieven Vandenberghe. Convex optimization . Cambridge university press, 2004. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers) (NAACL-HLT) , pp. 4171–4186, 2019. Zhichao Duan, Tengyu Pan, Zhenyu Li, Xiuxing Li, and Jianyong Wang. Comm: Concentrated margin maximization for robust document-level relation extraction. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) , volume 39, pp. 23841–23849, 2025. Chufan Gao, Xuan Wang, and Jimeng Sun. TTM-RE: memory-augmented document-level relation extraction. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL) , 2024. Jia Guo, Stanley Kok, and Lidong Bing. Towards integration of discriminability and robustness for document-level relation extraction. In Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics (EACL) , pp. 2598–2609, 2023. Kevin Huang, Peng Qi, Guangtao Wang, Tengyu Ma, and Jing Huang. Entity and evidence guided document-level relation extraction. In Proceedings of the 6th Workshop on Representation Learn-ing for NLP (RepL4NLP-2021) , pp. 307–315, 2021a. Quzhe Huang, Shengqi Zhu, Yansong Feng, Yuan Ye, Yuxuan Lai, and Dongyan Zhao. Three sen-tences are all you need: Local path enhanced document relation extraction. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th Interna-tional Joint Conference on Natural Language Processing (Volume 2: Short Papers) (ACL) , pp. 998–1004, 2021b. Feng Jiang, Jianwei Niu, Shasha Mo, and Shengda Fan. Key mention pairs guided document-level relation extraction. In Proceedings of the 29th International Conference on Computational Linguistics (COLING) , pp. 1904–1914, October 2022. Bulou Liu, Zhenhao Zhu, Qingyao Ai, Yiqun Liu, and Yueyue Wu. Ledqa: A chinese legal case document-based question answering dataset. In Proceedings of the 33rd ACM International Con-ference on Information and Knowledge Management (CIKM) , pp. 5385–5389, 2024. Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. Roberta: A robustly optimized BERT pretraining approach. arXiv, abs/1907.11692 , 2019. Chonggang Lu, Richong Zhang, Kai Sun, Jaein Kim, Cunwang Zhang, and Yongyi Mao. Anaphor assisted document-level relation extraction. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pp. 15453–15464, 2023. Youmi Ma, An Wang, and Naoaki Okazaki. Dreeam: Guiding attention with evidence for improv-ing document-level relation extraction. In Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics (EACL) , pp. 1971–1983, 2023. Ishani Mondal, Yufang Hou, and Charles Jochim. End-to-end construction of nlp knowledge graph. In Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021 , pp. 1885– 1895, 2021. A Paszke. Pytorch: An imperative style, high-performance deep learning library. arXiv preprint arXiv:1912.01703 , 2019. Xingyu Peng, Chong Zhang, and Ke Xu. Document-level relation extraction via subgraph reasoning. In International Joint Conference on Artificial Intelligence (IJCAI) , pp. 4331–4337, 2022. Shai Shalev-Shwartz and Shai Ben-David. Understanding machine learning: From theory to algo-rithms . Cambridge university press, 2014. Qi Sun, Kun Huang, Xiaocui Yang, Pengfei Hong, Kun Zhang, and Soujanya Poria. Uncertainty guided label denoising for document-level distant relation extraction. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) (ACL) ,pp. 15960–15973, 2023. 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Qingyu Tan, Ruidan He, Lidong Bing, and Hwee Tou Ng. Document-level relation extraction with adaptive focal loss and knowledge distillation. In Findings of the Annual Meeting of the Associa-tion for Computational Linguistics (ACL) , pp. 1672–1681, 2022a. Qingyu Tan, Lu Xu, Lidong Bing, Hwee Tou Ng, and Sharifah Mahani Aljunied. Revisiting docred-addressing the false negative problem in relation extraction. In Proceedings of the 2022 Confer-ence on Empirical Methods in Natural Language Processing (EMNLP) , pp. 8472–8487, 2022b. Qingyu Tan, Lu Xu, Lidong Bing, and Hwee Tou Ng. Class-adaptive self-training for relation extrac-tion with incompletely annotated training data. In Findings of the Association for Computational Linguistics (ACL) , pp. 8630–8643, 2023. Khai Phan Tran, Wen Hua, and Xue Li. Vaediff-docre: End-to-end data augmentation framework for document-level relation extraction. In Proceedings of the 31st International Conference on Computational Linguistics (COLING) , pp. 7307–7320, 2025. Vladimir N Vapnik. The nature of statistical learning. (No Title) , 1998. Vladimir N Vapnik. An overview of statistical learning theory. IEEE transactions on neural net-works , 10(5):988–999, 1999. Jize Wang, Xinyi Le, Xiaodi Peng, and Cailian Chen. Adaptive hinge balance loss for document-level relation extraction. In Findings of Conference on Empirical Methods in Natural Language Processing (EMNLP) , pp. 3872–3878, 2023. Ye Wang, Xinxin Liu, Wenxin Hu, and Tao Zhang. A unified positive-unlabeled learning framework for document-level relation extraction with different levels of labeling. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pp. 4123–4135, 2022. Ye Wang, Huazheng Pan, Tao Zhang, Wen Wu, and Wenxin Hu. A positive-unlabeled metric learn-ing framework for document-level relation extraction with incomplete labeling. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) , volume 38, pp. 19197–19205, 2024. Ying Wei and Qi Li. Sagdre: Sequence-aware graph-based document-level relation extraction with adaptive margin loss. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Dis-covery and Data Mining (KDD) , pp. 2000–2008, 2022. Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, R´ emi Louf, Morgan Funtowicz, et al. Transformers: State-of-the-art natural language processing. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations (EMNLP) , pp. 38–45, 2020. Yuxin Xiao, Zecheng Zhang, Yuning Mao, Carl Yang, and Jiawei Han. Sais: Supervising and augmenting intermediate steps for document-level relation extraction. In Proceedings of the 2022 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT) , pp. 2395–2409, 2022. Yiqing Xie, Jiaming Shen, Sha Li, Yuning Mao, and Jiawei Han. Eider: Empowering document-level relation extraction with efficient evidence extraction and inference-stage fusion. In Findings of (ACL) , pp. 257–268, 2022. Xiaolong Xu, Chenbin Li, Haolong Xiang, Lianyong Qi, Xuyun Zhang, and Wanchun Dou. Atten-tion based document-level relation extraction with none class ranking loss. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence (IJCAI) , 2024. Yuan Yao, Deming Ye, Peng Li, Xu Han, Yankai Lin, Zhenghao Liu, Zhiyuan Liu, Lixin Huang, Jie Zhou, and Maosong Sun. Docred: A large-scale document-level relation extraction dataset. In 
+
+Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics (ACL) ,pp. 764–777, 2019. Klim Zaporojets, Johannes Deleu, Chris Develder, and Thomas Demeester. DWIE: an entity-centric dataset for multi-task document-level information extraction. Inf. Process. Manag. , 58(4):102563, 2021. 12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 Hansi Zeng, Chen Luo, Bowen Jin, Sheikh Muhammad Sarwar, Tianxin Wei, and Hamed Zamani. Scalable and effective generative information retrieval. In Proceedings of the ACM Web Confer-ence 2024 (WWW) , pp. 1441–1452, 2024. Shuang Zeng, Runxin Xu, Baobao Chang, and Lei Li. Double graph based reasoning for document-level relation extraction. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pp. 1630–1640, 2020. Liang Zhang, Zijun Min, Jinsong Su, Pei Yu, Ante Wang, and Yidong Chen. Exploring effective inter-encoder semantic interaction for document-level relation extraction. In Proceedings of the Thirty-Second International Joint Conference on Artificial Intelligence (IJCAI) , pp. 5278–5286, 2023. Ningyu Zhang, Xiang Chen, Xin Xie, Shumin Deng, Chuanqi Tan, Mosha Chen, Fei Huang, Luo Si, and Huajun Chen. Document-level relation extraction as semantic segmentation. In Proceedings of the Thirtieth International Joint Conference on Artificial Intelligence (IJCAI) , pp. 3999–4006, 2021. Wenxuan Zhou, Kevin Huang, Tengyu Ma, and Jing Huang. Document-level relation extraction with adaptive thresholding and localized context pooling. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) , volume 35, pp. 14612–14620, 2021. Yang Zhou and Wee Sun Lee. None class ranking loss for document-level relation extraction. In 
+
+Proceedings of the Thirty-First International Joint Conference on Artificial Intelligence (IJCAI) ,pp. 4538–4544, 2022. 
+
+A THEORETICAL ANALYSIS OF ATSL L OSS 
+
+In this section, we provide a rigorous theoretical justification for the Adaptive Threshold Shifted 
+
+Loss ( ATSL ), including convexity, conditional risk analysis, optimal logits, and Bayes consistency. A.1 PROBLEM SETUP AND NOTATION 
+
+Let X be the input space and Y = {0, 1}K be the multi-label output space, where K is the number of labels. For an input x ∈ X , let y ∈ Y denote its corresponding multi-label vector, where yr = 1 
+
+if label r is relevant and yr = 0 otherwise. Define ∆r (x) = P(yr = 1 | x) as the conditional probability that label r is relevant given input 
+
+x. We assume conditional independence of labels given x, i.e., P(y | x) = QKr=1 ∆r (x)yr (1 −
+
+∆r (x)) 1−yr .Given a prediction function f : X → RK+1 that outputs logits (logit 1, . . . , logit K , logit TH ). Let 
+
+y ∈ { 0, 1}K be the ground-truth label vector for input x. We define the sets of positive and negative classes for loss calculation as: 
+
+PT = {r : yr = 1 } (ground-truth positive labels) , (17) 
+
+NT = {r : yr = 0 } (ground-truth negative labels) . (18) A.2 ATSL L OSS DEFINITION 
+
+The ATSL loss is defined as: 
+
+L′ 
+
+> 1
+
+= − X
+
+> r∈P T
+
+log exp( logit r )exp( logit TH + β) + P 
+
+> r′∈P T
+
+exp( logit r′ ) , (19) 
+
+L′ 
+
+> 2
+
+= − log exp( logit TH + λ)exp( logit TH + λ) + P 
+
+> r′∈N T
+
+exp( logit r′ ) , (20) 
+
+LATSL = L′ 
+
+> 1
+
++ L′
+
+> 2
+
+, (21) where PT and NT are the ground-truth positive and negative sets as defined in Section 3.1 , and 
+
+β, λ ≥ 0 are hyperparameters. 13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 A.3 CONVEXITY OF ATSL 
+
+Proposition 1 (Convexity). The ATSL loss can be rewritten as: 
+
+L′ 
+
+> 1
+
+= X
+
+> r∈P T
+
+h
+
+log 
+
+
+
+exp( logit TH + β) + X
+
+> r′∈P T
+
+exp( logit r′ )
+
+
+
+− logit r
+
+i
+
+, (22) 
+
+L′ 
+
+> 2
+
+= log 
+
+
+
+exp( logit TH + λ) + X
+
+> r′∈N T
+
+exp( logit r′ )
+
+
+
+− (logit TH + λ). (23) 
+
+Proof: The function log-sum-exp (z1, . . . , z n) = log( Pni=1 exp( zi)) is convex Boyd & Vanden-berghe (2004) in (z1, . . . , z n). Since L′ 
+
+> 1
+
+and L′ 
+
+> 2
+
+are compositions of convex functions (log-sum-exp) and affine transformations of the logits, both are convex functions over the domain RK+1 .Therefore, LATSL = L′ 
+
+> 1
+
++ L′ 
+
+> 2
+
+is convex. A.4 CONDITIONAL RISK ANALYSIS 
+
+The conditional risk associated with the ATSL loss is: 
+
+RATSL (f | x) = E[LATSL (f (x), Y ) | X = x]. (24) 
+
+Proposition 2 (Conditional Risk Formula). Under the conditional independence assumption, the conditional risk can be expressed as: 
+
+RATSL (f | x) = E
+
+" X
+
+> r∈P T
+
+log exp( logit TH + β) + X
+
+> r′∈P T
+
+exp( logit r′ )
+
+!
+
+− X
+
+> r∈P T
+
+logit r
+
+#
+
++ E
+
+"
+
+log exp( logit TH + λ) + X
+
+> r′∈N T
+
+exp( logit r′ )
+
+!
+
+− (logit TH + λ)
+
+#
+
+.
+
+(25) For a given input x and its deterministic ground-truth labels, the expectation simplifies to the point-wise loss: 
+
+RATSL (f | x) = |P T | log exp( logit TH + β) + X
+
+> r′∈P T
+
+exp( logit r′ )
+
+!
+
+− X
+
+> r∈P T
+
+logit r
+
++ log exp( logit TH + λ) + X
+
+> r′∈N T
+
+exp( logit r′ )
+
+!
+
+− (logit TH + λ),
+
+(26) where |P T | denotes the cardinality of PT .A.5 OPTIMAL LOGITS 
+
+Proposition 3 (Optimal Logits). The population-optimal logits that minimize RATSL (f | x)
+
+satisfy the following first-order conditions: 
+
+∂RATSL 
+
+∂logit r
+
+= |P T | · exp( logit r )exp( logit TH + β) + P 
+
+> r′∈P T
+
+exp( logit r′ ) − 1 = 0 , r ∈ P T ,∂RATSL 
+
+∂logit s
+
+= exp( logit s)exp( logit TH + λ) + P 
+
+> r′∈N T
+
+exp( logit r′ ) = 0 , s ∈ N T ,∂RATSL 
+
+∂logit TH 
+
+= |P T | · exp( logit TH + β)exp( logit TH + β) + P 
+
+> r′∈P T
+
+exp( logit r′ )+ exp( logit TH + λ)exp( logit TH + λ) + P 
+
+> r′∈N T
+
+exp( logit r′ ) − 1 = 0 .
+
+Note: The second condition implies logit s → −∞ for s ∈ N T , which aligns with the intuition that labels predicted as negative should have very low logits. The first and third conditions provide relationships between the positive label logits and the threshold. 14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 A.6 BAYES CONSISTENCY 
+
+Proposition 4 (Bayes Consistency). ATSL is Bayes consistent in the sense that it provides a con-sistent ranking-based approach for multi-label classification. 
+
+Proof: 
+
+Step 1: Convergence of Empirical Risk Minimizer. Since ATSL is convex and differentiable, by standard results in statistical learning theory (Vapnik, 1999; Shalev-Shwartz & Ben-David, 2014), the empirical risk minimizer converges almost surely to the population risk minimizer as the sample size approaches infinity. 
+
+Step 2: Optimal Threshold Property. The ATSL loss encourages: • Labels in PT to have high logits relative to the threshold logit TH + β
+
+• The threshold logit TH + λ to be high relative to labels in NT
+
+At the population optimum, this creates a clear separation between positive and negative predictions, with the threshold adapting to provide optimal ranking performance. 
+
+Step 3: Ranking-Induced Consistency. Unlike margin-based pairwise losses that assume balanced label distributions, the ATSL loss introduces tunable parameters β and λ to handle label imbalance explicitly. These parameters shift the decision threshold to reflect the asymmetry between positive and negative labels. The ATSL loss encourages positive labels ( PT ) to be ranked above both the threshold and the nega-tive labels ( NT ), creating a separation margin that adapts to the imbalance. Assuming the optimal ranking is induced by the ordering of the conditional label probabilities, the ATSL loss induces a scoring function that is consistent with this ordering. Hence, the classifier converges to the Bayes-optimal ranking under a label-ranking loss, even when β, λ > 0 are fixed and used to regularize the imbalance. 
+
+B DATASETS AND HYPERPARAMETERS 
+
+B.1 HYPERPARAMETER SETTINGS 
+
+We summarize the hyperparameters used for training on three datasets in Table 11 . To ensure robust evaluation, we conduct experiments using three different random seeds and report the averaged re-sults. The batch size is set to 4, and learning rates for the encoder and classifier are tuned separately: a lower rate (1e-5 to 5e-5) for the encoder and a higher rate (1e-4) for the classifier. A warm-up ratio of 0.06 is applied across all settings to stabilize the early stages of training. The ATSL-related hyperparameters include λ = {λRecall , λ Coarse , λ Fine } and β = {βRecall , β Coarse , β Fine }, which control the weights for the recall, coarse, and fine discriminators, respectively. Since the hyperparameters 
+
+λ and β in the ATSL loss serve the same purpose, we adjust only λ and set β to 0 to streamline the process. The number of training epochs is determined based on the dataset, ranging from 8 epochs on DocRED Yao et al. (2019) to 30 epochs on DWIE Zaporojets et al. (2021). B.2 DATASETS 
+
+The statistics of the three datasets are shown in Table 12 , with detailed descriptions provided below. 
+
+DocRED Yao et al. (2019) is a large-scale, human-annotated dataset constructed from Wikipedia, specifically designed for DocRE task. Although it contains 3,053 documents for training and 1,000 documents each for development and testing, it suffers from a substantial number of missing anno-tations. To address this issue, we adopt the Re-DocRED Tan et al. (2022b) dataset for evaluation on the dev and test sets. 
+
+DWIE Zaporojets et al. (2021) is a multi-task dataset focused on entity-centric tasks, with 602 documents in the train set, 98 in the dev set, and 99 in the test set. 
+
+Re-DocRED Tan et al. (2022b) is a revised version of the DocRED Yao et al. (2019) dataset, which has been reprocessed and manually validated to address the numerous false negative issues present 15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 Table 11: Hyperparameters. 
+
+Dataset Re-DocRED DocRED DWIE BERT RoBERTa RoBERTa BERT 
+
+epoch 20 20 8 30 lr encoder 4e-5 2e-5 1e-5 5e-5 lr classifier 1e-4 1e-4 1e-4 1e-4 batch size 4 4 4 4warmup ratio 0.06 0.06 0.06 0.06 
+
+ρ 4 4 4 4
+
+α 0.65 0.60 1.0 1.10 
+
+λRecall 3.0 3.0 4.5 3.0 
+
+λCoarse 1.5 1.5 4.0 1.5 
+
+λFine 0.0 0.0 - 0.0 
+
+βRecall 0.0 0.0 0.0 0.0 
+
+βCoarse 0.0 0.0 0.0 0.0 
+
+βFine 0.0 0.0 - 0.0 in the original DocRED. Additionally, the validation and test sets of Re-DocRED are derived by splitting the dev set of DocRED, with each containing 500 documents. The number of documents in the train set of Re-DocRED remains the same as in DocRED, with a total of 3,053 documents. Table 12: Statistics of datasets.                                             
+
+> Dataset Split #Docs. #Entities. #Rels. Long Docs ( >10 sents)
+> DocRED train 3,053 59,493 96 499 dev †500 9,684 96 87 test †500 9,779 96 78 DWIE train 602 16,494 65 553 dev 98 2,785 65 87 test 99 2,623 65 92 Re-DocRED train 3,053 59,359 96 499 dev †500 9,684 96 87 test †500 9,779 96 78
+
+C FURTHER ABLATION STUDY 
+
+Effect of Discriminator. To investigate the contributions of each discriminator in our MD-RE framework, we conduct ablation experiments on Re-DocRED and DWIE. Table 13 summarizes the results. With only the recall discriminator, most results are inferior to those obtained using two or three discriminators. These results further demonstrate the advantages of our discriminator design .The recall discriminator alone is not sufficient to effectively handle more difficult negative or am-biguous samples. In contrast, the coarse and fine discriminators apply progressively stricter, more refined criteria, enabling them to better handle these challenging samples. Notably, the complemen-tary filtering effect of the three discriminators leads to the best performance. 
+
+Sample Selection Strategy. To evaluate the effect of LNS, we compare it with random sampling and margin-based mining. As shown in Table 14 , LNS consistently achieves the best F1 and Ign-F1 scores. These results indicate that, although the gains are modest, LNS can also work in conjunction with the ATSL loss to dynamically adjust the threshold and recall of each discriminator. 16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 Table 13: Ablation study of discriminators on the Re-DocRED and DWIE dev sets. Model F1 Ign-F1 MD-RE on Re-DocRED using BERT base (ours) 77.70 76.46 
+
+w /o Coarse Discriminator 77.18 75.67 
+
+w /o Fine Discriminator 76.38 74.58 
+
+w /o Coarse & Fine Discriminator ( only Recall Discriminator) 76.23 74.83 MD-RE on Re-DocRED using RoBERTa large (ours) 81.44 80.38 
+
+w /o Coarse Discriminator 80.70 79.33 
+
+w /o Fine Discriminator 80.79 79.39 
+
+w /o Coarse & Fine Discriminator ( only Recall Discriminator) 80.35 79.22 MD-RE on DWIE using BERT base (ours) 73.81 68.37 
+
+w /o Coarse Discriminator 72.67 68.24 
+
+w /o Fine Discriminator 72.39 67.70 
+
+w /o Coarse & Fine Discriminator ( only Recall Discriminator) 69.14 61.11 MD-RE on DWIE using RoBERTa large (ours) 77.11 73.13 
+
+w /o Coarse Discriminator 76.37 72.35 
+
+w /o Fine Discriminator 76.67 72.47 
+
+w /o Coarse & Fine Discriminator ( only Recall Discriminator) 76.18 70.64 Table 14: Ablation study of sample selection strategies on the Re-DocRED dev set using BERT base 
+
+as the encoder. Model F1 Ign-F1 MD-RE (ours) 
+
+w LNS 77.70 76.46 
+
+w Random sampling 77.57 76.39 
+
+w Margin-based mining 77.44 75.87 
+
+Fusion Strategy. To evaluate the effect of Weighted Fusion, we compare it with several alterna-tive fusion strategies, including Pipeline Fusion, Add Fusion, Mean Fusion, and Voting Fusion. As shown in Table 15 , Weighted Fusion yielded the most favorable performance, achieving the highest F1 score of 77.70 and Ign-F1 score of 76.46. This represents a notable advantage, surpassing the runner-up Add Fusion by 0.68 F1 points. These results indicate that Weighted Fusion more effec-tively integrates information than simple addition, averaging, or voting, leading to improved overall performance. Table 15: Ablation study of fusion strategies on the Re-DocRED dev set using BERT base as the encoder, where w indicates inclusion. Model F1 Ign-F1 MD-RE (ours) 
+
+w Weighted Fusion 77.70 76.46 
+
+w Pipeline Fusion 72.83 72.27 
+
+w Add Fusion 77.02 75.53 
+
+w Mean Fusion 76.05 75.21 
+
+w Voting Fusion 72.63 72.08 
+
+D FURTHER ANALYSIS 
+
+17 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 
+
+Under review as a conference paper at ICLR 2026 Table 16: Results of the MD-RE evaluated on Re-DocRED documents longer than 10 sentences. Model dev test F1 F1 BERT base Encoder ATLOP Zhou et al. (2021) 70.44 73.67 DocuNet Zhang et al. (2021) 70.17 71.81 TTM-RE Gao et al. (2024) 71.93 73.01 VaeDiff-DocRE Tran et al. (2025) 70.27 73.38 MD-RE (ours) 73.54 77.32               
+
+> Model dev test F1 F1 RoBERTa large Encoder ATLOP Zhou et al. (2021) 73.92 78.36 DocuNet Zhang et al. (2021) 75.01 76.54 TTM-RE Gao et al. (2024) 77.52 79.96 VaeDiff-DocRE Tran et al. (2025) 74.47 77.09 MD-RE (ours) 78.07 80.76
+
+D.1 PERFORMANCE OF MD-RE FRAMEWORK ON LONG DOCUMENTS 
+
+To evaluate the capability of MD-RE with ATSL on long documents (more than 10 sentences), we evaluate it on the Re-DocRED dataset and compare it against strong baselines. Table 16 shows that MD-RE consistently outperforms all baselines on long documents. Using the BERT base encoder, our model achieves 73.54 F1 on dev and 77.32 F1 on test, outperforming the strongest baseline (TTM-RE) by 1.61 and 4.31 points. Using the RoBERTa large encoder, MD-RE reaches 78.07 F1 on dev and 80.76 F1 on test, again showing substantial improvements over previous methods. These results indicate that MD-RE with ATSL is particularly effective at capturing and aggregating information across long text spans, leading to improved relation extraction performance on long documents. D.2 IMPACT OF DISCRIMINATOR NUMBER ON MD-RE F RAMEWORK 
+
+To evaluate the impact of the number of discriminators on the MD-RE framework, we conduct ex-periments using different discriminator counts on the Re-DocRED test set with BERT base . As shown in Fig. 3 , the F1 score improves as the number of discriminators increases from 1 to 3, reaching the highest performance at 3 discriminators (77.80). However, further increasing the number to 4 and 5 leads to a decline in performance, with a sharp drop observed at 5 discriminators (73.71). These results suggest that a moderate number of discriminators is beneficial, while too many may introduce redundancy or overfitting, degrading the model’s effectiveness. 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0  
+
+> Discriminator Numbers
+> 74
+> 75
+> 76
+> 77
+> 78
+> F1
+> 76.48 77.18
+> 77.80
+> 77.77
+> 73.71
+
+Figure 3: Performance comparison of different numbers of discriminators in the MD-RE framework on the Re-DocRED test set using BERT base .D.3 EFFECT OF HYPERPARAMETER λ IN ATSL To evaluate the impact of the hyperparameter λ in ATSL, we vary its value from 0.0 to 4.0 and sys-tematically analyze its effect on performance. As shown in Fig. 4 , the F1 consistently improves with increasing λ, achieving the highest value of 76.23 at λ = 3 .0. A marginal decline in performance is observed beyond this point. These observations suggest that while ATSL is generally robust to the choice of λ, careful tuning around [2 .0, 3.5] is beneficial for maximizing performance. 18 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 
+
+Under review as a conference paper at ICLR 2026 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 
+
+Threshold Bias 
+
+75.0 
+
+75.5 
+
+76.0 
+
+> F1
+
+74.66 
+
+74.84 
+
+75.30 
+
+75.59 
+
+75.82 75.95 
+
+76.23 
+
+75.63 
+
+74.93 
+
+Figure 4: Performance under different λ values of the ATSL loss on the Re-DocRED dev set, using ATLOP and BERT base .D.4 EFFECT OF HYPERPARAMETER α IN MD-RE WITH ATSL LOSS 
+
+To further investigate the effect of different α values on MD-RE performance, we conduct additional experiments on the Re-DocRED and DWIE datasets, as shown in Fig. 5 . On the Re-DocRED dev set, the F1 score gradually increases as α rises from 0.5 to 0.65, reaching a peak of 77.70. Beyond this point, further increases in α lead to a decline in performance. On the DWIE dev set, the F1 score peaks at α = 1.1 with a value of 73.81, showing a similar trend of first rising and then falling. These results indicate that the optimal value of α varies across datasets but is generally tuned around 1.0. This setting ensures effective model fusion while reasonably balancing the contribution of each discriminator. 0.5 0.6 0.7 0.8 0.9 1.0 1.1 
+
+> hyperparameter
+> 75.5
+> 76.0
+> 76.5
+> 77.0
+> 77.5
+> F1
+> 77.49
+> 77.63
+> 77.65
+> 77.70
+> 77.49
+> 77.35
+> 77.17
+> 76.67
+> 76.10
+> 75.52
+
+(a) Re-DocRED dev set 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5  
+
+> hyperparameter
+> 72.5
+> 73.0
+> 73.5
+> F1
+> 72.23
+> 73.08
+> 73.22
+> 73.81
+> 73.37
+> 73.21
+> 73.16
+> 72.68
+
+(b) DWIE dev set 
+
+Figure 5: Performance under different α values of the MD-RE with ATSL loss, using BERT base .Results are shown for both the Re-DocRED and DWIE dev sets. D.5 CASE STUDY AND ERROR ANALYSIS 
+
+D.5.1 COMPREHENSIVE CASE STUDY 
+
+To better illustrate the effectiveness and interpretability of our MD-RE framework, we present a representative example in Fig. 6 , where we provide a detailed comparison between the results of our MD-RE framework and those of the baseline model ATLOP. In the predictions of the ATLOP model, only two triples were correctly identified, with four triples missing. In the predictions from the recall discriminator combined with the coarse discriminator, compared to ATLOP, two additional triples were correctly predicted. However, the triples ( Royal Navy , P607, World War II ) and (World War II , P710, Royal Navy ) were still missed. Moreover, the incorrect predictions ( Britain ,P607, World War II ) and ( World War II , P156, World War I ) were introduced. This is because the recall discriminator focuses on improving recall, leading to some triples being over-recalled, while the coarse discriminator emphasizes initial filtering and reducing excessive predictions, which 19 1026 1027 1028 1029 1030 1031 1032 1033 1034 1035 1036 1037 1038 1039 1040 1041 1042 1043 1044 1045 1046 1047 1048 1049 1050 1051 1052 1053 1054 1055 1056 1057 1058 1059 1060 1061 1062 1063 1064 1065 1066 1067 1068 1069 1070 1071 1072 1073 1074 1075 1076 1077 1078 1079 
+
+Under review as a conference paper at ICLR 2026 introduces incorrect predictions. In the predictions from the recall discriminator combined with the fine discriminator, the previously missed triples ( Royal Navy , P607, World War II ) and ( World War II , P710, Royal Navy ) were successfully recovered, and the incorrect prediction ( World War II , P156, World War I ) was corrected. This indicates that the fine discriminator is more effective at filtering out irrelevant or incorrect triples, thus improving prediction accuracy. Finally, by integrating the recall, coarse, and fine discriminators, the full MD-RE framework successfully predicted all the triples. Furthermore, the incorrect prediction ( Britain , P607, World War II ) from the combined recall and fine discriminator was eliminated. These results demonstrate that the integration of all three discriminators substantially enhances the overall performance of the framework. 【1】The Irish in the British... in the British Armed Forces ( including the British Army , the Royal Navy , the Royal Air Force and        
+
+> other elements ) . 【2】Ireland was then as part of the United Kingdom from 1800 ... in the British Army . 【3】Different social ... with the British Empire , while others ... adventure . 【4】Many Irishmen...Britain and also Ulster...World War I and World War II ... forces . 【5】However ... still occur . 【6】Since partition ... in the British Army . 【7】Since 2007 , ... since World War II .
+> British Armed
+> Forces British
+> Army Royal Navy World War
+> II P527 P361 P607 P710
+> Recall & Coarse Discriminator
+> the United
+> Kingdom Britain World War
+> I
+> British Armed
+> Forces British
+> Army Royal Navy World War
+> II P527 P361 P607 P710
+> ATLOP
+> the United
+> Kingdom British Armed
+> Forces British
+> Army Royal Navy World War
+> II P527 P361 P607 P710
+> Recall & Fine Discriminator
+> the United
+> Kingdom Britain British Armed
+> Forces British
+> Army Royal Navy World War
+> II P527 P361 P607 P710
+> Recall & Coarse &Fine Discriminator
+> the United
+> Kingdom
+
+Figure 6: Case study of the baseline model ATLOP and our proposed MD-RE framework on Re-DocRED dev set. Black solid lines indicate correct predictions, red solid lines represent incorrect predictions, and dashed lines denote missing predictions. D.5.2 ERROR ANALYSIS OF MD-RE To further investigate the failure patterns of MD-RE, we analyze model performance across differ-ent relation types. As shown in Table 17 , MD-RE exhibits strong performance on high-frequency relations such as located in the administrative territorial entity and country , achieving F1 above 80. However, performance drops substantially on long-tail relations, including replaced by (22.22) and replaces (12.50), indicating that most performance degradation originates from relations with limited training data. In addition, we observe that false positive errors occur more often in high-frequency relations, indicating occasional over-prediction. Furthermore, to more thoroughly evaluate the effectiveness of our MD-RE framework in handling long-tail relations, we conduct comparative experiments on the Re-DocRED dataset and report per-formance separately on frequent (Freq) and long-tail (LTail) relation subsets. As shown in Table 18 ,our method consistently improves the F1 score for long-tail relations across different models. Specif-ically, MD-RE improves LTail F1 by 2.50 on the dev set and 3.02 on the test set with BERT base , and by 2.67 and 2.60 with RoBERTa large . These results demonstrate the robustness and generalization ability of MD-RE in modeling sparse relations, while simultaneously achieving overall performance gains without degrading frequent-relation performance. D.5.3 ERROR ANALYSIS OF FALSE POSITIVES AFTER APPLYING ATSL To investigate which types of false positives increase after applying ATSL, we examine false pos-itives (FPs) by relation type on the Re-DocRED dev set. As shown in Table 19 , the results show that FP increases mainly occur in high-frequency relations, such as located in the administrative territorial entity and country , whereas long-tail relations exhibit smaller growth. This suggests that ATSL tends to over-predict frequent relations, improving recall at the cost of higher FPs. 20 1080 1081 1082 1083 1084 1085 1086 1087 1088 1089 1090 1091 1092 1093 1094 1095 1096 1097 1098 1099 1100 1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114 1115 1116 1117 1118 1119 1120 1121 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 
+
+Under review as a conference paper at ICLR 2026 Table 17: Head vs. Tail relation performance of our MD-RE framework on the Re-DocRED dev set with BERT base .
+
+Type Relation Name FP FN Total F1 Rank (by train set) Head 
+
+located in the administrative territorial entity 635 696 3846 82.56 1country 414 449 2739 84.14 2country of citizenship 194 147 823 79.86 3contains administrative territorial entity 114 155 662 79.03 4notable work 82 127 604 82.03 5has part 75 196 469 66.83 6part of 77 192 444 65.20 7
+
+... (intermediate relations omitted) ... 
+
+Tail 
+
+manufacturer 15 20 76 76.19 80 parent taxon 3 5 28 85.19 81 original language of work 3 9 19 62.50 82 end time 10 16 26 43.48 83 location of formation 1 9 24 75.00 84 replaced by 3 11 13 22.22 85 replaces 2 12 13 12.50 86 narrative location 2 1 7 80.00 87 Table 18: Long-Tail relation performance with different models. Experimental result on Re-DocRED dataset. * from Tran et al. (2025), and † our reproduced results. Freq F1 evaluates the 10 most common relations, while LTail F1 covers the remaining 86 uncommon relations in Re-DocRED. Model Dev Test F1 Ign-F1 Freq F1 LTail F1 F1 Ign-F1 Freq F1 LTail F1 BERT base Encoder ATLOP Zhou et al. (2021) 74.22 73.35 77.77† 68.83† 74.02 73.22 75.92* 67.46* DocuNET Zhang et al. (2021) 74.65 73.68 78.55† 69.41† 74.49 73.60 77.54† 68.33† KD-DocRE Tan et al. (2022a) 74.69 73.76 78.71* 70.26* 74.55 73.67 78.28* 69.52* TTM-RE Gao et al. (2024) 76.21 74.74 80.45† 69.42† 76.33 74.89 79.83† 68.99† VaeDiff-DocRE Tran et al. (2025) 75.89* 74.96* 79.18* 71.12* 75.07* 74.13* 78.32* 70.06* MD-RE (ours) 77.70 (1.49 ↑) 76.46 (1.50 ↑) 80.51 (0.06 ↑) 73.62 (2.50 ↑) 77.80 (1.47 ↑) 76.63 (1.74 ↑) 80.81 (0.98 ↑) 73.18 (3.02 ↑)RoBERTa large Encoder ATLOP Zhou et al. (2021) 77.63 76.88 80.92† 72.83† 77.73 76.94 80.78* 72.29* DocuNET Zhang et al. (2021) 78.16 77.53 80.73† 73.34† 77.92 77.27 81.25* 73.32* KD-DocRE Tan et al. (2022a) 78.65 77.92 80.52† 72.54† 78.35 77.63 80.85* 74.31* TTM-RE Gao et al. (2024) 78.13 78.05 83.05† 73.90† 79.95 78.20 83.43† 73.23† VaeDiff-DocRE Tran et al. (2025) 79.19* 78.35* 82.00* 75.13* 79.03* 78.22* 81.84* 74.73* MD-RE (ours) 81.44 (2.25 ↑) 80.38 (2.03 ↑) 84.10 (1.05 ↑) 77.80 (2.67 ↑) 81.49 (1.54 ↑) 80.45 (2.23 ↑) 84.10 (0.67 ↑) 77.33 (2.60 ↑)21 1134 1135 1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152 1153 1154 1155 1156 1157 1158 1159 1160 1161 1162 1163 1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177 1178 1179 1180 1181 1182 1183 1184 1185 1186 1187 
+
+Under review as a conference paper at ICLR 2026 Table 19: Analysis of increased false positives by relation type after applying ATSL on Re-DocRED dev set. 
+
+Relation Name ATLOP (FP) ATLOP with ATSL (FP) ∆FP Rank (by train set) BERT base Encoder 
+
+located in the administrative territorial entity 411 716 305 1country 283 449 166 2country of citizenship 135 222 87 3contains administrative territorial entity 57 143 86 4part of 40 113 73 7applies to jurisdiction 28 79 51 11 has part 53 104 51 6publication date 38 85 47 9member of 32 78 46 10 owned by 11 53 42 38 
+
+RoBERTa large Encoder 
+
+located in the administrative territorial entity 355 490 135 1country 255 346 91 2part of 49 106 57 7continent 23 63 40 20 has part 54 93 39 6contains administrative territorial entity 53 91 38 4member of 23 60 37 10 country of citizenship 124 158 34 3headquarters location 6 37 31 55 country of origin 33 63 30 16 
+
+E USE OF LARGE LANGUAGE MODELS (LLM S)
+
+Large language models are used solely for language polishing and grammar correction of the paper draft. All technical content, including the research idea, methodology, experiments, and writing, is solely produced by the authors. 22

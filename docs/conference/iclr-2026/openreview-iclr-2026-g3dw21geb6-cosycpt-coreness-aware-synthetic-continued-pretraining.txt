@@ -1,0 +1,920 @@
+Title: 22241_CosyCPT_Coreness_Aware_S.pdf
+
+URL Source: https://openreview.net/pdf?id=G3dW21Geb6
+
+Number of Pages: 24
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# COSY CPT: C ORENESS -A WARE SYNTHETIC CONTIN -
+
+# UED PRETRAINING 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+# ABSTRACT 
+
+Synthetic continued pretraining adapts LLMs to specific domains by fine-tuning them on synthetic data that augments real domain data. However, existing meth-ods are often data-inefficient (requiring massive synthetic corpora to enumerate all relational facts) and fail to account for the relative importance of different en-tity relationships. In this paper, we propose co reness-aware sy nthetic continued 
+
+pre training (C OSY CPT), a systematic pipeline that addresses both limitations. Our method (1) constructs a graph representation of entity relations in a document, (2) quantifies relation importance via coreness scores derived from the graph, and (3) leverages these scores to guide synthetic data sampling and augmentation for continued pretraining. We investigate four definitions of entity coreness and four formulations of relation coreness, verifying that multiple variants of coreness-aware sampling can outperform random sampling of augmented data for synthetic continued pretraining. We offer a mathematical analysis, proving that (1) given a learning budget, maximizing the expected accuracy on a query set about relational knowledge in a document collection is an NP-complete problem, (2) coreness-aware sampling is the optimal solution when each query examines one entity pair, and (3) coreness-aware sampling has a better upper bound for expected accuray than random sampling. 
+
+# 1 INTRODUCTION 
+
+Pre-trained LLMs do not inherently possess knowledge of proprietary or domain-specific corpus. A common remedy is continued pre-training on in-domain corpora in two steps: (i) generate synthetic data to enumerate relational facts contained within the corpus, (ii) fine-tune the LLM on this enriched dataset. Specifically, recent work (e.g., Yang et al., 2024; Zhang et al., 2025) constructs entity graphs from the corpus and generates synthetic data over that graph. While more effective than naive document-level synthesis, these methods remain inefficient: they treat all vertices (entities in graphs) and edges (relation between a pair of entity) equally. In reality, entities and relations contribute unevenly to model downstream performance (e.g., in finance, transaction links between firms may matter more than their headquarters’ locations). Ignoring this imbalance wastes synthetic tokens and dilutes training signals. This leads to the central question we aim to study: 
+
+How can synthetic data generation be made more efficient by sampling entities and relations in proportion to their contribution to downstream performance? 
+
+In this work, we introduce coreness-aware synthetic continued pretraining (C OSY CPT). Our ap-proach builds on top of the entity graph proposed in Yang et al. (2024) and computes graph-theoretic coreness scores over entities and relations, and uses these scores to guide synthetic data sampling and augmentation. By focusing augmentation on the structural core of domain knowledge, C OSY CPT reduces wasted tokens, strengthens training signals, and theoretically requires fewer augmented ex-amples to achieve the same accuracy as uniform enumeration. Our main contributions are the following: • We provide a mathematical formulation of the document knowledge acquisition problem, taking into account the fact that entity relations have varying importance in documents. 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 1: Overview of coreness-aware synthetic continued pretraining (C OSY CPT). • We propose coreness-aware sampling for synthetic continued pretraining, a graph-theoretic framework for modeling entity relation coreness and improve data efficiency of synthetic continued pretraining. • We empirically demonstrate the effectiveness of coreness-aware sampling, showing up to 4% accuracy improvement on the QuALITY document question-answering task. • We provide mathematical analyses, proving (1) NP-completeness of maximizing expected accuracy for the problem, (2) optimality of coreness-aware sampling under common as-sumptions, and (3) a better theoretical bound on expected accuracy compared to random sampling in existing literature. 
+
+# 2 RELATED WORK 
+
+Synthetic data. Progress in LLMs has largely been driven by scaling compute: training bigger models on larger datasets. However, the availability of high-quality data is emerging as a fundamen-tal bottleneck, since the rate at which models learn from data far outpaces the rate at which new data is generated. As a result, curating better training data has become increasingly critical. Synthetic data offer a promising solution and recent studies have shown that these data can effectively supple-ment real-world corpora to boost model performance. For example, Li et al. (2023); Gunasekar et al. (2023) demonstrate this with Phi-1.5, trained using both web data and synthetic textbooks and ex-ercises data. Another direction focuses on generating synthetic instruction-response pairs, enabling LLMs to better learn how to reliably follow user prompts. For example, self-instruct (Wang et al., 2023) expands a small human seed set by generating and filtering new instruction–response pairs and GLAN (Li et al., 2024) builds synthetic data “from scratch” by structuring human knowledge into subjects and concepts, then producing instructions and exercises with LLMs. This allows for broad coverage beyond existing manually-curated datasets. Beyond generic instruction following, synthetic data has been used to enhance specific skills such as code generation. Work like Magi-coder (Wei et al., 2024) produces synthetic instruction data grounded in open-source code snip-pets; Case2Code (Shao et al., 2025) generates synthetic inductive inference tasks for code (given input-output examples to infer underlying program behavior); UnitCoder builds large, verified code datasets by combining model-generated unit tests with code retrieval. 
+
+Continued pre-training (CPT). CPT can inject domain-specific knowledge into pre-trained LLMs (Gururangan et al., 2020). Broadly, there are two major directions: (i) continuing pre-training on a diverse set of corpora to enhance general knowledge and reasoning capabilities (Lewkowycz et al., 2022; Chen et al., 2023; Azerbayev et al.; Shao et al., 2024; Colombo et al., 2024; Yuan et al., 2024), and (ii) continuing pre-training on proprietary documents to adapt the model to a targeted domain (Mecklenburg et al., 2024; Yang et al., 2024). In this work, we focus on the latter chal-lenge. The most relevant prior work is by Yang et al. (2024) who construct an entity graph from a small domain corpus, synthesize a larger corpus using this graph, and continue pre-training on this synthetic data. However, they assume that all entities are equally important and uniformly samples across the graph, overlooking differences in relational significance. We improve upon this approach 2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 by introducing a coreness-aware framework that re-weights entities and relations according to their structural importance, enabling more data-efficient sampling for CPT. 
+
+Structuring synthetic data for CPT. Several works explore how to better control or structure synthetic data for CPT. One line of work investigates the choice of data format. Knowledge-Instruct (Ovadia et al., 2025) proposes using an instruction-following question–answer format to inject new knowledge while mitigating catastrophic forgetting and preserving general reasoning ability. Ac-tive Reading (Lin et al., 2025) trains models to “study” domain material through self-generated learning strategies such as paraphrasing, analogy, and active recall. LinkQA (Zhang et al., 2025) represents a general corpus, from mathematics to diverse knowledge domains, through knowledge points. They build a knowledge-point graph from question–answer seeds to synthesize diverse, large-scale datasets, demonstrating improvements in general knowledge and reasoning on MMLU (Hendrycks et al., 2021) and GSM8K (Cobbe et al., 2021) by balancing knowledge coverage and difficulty. While these works primarily focus on designing formats for synthetic data to represent the underlying corpus, we address a complementary problem: efficient knowledge fine-tuning for domain-specific CPT. Our approach quantifies the relative importance of relational facts via core-ness scores on entity–relation graphs, thereby prioritizing structurally central knowledge. This effort not only improves efficiency but also enables LLMs to allocate capacity to “core” knowledge rather than uniformly enumerating all relations between entities. 
+
+# 3 PROBLEM SETUP 
+
+3.1 SPECIALIZED KNOWLEDGE ACQUISITION 
+
+The primary challenge we address is the efficient adaptation of a pretrained large language model to a domain-specific source document collection, denoted as Dsource . The goal is to imbue the model with the specialized knowledge contained in Dsource through continued pretraining. This is typically achieved by first generating a larger, synthetic corpus, Dsynth , from the source documents. The effectiveness of the adaptation is then measured by the model’s performance on a set of knowledge-intensive test queries, Qtest , which require understanding the information from Dsource without having direct access to it during inference. 3.2 A M ATHEMATICAL FORMULATION OF KNOWLEDGE ACQUISITION 
+
+Our work builds upon the synthetic continued pretraining paradigm established by EntiGraph (Yang et al., 2024). EntiGraph extracts the salient entities E = {enti 1, enti 2, ..., enti n} from source corpus Dsource . Ideally, the relations among entities in any subset E′ ⊆ E need to be augmented to generate Dsynth . With 2n possible subsets of E and hundreds of salient entities in Dsource , it is empirically impossible to enumerate all subsets. To make the problem tractable, EntiGraph focuses on analyzing entity pair relations and presents a log-linear scaling pattern between the number of 
+
+uniformly and randomly sampled entity pairs for augmentation and the knowledge accuracy. We similarly build our mathematical model for analyzing pairwise relations. (See Appendix A for details .) Entigraph’s reliance on uniform random sampling is the central inefficiency that we aim to address. It implicitly assumes all entity relationships are equally important, leading to wasted computational resources on generating and training on peripheral or redundant knowledge while potentially under-sampling the core concepts of the domain. Define I = {(enti i, enti j )|i, j ∈ [n], i ̸ = j}. In our mathematical model, we assume there exists a mapping F for each corpus Dsource that assigns each entity pair an importance score 
+
+F : I → [0 , 1] , (enti i, enti j ) 7 → Si,j ,
+
+defined for all i, j ∈ [n] with i̸ = j, such that the scores are normalized: Pi,j ∈[n]
+
+> i̸=j
+
+Si,j = 1 .To simulate each Si,j (i, j ∈ [n], i ̸ = j), we first construct a knowledge graph G = ( V, E ) based on the document Dsource . We posit two mappings 
+
+Fv : E → V, Fv (enti i) = vi (i ∈ [n]) ,
+
+3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 
+
+Algorithm 1 COSY CPT: Coreness-Aware Synthetic CPT Pipeline 
+
+1: Input: Source documents Dsource , Token budget B
+
+2: Output: Synthetic corpus for CPT Dsynth 
+
+3: // Step 1: Graph Construction 
+
+4: E ← ExtractEntities( Dsource )
+
+5: G = ( V, E ) ← ConstructGraph( E, Dsource )
+
+6: // Step 2: Coreness Mining 
+
+7: for each vertex vi ∈ V do 
+
+8: Cen (vi) ← ComputeEntityCoreness( G, v i) {See Table 1 & Appx. B }
+
+9: end for 
+
+10: Spairs ← Coreness Mining BFS (G, Cen (·), RC (·, ·, ·)) (See Algorithm 2) 
+
+11: // Step 3: Coreness-Aware Sampling 
+
+12: Sranked ← SortByScore( Spairs )
+
+13: Dsynth ← ∅ 
+
+14: while TokenCount( Dsynth ) < B do 
+
+15: (vi, v j ) ← SampleFromDistribution( Sranked )
+
+16: text ij ← GenerateSyntheticText( vi, v j , Dsource )
+
+17: Dsynth ← D synth ∪ { text ij }
+
+18: end while 
+
+19: return Dsynth 
+
+FE : R → E, FE (enti i, enti j ) = enti i,j (( enti i, enti j ) ∈ R ),
+
+where R ⊆ I denotes the set of entity pairs whose relation is directly stated in Dsource .We denote the distance between vi and vj (i, j ∈ [n]) as Dis (vi, v j ). We define a centrality score 
+
+Cen (vi) for each vertex vi (i ∈ [n]). The centrality score can be simulated by multiple widely applied centrality measures. For details, please see Section 4.3. Hence, to simulate each Si,j (i, j ∈
+
+[n], i ̸ = j), we exploit the properties of the knowledge graph structure and propose several heuristic aggregation functions, each incorporating Cen (vi), Cen (vj ), and Dis (vi, v j ) as determinants of the score. Detailed discussion will be in Section 4.3. 
+
+# 4 COSY CPT: C ORENESS -A WARE SYNTHETIC CONTINUED PRETRAINING 
+
+To address the data inefficiency of EntiGraph’s uniform sampling strategy, we introduce C OSY CPT, a pipeline that replaces random sampling with a principled, coreness-aware approach. Our method prioritizes structurally important entities and relations, thereby focusing the synthetic data genera-tion on the core knowledge of the document collection. 4.1 METHOD OVERVIEW 
+
+The C OSY CPT pipeline consists of three main steps, as outlined in Algorithm 1: 1. Entity-Relation Graph Construction: We first parse the source documents Dsource to build a knowledge graph G = ( V, E ), where vertices represent entities and edges represent explicitly stated relationships. We ensure that an edge is added between any two entities only if an explicit relationship exists between the entities in the source documents. 2. Coreness Mining: We then analyze the topology of this graph G to simulate a “coreness” score for each entity pair in I.3. Coreness-Aware Data Sampling: Finally, we use these coreness scores to guide the synthetic data generation process. Instead of sampling entity pairs uniformly, we sample them in proportion to their importance, ensuring that the resulting corpus Dsynth consists mostly of necessary core knowledge. 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 4.2 STEP 1: E NTITY -R ELATION GRAPH CONSTRUCTION 
+
+Following the general approach in Yang et al. (2024), we construct the knowledge graph G = ( V, E )
+
+through a two-stage process. First, we perform salient entity extraction by prompting a large language model (LLM) to identify a comprehensive set of entities, E = {enti 1, enti 2, . . . , enti n},from the source documents Dsource . This set of entities constitutes the graph’s vertices V .Subsequently, we perform explicit edge induction . For every pair of entities (enti i, enti j ) ∈ I , we query an LLM to determine if a direct and explicit relationship between them is asserted in Dsource .An undirected edge is added to the edge set E if such a relationship exists. The final graph is unweighted, representing the relational structure of the core entities. 4.3 STEP 2: C ORENESS MINING 
+
+Remember the goal is to simulate each Si,j (i, j ∈ [n], i ̸ = j) incorporating Cen (vi), Cen (vj ), and 
+
+Dis (vi, v j ) as determinants. Let AG : R≥0 × R≥0 × N → R≥0 denote the heuristic aggregation function that instantiates Si,j . For vertices vi, v j ∈ V with i̸ = j, we define 
+
+Si,j = AG  Cen (vi), Cen (vj ), Dis (vi, v j )
+
+Entity Centrality We first compute a centrality score for each entity (vertex) using well-established graph centrality measures, summarized in Table 1. These metrics leverage the graph’s topology to assess a node’s structural importance, justified by the observation that knowledge graphs often exhibit topological similarities to social networks, such as sparsity, small-world properties and power-law degree distribution 5. A detailed discussion of the motivation, definition, and com-plexity for each measure is provided in Appendix B. Distance Suppose that we have already computed Cen (vi) (∀i ∈ [n]). We enumerate entity pairs by performing breadth-first search (BFS) on the graph G. For each source vertex s ∈ V , BFS yields distances Dis (s, t ) to all reachable targets t ∈ V . We then record, for each unordered pair (s, t ),a 3-tuple  s, t, AG( Cen (s), Cen (t), Dis (s, t ))  =  s, t, S s,t 
+
+. The resulting collection constitutes 
+
+entity pair info list Spair . ( Please see Appendix F for detailed implementation. )
+
+Aggregation Functions to Simulate Relation Coreness We propose several heuristic aggrega-tion functions (See Table 2) to simulate each Si,j (i, j ∈ [n], i ̸ = j). Table 2 provides an overview of aggregation functions. We define M ax Dis (G) = max( Dis (vi, v j ))( i, j ∈ [n], i ̸ = j) and 
+
+M in Dis (G) = min( Dis (vi, v j ))( i, j ∈ [n], i ̸ = j). Let Clo (vi, v j ) = M ax Dis (G) −
+
+Dis (vi, v j ) + M in Dis (G)( i, j ∈ [n], i ̸ = j). While Dis (vi, v j ) indicates how far vi is away from vj , Clo (vi, v j ) suggests how close they are on G.Intuitively, the more central vi and vj are in G, the more the relation (vi, v j ) will matter. Also, the closer vi and vj locate to each other, the more salient the relation (vi, v j ) will be. Typically, each 
+
+Si,j (i, j ∈ [n], i ̸ = j) should rise with Cen (vi), Cen (vj ), and Clo (vi, v j ) and fall with Dis (vi, v j ).Since the relative weights among determinants( Cen (vi), Cen (vj ), Clo (vi, v j ), and Dis (vi, v j ))remain unknown, we explore multiple heuristic aggregation functions that vary the proportional in-fluence of each factor in Table 2. The detailed rationale and trade-offs between these functional forms are discussed in Appendix C. 
+
+4.4 STEP 3: C ORENESS -A WARE DATA SAMPLING AND AUGMENTATION 
+
+The computed entity pair info list Spair provides the basis for our guided sampling strategy. We rank all entity pairs in descending order of their scores  s, t, S s,t 
+
+. To generate the synthetic corpus, we preferentially sample pairs from the top of this ranked list and prompt an LLM to generate relation descriptions for them, conditioned on the content of Dsource . This process continues until a predefined token budget is met. By prioritizing high-coreness pairs, we ensure that the model’s continued pretraining is focused on the most central and structurally significant relationships in the domain. 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 Table 1: Overview of entity centralities in our experiments. 
+
+Entity Centrality Symbol Formula 
+
+Degree Centrality Cdeg (v) Cdeg (v) = deg (v)
+
+n − 1 (deg (v) is the degree of v) (1) Betweenness Centrality Cbtw (v) Cbtw (v) = X 
+
+> s̸=v̸=ts̸=t
+
+σst (v)
+
+σst 
+
+, ( σst is the number of shortest paths 
+
+s → t, while σst (v) is the number of shortest paths s → v → t (2) Closeness Centrality Ccls (v) Ccls (v) = n − 1
+
+P 
+
+> u̸=v
+
+Dis( v, u ) (3) PageRank Centrality Cpr (v) Cpr (v) = (1 − α) 1 
+
+> n
+
++ α X 
+
+> u∈Nin (v)
+
+Cpr (u)deg +(u) (damping factor 
+
+α ∈ (0 , 1) ; typically 0.85 ). (4) 
+
+Table 2: Heuristic aggregation functions for simulation of relation coreness Si,j .
+
+Name Formula for Si,j 
+
+Attraction model alike Cen( vi) Cen( vj )Dis( vi, v j )2 (5) Triple product  Cen( vi) Cen( vj ) Clo( vi, v j )1/3 (6) Harmonic mean with distance 2Dis( vi, v j )
+
+ 1Cen( vi) + 1Cen( vj )
+
+ (7) Max centrality over distance max {Cen( vi), Cen( vj )}
+
+Dis( vi, v j ) (8) 
+
+# 5 EXPERIMENTS 
+
+5.1 EXPERIMENTAL SETUP 
+
+Data and evaluation We evaluate our method on the QuALITY benchmark Pang et al. (2022), using the data split released by Yang et al. (2024). QuALITY is a long-context multiple-choice QA dataset built from narrative articles and stories drawn from sources such as Project Gutenberg and the Open American National Corpus. Human annotators with advanced degrees in literature or teaching write the questions, which are divided into easy and hard categories depending on the difficulty of annotation. Our evaluation uses a subsample containing 383,508 tokens , with documents averaging 4,320 words . Performance is measured using the Exact Match (EM) metric. For consistency, we prompt the model to generate both its reasoning process and the final answer in a fixed format, then parse the answer string to compute exact match accuracy. We consider two evaluation settings. In the closed-book setting , the input query is constructed by prepending the document title to the question, thereby reducing ambiguity, following Yang et al. (2024). In the open-book setting , we adopt a retrieval-augmented generation (RAG) approach, retrieving relevant text chunks and prepending them to the query before inference. 
+
+Implementation Details We use Qwen-3-32B (Yang et al., 2025) as the teacher model for gener-ating entity pairs and their associated discussions, which serve as the basis for our synthetic training corpus. The full set of prompts used in synthetic data generation is provided in Appendix D. For all experiments, we fine-tune Llama-3.1-8B-Instruct (Grattafiori et al., 2024) as the student model. Training is performed using the HuggingFace Trainer framework, following the hyper-parameters reported in Yang et al. (2024). 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 2: Comparison of our proposed sampling method (CosyCPT with RAG) against EntiGraph random sampling, CPT on raw documents, and prompting with Llama-3.1-8B-Instruct on the QuAL-ITY benchmark. Our method achieves the highest accuracy in the closed-book setting, outperforms Llama-3.1-8B-Instruct in the RAG setting, and performs on par with EntiGraph with RAG. Evaluation is conducted under both closed-book and open-book (RAG) settings using the publicly released scripts from Yang et al. (2024), ensuring consistency and reproducibility across experimen-tal conditions. 
+
+Baselines We compare our method against three baselines: (1) Prompting the Instruct Model ,where the off-the-shelf Llama-3.1-8B-Instruct is evaluated without additional training to measure its reliance on pretrained knowledge; (2) Raw Document CPT , where the model is continued-pretrained for two epochs on the original QuALITY documents; and (3) EntiGraph CPT , where continued pretraining is performed for two epochs on a corpus built from uniformly randomly sampled entity pairs augmented with discussions. 5.2 MAIN RESULTS 
+
+We evaluate our method against three baselines under both closed-book and open-book (RAG) 
+
+settings (Figure 2). In the open-book setup, each model is given four retrieved passages, identical across models; the full prompt template is in Appendix E. Baselines include Raw Document CPT ,which continues pretraining on the unprocessed corpus, and EntiGraph CPT , which samples entity pairs with discussion-based augmentation. We also report results for the off-the-shelf Llama-3.1-8B-Instruct in both prompting and RAG settings. All methods are trained at multiple data scales (1 ×, 4 ×, 16 ×, 64 ×, 256 ×). Across scales, our coreness-based sampling strategy substantially outperforms Raw CPT and Enti-Graph, with CosyCPT achieving the highest QA accuracy at 256 × tokens. In the open-book setting, both CosyCPT and EntiGraph exceed the naive baselines, which we attribute to document-centric pretraining improving the model’s ability to integrate retrieved passages with internalized knowl-edge. Overall, CosyCPT matches or surpasses EntiGraph while maintaining higher closed-book accuracy, showing that coreness sampling improves both memorization and retrieval-augmented performance. 5.3 COMPARING RELATION CORENESS FORMULATIONS 
+
+Setup. We compare different strategies for estimating entity coreness and aggregating these scores across entities. For coreness estimation, we ablate over four common graph centrality measures: de-gree , betweenness , closeness , and PageRank . To evaluate aggregation, we consider four alternatives for combining PageRank-based scores: attraction model alike , triple product , maximum central-ity over distance , and harmonic mean with distance . All results are reported as the change in QA accuracy relative to random sampling. 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 3: Comparison of entity centrality measures and aggregation functions for coreness sam-pling. The y-axis reports the change in QA accuracy relative to random sampling. Left: Different centrality measures used to identify core entities, where PageRank centrality yields the largest and most consistent improvements. Right: Aggregation functions applied to PageRank-based coreness, with the harmonic mean over distance providing the most robust gains. Table 3: Results across 3 instruction-following benchmarks (scores in %). Overall score is the average across BBH, GPQA, and MMLU-Pro.                     
+
+> Model BBH GPQA MMLU-Pro Overall score
+> Llama-3.1-8B-Instruct 51.01 28.77 37.78 39.19 Naive CPT 50.86 30.05 38.52 39.81 EntiGraph CPT (Random Sampling) 49.65 28.08 36.00 37.91 CosyCPT (Ours) 48.95 28.08 35.47 37.5
+
+Results. Figure 3 summarizes the results. Among centrality measures, PageRank provides the most balanced and consistent improvements across token scales, outperforming degree-, betweenness-, and closeness-based alternatives. With PageRank selected as the best coreness mea-sure, we then compare aggregation strategies. Here, the harmonic mean with distance achieves the largest and most stable gains, surpassing both multiplicative and max-based formulations. Together, these findings highlight that PageRank centrality combined with harmonic mean aggregation is the most effective strategy for constructing relation-level coreness. 5.4 INSTRUCTION FOLLOWING 
+
+Setup. We evaluate instruction-following ability using the lm-eval-harness implementation Gao et al. (2024) of the Open LLM Leaderboard tasks Big-Bench Hard (BBH) , General Purpose Ques-tion Answering (GPQA) , and MMLU-Pro , with results summarized in Table 3. BBH is assessed across all 23 subtasks using the default 3-shot configuration and normalized accuracy ( acc norm ). GPQA is evaluated in a 0-shot setting with four multiple-choice options, and MMLU-Pro is assessed in a 5-shot setting with ten choices using plain accuracy ( acc ). All evaluations are performed in closed-book mode with no retrieval. For instruction-tuned models, we follow lm-eval recommen-dations by enabling --apply chat template and --fewshot as multiturn . To control for variance, EntiGraph CPT with Random Sampling is run with three different seeds, and the reported results are the average across these seeds. 
+
+Results. Overall, the naive baseline and the Llama-3.1-8B-Instruct baseline perform similarly, while EntiGraph with random sampling shows a modest drop in average score. CosyCPT achieves comparable results, indicating that incorporating coreness-aware sampling retains instruction-following ability, on par with EntiGraph. This complements the open-book findings by showing that CosyCPT maintains stable closed-book performance while introducing a more structured rela-tion sampling strategy. 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 
+
+# 6 THEORETICAL EFFECTIVENESS OF CORENESS -A WARE SAMPLING 
+
+Let us now return to the initial setting of our mathematical model. Remember that I is the collection of entity pairs and Si,j is the importance score for entity pair (enti i, enti j ) ∈ I . (See Section 3.2.) Suppose that the test set contains Te questions indexed by indexed by t = 1 , 2, . . . , T e. Each ques-tion can involve the knowledge of k entities in the context of Dsource (k ∈ [n], k ≥ 2 since we assume pairwise entity relation is the minimum knowledge units). Let qk denote the probability that an item involves exactly k entities. We assume that the entities involved in each test question are sampled with weights derived from pairwise relation importance and increasing with each relation impor-tance scores. More specifically, for any k-set ( k ∈ [n], k ≥ 2) S′ = {enti i1 , enti i2 , . . . , enti ik },we can define its combination importance 
+
+g(S′) = g(enti i1 , enti i2 , . . . , enti ik )
+
+whose score only depends on {Sc,d |c, d ∈ { i1, i 2, . . . , i k}, c ̸ = d}.Let Sk = { S ′ ⊆ E : |S ′| = k } (k ∈ [n], k ≥ 2) and define the normalizer 
+
+Zk = X
+
+> S∈S k
+
+g(S) (9) Hence, the probability that each question involves exactly the set S′ ∈ S k is 
+
+Pr( each question involves exactly S′) = qk · g(S)
+
+Zk
+
+, k ∈ [n], k ≥ 2. (10) Recall that our goal is to maximize the expected accuracy on the test set. For each entity pair 
+
+(enti i, enti j ) ∈ I , Let Wi,j ∈ { 0, 1} indicate whether the model has learned the corresponding knowledge ( Wi,j = 1 ) or not ( Wi,j = 0 ). We write  S′
+
+> 2
+
+ = {(enti c, enti d) : enti c, enti d ∈ S ′, c ̸ =
+
+d} for the set of entity pairs in S′. So we have the expected accuracy 
+
+E[Acc] = 1
+
+TeTeX
+
+> t=1
+> n
+
+X
+
+> k=2
+
+qk
+
+X
+
+> S′∈S k
+
+g(S′)
+
+Zk
+
+· Y 
+
+> (enti u,enti v)∈
+
+(S′ 
+
+> 2
+
+)
+
+Wu,v , (11) We derive three theorems to demonstrate the effectiveness of coreness-aware sampling. For detailed analysis and proof, please see Appendix G. 
+
+Theorem 1 (NP-completeness of maximizing expected accuracy) Consider the decision variant of the following problem: given a budget y and a threshold τ ∈ [0 , 1] , does there exist a learned set 
+
+L ⊆ I with |L| = y such that E[Acc | L ] ≥ τ ? This decision problem is NP-complete, even when 
+
+qk > 0 for a single k ≥ 3 and g is constant on Sk.
+
+Theorem 2 (Optimality of coreness-aware sampling when q2 = 1 ) Suppose q2 = 1 and qk = 0 
+
+for all k̸ = 2 . Then for any budget y, the Coreness Sampling rule that selects the top-y entity pairs by importance score attains an L that maximizes E[Acc | L ] among all L ⊆ I with |L| = y.
+
+Theorem 3 (Coreness-aware sampling has better upper bound than random sampling) Let 
+
+UP( L) be the upper bound on E[Acc | L ]. For any budget y and any value of qk (k ≥ 2) and g(·),we have 
+
+UP( Lcore ) ≥ UP( Lrand ).
+
+# 7 CONCLUSION 
+
+We propose coreness-aware synthetic continued pretraining, a graph-theoretic framework to model entity relation coreness in document to guide data sampling and augmentation for document knowl-edge acquisition. We investigate multiple formulations of entity coreness, aggregation functions, and relation corness, and observe the empirical effectiveness of coreness-aware sampling. We fur-ther derive the optimality of our algorithm under common assumptions and its theoretical advantage over random sampling. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+# REPRODUCIBILITY STATEMENT 
+
+We have taken steps to ensure the reproducibility of our results. We will publish our code used for our experiments upon acceptance. In appendix sections D and E, we provide the prompts we use for reproduciblity purposes. In appendix F we provide algorithmic details to facilitate understanding. 
+
+# ETHICS STATEMENT 
+
+We are committed to conducting research that adheres to the ethical principles outlined in the ICLR Code of Ethics. Our study focuses on improving the efficiency of existing algorithms and does not cause any intended harm. We are not creating new datasets and comply with relevant data privacy regulations. We have noted below our usage of LLMs in the project. 
+
+# LLM C ONTRIBUTION 
+
+Entity extraction and relation induction: During the construction of entity–relation graphs, we prompt an LLM to extract salient entities from source documents and to identify explicit relation-ships between entity pairs, following EntiGraph (Yang et al., 2024). 
+
+Synthetic data generation: For coreness-aware augmentation, we use LLM prompting to gen-erate relation-centric text conditioned on pairs of entities and their source document context (see appendix D). 
+
+Assistance: We leveraged LLM tools for polishing language and for coding assistance such as cursor. All substantive scientific content, experimental design, and analysis were produced by the authors. All generated outputs used in experiments were systematically verified and filtered by the authors before inclusion. The use of LLMs did not replace any of the authors’ responsibilities for research design, implementation, or interpretation. We have used ChatBots to discuss some components of our proposed method, such as, the type of possible aggregation functions. But the LLM came up with materials within our knowledge. 
+
+# REFERENCES 
+
+Zhangir Azerbayev, Hailey Schoelkopf, Keiran Paster, Marco Dos Santos, Stephen McAleer, Al-bert Q Jiang, Jia Deng, Stella Biderman, and Sean Welleck. Llemma: An open language model for mathematics. arXiv preprint arXiv:2310.10631 .Alex Bavelas. Communication patterns in task-oriented groups. Journal of the Acoustical Society of America , 22(6):725–730, 1950. Ulrik Brandes. A faster algorithm for betweenness centrality. Journal of Mathematical Sociology ,25(2):163–177, 2001. doi: 10.1080/0022250X.2001.9990249. Zeming Chen, Alejandro Hern´ andez Cano, Angelika Romanou, Antoine Bonnet, Kyle Matoba, Francesco Salvi, Matteo Pagliardini, Simin Fan, Andreas K¨ opf, Amirkeivan Mohtashami, et al. Meditron-70b: Scaling medical pretraining for large language models. arXiv preprint arXiv:2311.16079 , 2023. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. Training verifiers to solve math word problems, 2021. URL https://arxiv. org/abs/2110.14168 .Pierre Colombo, Telmo Pires, Malik Boudiaf, Rui Melo, Dominic Culver, Etienne Malaboeuf, Gabriel Hautreux, Johanne Charpentier, and Michael Desa. Saullm-54b & saullm-141b: Scaling up domain adaptation for the legal domain. Advances in Neural Information Processing Systems ,37:129672–129695, 2024. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Linton C. Freeman. A set of measures of centrality based on betweenness. Sociometry , 40(1):35–41, 1977. Linton C. Freeman. Centrality in social networks: Conceptual clarification. Social Networks , 1(3): 215–239, 1979. Leo Gao, Jonathan Tow, Baber Abbasi, Stella Biderman, Sid Black, Anthony DiPofi, Charles Fos-ter, Laurence Golding, Jeffrey Hsu, Alain Le Noac’h, Haonan Li, Kyle McDonell, Niklas Muen-nighoff, Chris Ociepa, Jason Phang, Laria Reynolds, Hailey Schoelkopf, Aviya Skowron, Lintang Sutawika, Eric Tang, Anish Thite, Ben Wang, Kevin Wang, and Andy Zou. The language model evaluation harness, 07 2024. URL https://zenodo.org/records/12608602 .Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, Amy Yang, Angela Fan, Anirudh Goyal, Anthony Hartshorn, Aobo Yang, Archi Mitra, Archie Sravankumar, Artem Ko-renev, Arthur Hinsvark, Arun Rao, Aston Zhang, Aurelien Rodriguez, Austen Gregerson, Ava Spataru, Baptiste Roziere, Bethany Biron, Binh Tang, Bobbie Chern, Charlotte Caucheteux, Chaya Nayak, Chloe Bi, Chris Marra, Chris McConnell, Christian Keller, Christophe Touret, Chunyang Wu, Corinne Wong, Cristian Canton Ferrer, Cyrus Nikolaidis, Damien Allonsius, Daniel Song, Danielle Pintz, Danny Livshits, Danny Wyatt, David Esiobu, Dhruv Choudhary, Dhruv Mahajan, Diego Garcia-Olano, Diego Perino, Dieuwke Hupkes, Egor Lakomkin, Ehab AlBadawy, Elina Lobanova, Emily Dinan, Eric Michael Smith, Filip Radenovic, Francisco Guzm´ an, Frank Zhang, Gabriel Synnaeve, Gabrielle Lee, Georgia Lewis Anderson, Govind That-tai, Graeme Nail, Gregoire Mialon, Guan Pang, Guillem Cucurell, Hailey Nguyen, Hannah Kore-vaar, Hu Xu, Hugo Touvron, Iliyan Zarov, Imanol Arrieta Ibarra, Isabel Kloumann, Ishan Misra, Ivan Evtimov, Jack Zhang, Jade Copet, Jaewon Lee, Jan Geffert, Jana Vranes, Jason Park, Jay Ma-hadeokar, Jeet Shah, Jelmer van der Linde, Jennifer Billock, Jenny Hong, Jenya Lee, Jeremy Fu, Jianfeng Chi, Jianyu Huang, Jiawen Liu, Jie Wang, Jiecao Yu, Joanna Bitton, Joe Spisak, Jong-soo Park, Joseph Rocca, Joshua Johnstun, Joshua Saxe, Junteng Jia, Kalyan Vasuden Alwala, Karthik Prasad, Kartikeya Upasani, Kate Plawiak, Ke Li, Kenneth Heafield, Kevin Stone, Khalid El-Arini, Krithika Iyer, Kshitiz Malik, Kuenley Chiu, Kunal Bhalla, Kushal Lakhotia, Lauren Rantala-Yeary, Laurens van der Maaten, Lawrence Chen, Liang Tan, Liz Jenkins, Louis Martin, Lovish Madaan, Lubo Malo, Lukas Blecher, Lukas Landzaat, Luke de Oliveira, Madeline Muzzi, Mahesh Pasupuleti, Mannat Singh, Manohar Paluri, Marcin Kardas, Maria Tsimpoukelli, Mathew Oldham, Mathieu Rita, Maya Pavlova, Melanie Kambadur, Mike Lewis, Min Si, Mitesh Ku-mar Singh, Mona Hassan, Naman Goyal, Narjes Torabi, Nikolay Bashlykov, Nikolay Bogoy-chev, Niladri Chatterji, Ning Zhang, Olivier Duchenne, Onur C ¸ elebi, Patrick Alrassy, Pengchuan Zhang, Pengwei Li, Petar Vasic, Peter Weng, Prajjwal Bhargava, Pratik Dubal, Praveen Krishnan, Punit Singh Koura, Puxin Xu, Qing He, Qingxiao Dong, Ragavan Srinivasan, Raj Ganapathy, Ra-mon Calderer, Ricardo Silveira Cabral, Robert Stojnic, Roberta Raileanu, Rohan Maheswari, Ro-hit Girdhar, Rohit Patel, Romain Sauvestre, Ronnie Polidoro, Roshan Sumbaly, Ross Taylor, Ruan Silva, Rui Hou, Rui Wang, Saghar Hosseini, Sahana Chennabasappa, Sanjay Singh, Sean Bell, Seohyun Sonia Kim, Sergey Edunov, Shaoliang Nie, Sharan Narang, Sharath Raparthy, Sheng Shen, Shengye Wan, Shruti Bhosale, Shun Zhang, Simon Vandenhende, Soumya Batra, Spencer Whitman, Sten Sootla, Stephane Collot, Suchin Gururangan, Sydney Borodinsky, Tamar Herman, Tara Fowler, Tarek Sheasha, Thomas Georgiou, Thomas Scialom, Tobias Speckbacher, Todor Mi-haylov, Tong Xiao, Ujjwal Karn, Vedanuj Goswami, Vibhor Gupta, Vignesh Ramanathan, Viktor Kerkez, Vincent Gonguet, Virginie Do, Vish Vogeti, V´ ıtor Albiero, Vladan Petrovic, Weiwei Chu, Wenhan Xiong, Wenyin Fu, Whitney Meers, Xavier Martinet, Xiaodong Wang, Xiaofang Wang, Xiaoqing Ellen Tan, Xide Xia, Xinfeng Xie, Xuchao Jia, Xuewei Wang, Yaelle Gold-schlag, Yashesh Gaur, Yasmine Babaei, Yi Wen, Yiwen Song, Yuchen Zhang, Yue Li, Yuning Mao, Zacharie Delpierre Coudert, Zheng Yan, Zhengxing Chen, Zoe Papakipos, Aaditya Singh, Aayushi Srivastava, Abha Jain, Adam Kelsey, Adam Shajnfeld, Adithya Gangidi, Adolfo Victoria, Ahuva Goldstand, Ajay Menon, Ajay Sharma, Alex Boesenberg, Alexei Baevski, Allie Feinstein, Amanda Kallet, Amit Sangani, Amos Teo, Anam Yunus, Andrei Lupu, Andres Alvarado, An-drew Caples, Andrew Gu, Andrew Ho, Andrew Poulton, Andrew Ryan, Ankit Ramchandani, An-nie Dong, Annie Franco, Anuj Goyal, Aparajita Saraf, Arkabandhu Chowdhury, Ashley Gabriel, Ashwin Bharambe, Assaf Eisenman, Azadeh Yazdan, Beau James, Ben Maurer, Benjamin Leon-hardi, Bernie Huang, Beth Loyd, Beto De Paola, Bhargavi Paranjape, Bing Liu, Bo Wu, Boyu 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Ni, Braden Hancock, Bram Wasti, Brandon Spence, Brani Stojkovic, Brian Gamido, Britt Mon-talvo, Carl Parker, Carly Burton, Catalina Mejia, Ce Liu, Changhan Wang, Changkyu Kim, Chao Zhou, Chester Hu, Ching-Hsiang Chu, Chris Cai, Chris Tindal, Christoph Feichtenhofer, Cynthia Gao, Damon Civin, Dana Beaty, Daniel Kreymer, Daniel Li, David Adkins, David Xu, Davide Testuggine, Delia David, Devi Parikh, Diana Liskovich, Didem Foss, Dingkang Wang, Duc Le, Dustin Holland, Edward Dowling, Eissa Jamil, Elaine Montgomery, Eleonora Presani, Emily Hahn, Emily Wood, Eric-Tuan Le, Erik Brinkman, Esteban Arcaute, Evan Dunbar, Evan Smoth-ers, Fei Sun, Felix Kreuk, Feng Tian, Filippos Kokkinos, Firat Ozgenel, Francesco Caggioni, Frank Kanayet, Frank Seide, Gabriela Medina Florez, Gabriella Schwarz, Gada Badeer, Georgia Swee, Gil Halpern, Grant Herman, Grigory Sizov, Guangyi, Zhang, Guna Lakshminarayanan, Hakan Inan, Hamid Shojanazeri, Han Zou, Hannah Wang, Hanwen Zha, Haroun Habeeb, Harri-son Rudolph, Helen Suk, Henry Aspegren, Hunter Goldman, Hongyuan Zhan, Ibrahim Damlaj, Igor Molybog, Igor Tufanov, Ilias Leontiadis, Irina-Elena Veliche, Itai Gat, Jake Weissman, James Geboski, James Kohli, Janice Lam, Japhet Asher, Jean-Baptiste Gaya, Jeff Marcus, Jeff Tang, Jen-nifer Chan, Jenny Zhen, Jeremy Reizenstein, Jeremy Teboul, Jessica Zhong, Jian Jin, Jingyi Yang, Joe Cummings, Jon Carvill, Jon Shepard, Jonathan McPhie, Jonathan Torres, Josh Ginsburg, Jun-jie Wang, Kai Wu, Kam Hou U, Karan Saxena, Kartikay Khandelwal, Katayoun Zand, Kathy Matosich, Kaushik Veeraraghavan, Kelly Michelena, Keqian Li, Kiran Jagadeesh, Kun Huang, Kunal Chawla, Kyle Huang, Lailin Chen, Lakshya Garg, Lavender A, Leandro Silva, Lee Bell, Lei Zhang, Liangpeng Guo, Licheng Yu, Liron Moshkovich, Luca Wehrstedt, Madian Khabsa, Manav Avalani, Manish Bhatt, Martynas Mankus, Matan Hasson, Matthew Lennie, Matthias Reso, Maxim Groshev, Maxim Naumov, Maya Lathi, Meghan Keneally, Miao Liu, Michael L. Seltzer, Michal Valko, Michelle Restrepo, Mihir Patel, Mik Vyatskov, Mikayel Samvelyan, Mike Clark, Mike Macey, Mike Wang, Miquel Jubert Hermoso, Mo Metanat, Mohammad Rastegari, Munish Bansal, Nandhini Santhanam, Natascha Parks, Natasha White, Navyata Bawa, Nayan Singhal, Nick Egebo, Nicolas Usunier, Nikhil Mehta, Nikolay Pavlovich Laptev, Ning Dong, Norman Cheng, Oleg Chernoguz, Olivia Hart, Omkar Salpekar, Ozlem Kalinli, Parkin Kent, Parth Parekh, Paul Saab, Pavan Balaji, Pedro Rittner, Philip Bontrager, Pierre Roux, Piotr Dollar, Polina Zvyagina, Prashant Ratanchandani, Pritish Yuvraj, Qian Liang, Rachad Alao, Rachel Ro-driguez, Rafi Ayub, Raghotham Murthy, Raghu Nayani, Rahul Mitra, Rangaprabhu Parthasarathy, Raymond Li, Rebekkah Hogan, Robin Battey, Rocky Wang, Russ Howes, Ruty Rinott, Sachin Mehta, Sachin Siby, Sai Jayesh Bondu, Samyak Datta, Sara Chugh, Sara Hunt, Sargun Dhillon, Sasha Sidorov, Satadru Pan, Saurabh Mahajan, Saurabh Verma, Seiji Yamamoto, Sharadh Ra-maswamy, Shaun Lindsay, Shaun Lindsay, Sheng Feng, Shenghao Lin, Shengxin Cindy Zha, Shishir Patil, Shiva Shankar, Shuqiang Zhang, Shuqiang Zhang, Sinong Wang, Sneha Agarwal, Soji Sajuyigbe, Soumith Chintala, Stephanie Max, Stephen Chen, Steve Kehoe, Steve Satter-field, Sudarshan Govindaprasad, Sumit Gupta, Summer Deng, Sungmin Cho, Sunny Virk, Suraj Subramanian, Sy Choudhury, Sydney Goldman, Tal Remez, Tamar Glaser, Tamara Best, Thilo Koehler, Thomas Robinson, Tianhe Li, Tianjun Zhang, Tim Matthews, Timothy Chou, Tzook Shaked, Varun Vontimitta, Victoria Ajayi, Victoria Montanez, Vijai Mohan, Vinay Satish Ku-mar, Vishal Mangla, Vlad Ionescu, Vlad Poenaru, Vlad Tiberiu Mihailescu, Vladimir Ivanov, Wei Li, Wenchen Wang, Wenwen Jiang, Wes Bouaziz, Will Constable, Xiaocheng Tang, Xiao-jian Wu, Xiaolan Wang, Xilun Wu, Xinbo Gao, Yaniv Kleinman, Yanjun Chen, Ye Hu, Ye Jia, Ye Qi, Yenda Li, Yilin Zhang, Ying Zhang, Yossi Adi, Youngjin Nam, Yu, Wang, Yu Zhao, Yuchen Hao, Yundi Qian, Yunlu Li, Yuzi He, Zach Rait, Zachary DeVito, Zef Rosnbrick, Zhao-duo Wen, Zhenyu Yang, Zhiwei Zhao, and Zhiyu Ma. The llama 3 herd of models, 2024. URL 
+
+https://arxiv.org/abs/2407.21783 .Suriya Gunasekar, Yi Zhang, Jyoti Aneja, Caio C´ esar Teodoro Mendes, Allie Del Giorno, Sivakanth Gopi, Mojan Javaheripi, Piero Kauffmann, Gustavo de Rosa, Olli Saarikivi, Adil Salim, Shital Shah, Harkirat Singh Behl, Xin Wang, S´ ebastien Bubeck, Ronen Eldan, Adam Tauman Kalai, Yin Tat Lee, and Yuanzhi Li. Textbooks are all you need, 2023. URL https://arxiv.org/ abs/2306.11644 .Suchin Gururangan, Ana Marasovi´ c, Swabha Swayamdipta, Kyle Lo, Iz Beltagy, Doug Downey, and Noah A. Smith. Don’t stop pretraining: Adapt language models to domains and tasks, 2020. URL https://arxiv.org/abs/2004.10964 .Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Ja-cob Steinhardt. Measuring massive multitask language understanding, 2021. URL https: 
+
+12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 
+
+//arxiv.org/abs/2009.03300 .Aitor Lewkowycz, Anders Andreassen, David Dohan, Ethan Dyer, Henryk Michalewski, Vinay Ra-masesh, Ambrose Slone, Cem Anil, Imanol Schlag, Theo Gutman-Solo, et al. Solving quantitative reasoning problems with language models. Advances in neural information processing systems ,35:3843–3857, 2022. Haoran Li, Qingxiu Dong, Zhengyang Tang, Chaojun Wang, Xingxing Zhang, Haoyang Huang, Shaohan Huang, Xiaolong Huang, Zeqiang Huang, Dongdong Zhang, Yuxian Gu, Xin Cheng, Xun Wang, Si-Qing Chen, Li Dong, Wei Lu, Zhifang Sui, Benyou Wang, Wai Lam, and Furu Wei. Synthetic data (almost) from scratch: Generalized instruction tuning for language models, 2024. URL https://arxiv.org/abs/2402.13064 .Yuanzhi Li, S´ ebastien Bubeck, Ronen Eldan, Allie Del Giorno, Suriya Gunasekar, and Yin Tat Lee. Textbooks are all you need ii: phi-1.5 technical report, 2023. URL https://arxiv.org/ abs/2309.05463 .Jessy Lin, Vincent-Pierre Berges, Xilun Chen, Wen-Tau Yih, Gargi Ghosh, and Barlas O˘ guz. Learn-ing facts at scale with active reading, 2025. URL https://arxiv.org/abs/2508.09494 .Nick Mecklenburg, Yiyou Lin, Xiaoxiao Li, Daniel Holstein, Leonardo Nunes, Sara Malvar, Bruno Silva, Ranveer Chandra, Vijay Aski, Pavan Kumar Reddy Yannam, et al. Injecting new knowledge into large language models via supervised fine-tuning. arXiv preprint arXiv:2404.00213 , 2024. Oded Ovadia, Meni Brief, Rachel Lemberg, and Eitam Sheetrit. Knowledge-instruct: Effective con-tinual pre-training from limited data using instructions, 2025. URL https://arxiv.org/ abs/2504.05571 .Lawrence Page, Sergey Brin, Rajeev Motwani, and Terry Winograd. The pagerank citation ranking: Bringing order to the web. Technical report, Stanford InfoLab, Stanford, CA, 1998. Technical Report. Richard Yuanzhe Pang, Alicia Parrish, Nitish Joshi, Nikita Nangia, Jason Phang, Angelica Chen, Vishakh Padmakumar, Johnny Ma, Jana Thompson, He He, and Samuel Bowman. QuALITY: Question answering with long input texts, yes! In Proceedings of the 2022 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , pp. 5336–5358, Seattle, United States, July 2022. Association for Computational Linguistics. URL https://aclanthology.org/2022.naacl-main.391 .Yunfan Shao, Linyang Li, Yichuan Ma, Peiji Li, Demin Song, Qinyuan Cheng, Shimin Li, Xiao-nan Li, Pengyu Wang, Qipeng Guo, Hang Yan, Xipeng Qiu, Xuanjing Huang, and Dahua Lin. Case2code: Scalable synthetic data for code generation, 2025. URL https://arxiv.org/ abs/2407.12504 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathemati-cal reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. Yizhong Wang, Yeganeh Kordi, Swaroop Mishra, Alisa Liu, Noah A. Smith, Daniel Khashabi, and Hannaneh Hajishirzi. Self-instruct: Aligning language models with self-generated instructions, 2023. URL https://arxiv.org/abs/2212.10560 .Stanley Wasserman and Katherine Faust. Social Network Analysis: Methods and Applications .Cambridge University Press, Cambridge, 1994. doi: 10.1017/CBO9780511815478. Yuxiang Wei, Zhe Wang, Jiawei Liu, Yifeng Ding, and Lingming Zhang. Magicoder: Empowering code generation with oss-instruct, 2024. URL https://arxiv.org/abs/2312.02120 .An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Dayiheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jing Zhou, Jingren Zhou, Junyang Lin, Kai Dang, Keqin Bao, Kexin Yang, Le Yu, Lianghao Deng, Mei Li, Mingfeng Xue, Mingze Li, Pei Zhang, Peng Wang, Qin Zhu, Rui 13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 Men, Ruize Gao, Shixuan Liu, Shuang Luo, Tianhao Li, Tianyi Tang, Wenbiao Yin, Xingzhang Ren, Xinyu Wang, Xinyu Zhang, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yinger Zhang, Yu Wan, Yuqiong Liu, Zekun Wang, Zeyu Cui, Zhenru Zhang, Zhipeng Zhou, and Zihan Qiu. Qwen3 technical report, 2025. URL https://arxiv.org/abs/2505.09388 .Zitong Yang, Neil Band, Shuangping Li, Emmanuel Cand` es, and Tatsunori Hashimoto. Synthetic continued pretraining, 2024. URL https://arxiv.org/abs/2409.07431 .Dong Yuan, Eti Rastogi, Gautam Naik, Sree Prasanna Rajagopal, Sagar Goyal, Fen Zhao, Bharath Chintagunta, and Jeff Ward. A continued pretrained llm approach for automatic medical note generation. arXiv preprint arXiv:2403.09057 , 2024. Xuemiao Zhang, Can Ren, Chengying Tu, Rongxiang Weng, Hongfei Yan, Jingang Wang, and Xunliang Cai. Linkqa: Synthesizing diverse qa from multiple seeds strongly linked by knowledge points, 2025. URL https://arxiv.org/abs/2508.01317 .14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 
+
+# A MATHEMATICAL FORMULATION OF IMPORTANCE SAMPLING 
+
+The Combinatorial Challenge of Full Knowledge Enumeration. Our motivation for coreness-aware sampling is grounded in the combinatorial complexity of knowledge enumeration. To capture every possible relational fact within a document, including complex interactions between multiple entities, one would ideally need to generate synthetic data for every possible subset of the n salient entities. This represents a complete but computationally infeasible task, as it requires considering 
+
+2n subsets, a number that grows exponentially. 
+
+Simplification to Pairwise Relations: A Massive but Insufficient Step. We demonstrate the non-necessity of exhaustively exponential enumeration. Observe that for any E1, E2 ⊆ E with E1 ⊂ E 2,the relational knowledge over E1 is subsumed by that over S2 and thus need not be augmented re-peatedly. A specification of the minimum knowledge for non-redundant enumeration can be defined here to make a significant simplification: assuming that complex knowledge can be sufficiently ap-proximated by the set of all atomic, pairwise facts. This reduces the problem from considering 2n
+
+subsets to considering the set of all possible entity pairs, I = {(enti i, enti j )|i̸ = j}. While this drastically reduces the complexity from exponential to polynomial ( O(n2)), it is still prohibitively expensive to generate synthetic data for every one of the O(n2) pairs, especially for documents rich in entities. 
+
+Graph Topology as a Principled Proxy for Importance. The core issue is that not all pairs are equally important. We hypothesize a ”true” but unknown importance distribution over all pairs, represented by a score Si,j (i, j ∈ [n], i ̸ = j)for each pair. An ideal data generation process would sample pairs according to this distribution. This is the principle of importance sampling , and the challenge is to estimate these unknown scores. We argue that the relational structure of knowledge, as captured by our graph G = ( V, E ), is a principled proxy for this semantic importance. The structure is not random: • Centrality as Influence: Semantically important entities often serve as hubs or bridges within a knowledge domain. They are more frequently connected to other entities, giving them high centrality. • Distance as Relatedness: Entities that are conceptually close are more likely to have a short path between them in the knowledge graph. Therefore, we use graph-theoretic properties as a computationally tractable proxy for the latent im-portance scores. By combining vertex centrality ( Cen (vi)) and shortest-path distance ( Dis (vi, v j )), COSY CPT approximates the true importance Si,j , enabling a more efficient, guided sampling strategy.( i, j ∈ [n], i ̸ = j)
+
+# B DETAILS OF ENTITY CORENESS MEASURES 
+
+Here we provide detailed descriptions of the vertex centrality measures summarized in Table 1. Remember that |V | = n. We denote |E| = m.B.1 DEGREE CENTRALITY (F REEMAN (1979)) 
+
+Definition The degree centrality Cdeg (v) is the fraction of nodes a given node v is connected to, calculated as Cdeg (v) = deg (v) 
+
+> n−1
+
+( equation 1), where deg (v) is the degree of vertex v.
+
+Motivation A vertex with higher degree centrality is a local hub, directly referenced by many other entities. While simple, it captures a fundamental notion of influence. However, it may not reflect the global significancy. 
+
+Computation and Complexity Computing degree for all vertices requires a single pass through the edge list, leading to a time complexity of O(n + m).15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 B.2 BETWEENNESS CENTRALITY (F REEMAN (1977)) 
+
+Definition Betweenness centrality measures the extent to which a vertex lies on the shortest paths between other vertices. It is defined as Cbtw (v) = P  
+
+> s̸=v̸=tσst (v)
+> σst
+
+, where σst is the total number of shortest paths from s to t, and σst (v) is the number of those paths that pass through v. ( equation 2) 
+
+Motivation In a knowledge graph, a high-betweenness entity acts as a crucial bridge connecting disparate knowledge clusters. The High-betweenness vertex usually has similar positions with cut vertices or bridges between dense subgraphs. Such entities may not have high degree or a ”core” knowledge entity in the conventional sense, but are essential for the flow of information across the graph. 
+
+Computation and Complexity We compute betweenness centrality using NetworkX’s between-ness centrality , which employs Brandes Algorithm (Brandes (2001)). The algorithm iterates over each vertex s (∀s ∈ G) as a source and runs a BFS to obtain shortest-path distances and all possible predecessors to reachable targets. We then traverse the resulting shortest-path DAG in reverse order to accumulate shortest-path dependencies and update the betweenness scores. This approach avoids the cost of explicitly enumerating O(n2) pairs of shortest paths. Instead, we do a simple BFS from each source vertex that takes O(m) time, leading to the time complexity of O(nm ). For discon-nected graphs, vertex pairs in different components are automatically skipped in the path counts. B.3 CLOSENESS CENTRALITY (B AVELAS (1950); F REEMAN (1979)) 
+
+Definition Closeness centrality is typically defined as the reciprocal of sum of the distances to every other vertex, often scaled by a factor n − 1. Specifically, we have Ccls (v) = n − 1
+
+P 
+
+> u̸=v
+
+Dis( v, u )
+
+( equation 3). 
+
+Motivation An entity with high closeness centrality can access all other entities in the graph most efficiently. This indicates it is in a structurally central position within the overall knowledge base. Vertices with high closeness centrality can be a hub knowledge entity of G, a pivot of some dense subgraph, or lie on a bridge connecting dense subgraphs slimilar to vertices with high betweenness centrality. 
+
+Computation and Complexity We compute closeness centrality using NetworkX , which conducts a BFS starting from each v (∀v ∈ V ) and sum up the distances to reachable vertice. On disconnected graphs, distances are averaged over the reachable nodes only, and the Wasserman–Faust correction (Wasserman & Faust (1994)) is applied to ensure comparability across components. The total time complexity will be O(nm ).B.4 PAGE RANK CENTRALITY .(P AGE ET AL . (1998)) 
+
+Definition PageRank centrality Cpr (v) (∀v ∈ V ) represents a stationary score of v under a random walk with teleportation. We define α (0 ≤ αleq 1, typically 0.85) to be a damping factor. The random work follows a random edge at probability α and jumps uniformly to any vertex at probability 1 − α.Let N (v) be the collection of the neighbors. We have Cpr (v) = (1 −α) 1 
+
+> n
+
++α X 
+
+> u∈N(v)
+
+Cpr (u)
+
+deg (u) .( equa-tion 4) 
+
+Motivation PageRank centrality aims to capture global significance instead of emphasizing local connectivity. Besides, by introducing teleportation, PageRank Centrality further mitigates the influ-ence of local hub vertex and generates a more globally harmonized score ranking. While G is an undirected graph in our context, PageRank centrality is often applied for directed graphs. However, the teleportation also allows us to handle disconnected graphs more naturally. 
+
+Computation and Complexity We employ the power iteration method to stimulate the random walk. Specifically, we initialize a n-dimensional vector ⃗x 0 with each entry being 1 
+
+> n
+
+. We define a 16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 matrix P with Pi,j being the entry in the i-th row and j-th column of P . Pi,j = 1{(j,i )∈E} 
+
+> deg( j)
+
+. Besides, let ⃗ t0 be a vector with each entry being 1 
+
+> n
+
+, which is the probability distribution over vertices to which the random work ”teleports”. We iteratively apply the following formula 12 until the maximum number of iterations k is reached. Let ⃗x p be the output vector. The intuition of equation 12 is to distribute the score of every vertex evenly to its neighbors con-nected by outgoing edges in each iteration with high probability while with a small chance to evenly distribute the score to every vertex in the graph. ⃗x t+1 = αP⃗ x t + (1 − α)⃗ t0 (12) 
+
+Cpr (v) (∀v ∈ V ) is the v-th entry of ⃗x p. The total time complexity will be O(kn 2) in the worst case. Note that we use a normalized transition probability matrix P instead of adjacency matrix A.
+
+∥⃗x t+1 ∥1 = ∥⃗x t∥1 = 1 holds for t ≥ 0. In this case, each entry of ⃗x p also represents the probability of staying on the corresponding vertex after the random walk. 
+
+# C RATIONALE FOR AGGREGATION FUNCTIONS 
+
+The heuristic aggregation functions in Table 2 explore different ways to combine entity coreness scores and distance, reflecting different assumptions about how these factors interact. The multiplicative forms in Attraction model alike and Triple product enforce co-importance; if either entity has a low score, the resulting relation score will also be low. More aggressively, in 
+
+Max centrality over distance , the smaller vertex centrality gets completely dominated by the big-ger vertex centrality, and we only care about how extreme one of the centrality values can be. On the contrary, Harmonic mean with distance will prevent large factors from dominating the relation coreness score but highlight the impact of small factors, which will improve the robustness under skewed vertex centrality distributions. Compared with Triple product , the Attraction model alike 
+
+penalizes distance more heavily with a quadratic term to show more preference for nearby pairs. Ad-ditionally, the Attraction model alike formula is inspired by the classic law of universal gravitation formula. Note that in the implementation, we normalize Cen( ·) to the scale from M in Dis (G) to 
+
+M ax Dis (G) to improve numerical stability and enhance comparability between different deter-minants. 
+
+# D SYNTHETIC DATA GENERATION PROMPTS 
+
+Summary & Entity extraction The first step is to summarize and extract the important enti-ties from the document D using the generalized entity extraction operation. The complete 
+
+entity extraction prompt is as follows:                                                                                              
+
+> system: As aknowledge analyzer, your task is to dissect and understand an article provided by the user. introduction: |You are required to perform the following steps: 1. Summarize the Article: Provide aconcise summary of the entire article, capturing the main points and themes. 2. Extract Entities: Identify and list all significant "nouns" or entities mentioned within the article. These entities should include but are not limited to: *People: Any individuals mentioned in the article, using the names or references provided. *Places: Both specific locations and abstract spaces relevant to the content. *Object: Any concrete object that is referenced by the provided content.
+
+17 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 
+
+Under review as a conference paper at ICLR 2026 
+
+* Concepts: Any significant abstract ideas or themes that are central to the article’s discussion. Try to exhaust as many entities as possible. Your response should be structured in a JSON format to organize the information effectively. Ensure that the summary is brief yet comprehensive, and the list of entities is detailed and accurate. Here is the format you should use for your response: {"summary": "<A concise summary of the article>", "entities": ["entity1", "entity2", ...] }principles: "" examples: "" generation: |Article: {{document}} 
+
+Explicit relation existence The second step is to analyze and determine if the relation among two or more entities exist explicitly in the document. The prompt we use for generating such a determination of a given entity is as follows: 
+
+system: |You are a helpful assistant that excels at reading comprehension. introduction: |Your task is to classify the existence of an explicitly stated relation between two entities in a document. The user will provide a document and two entities mentioned in the document. Your role is to determine whether the document directly provides any information regarding the relation between the two entities. principles: |Respond "Yes" if and only if the document directly discusses an interaction, connection, or asssociation between the two entities. Respond "No" if the document does not explicitly discuss the two entities together, either when there is no relation between them, or when their relation is implied, inferred, or requires outside knowledge. Output your answer in the following JSON format: {"analysis": "Brief explanation referencing the document", "relation": "Yes" or "No" }examples: |Here are two examples to help you understand the task: ### Example 1: Document: Batman and the Joker engage .... Entity 1: Batman Entity 2: Joker Question: Is there an explicitly stated relation between Entity 1and Entity 2 in the Document? 
+
+18 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 
+
+Under review as a conference paper at ICLR 2026 
+
+Answer: {"analysis": "The document explicitly discusses the conflict and psychological battle between Batman and the Joker, highlighting their direct interactions.", "relation": "Yes" }### Example 2: Document: Frodo Baggins sets out on a quest .... Entity 1: Frodo Baggins Entity 2: Gandalf Question: Is there an explicitly stated relation between Entity 1and Entity 2 in the Document? Answer: {"analysis": "Although both Frodo and Gandalf are part of the broader narrative, the document does not mention any explicit interaction between them.", "relation": "No" }generation: |Now it’s your turn to perform the task. Document: {{document}} Entity 1: {{entity_pair[0]}} Entity 2: {{entity_pair[1]}} Question: Is there an explicitly stated relation between Entity 1and Entity 2 in the Document? Answer: 
+
+Coreness-Aware Augmentation In the final step of the algorithm (Step 3), we use the coreness scores from step 2 to guide the choice of relations that are used for synthetic data generation. Once chosen, we use the following prompt to generate a thorough analysis of the chosen relations: 
+
+system: |You will act as a knowledge analyzer tasked with dissecting adocument provided by the user. Your role involves two main objectives: 1. Rephrasing Content: The user will identify two specific entities mentioned in the document. You are required to rephrase the content of the document twice: * Once, emphasizing the first entity. * Again, emphasizing the second entity. 2. Analyzing Interactions: Discuss how the two specified entities interact within the context of the document. Your responses should provide clear segregation between the rephrased content and the interaction analysis. Ensure that each section of the output includes sufficient context, ideally 
+
+19 1026 1027 1028 1029 1030 1031 1032 1033 1034 1035 1036 1037 1038 1039 1040 1041 1042 1043 1044 1045 1046 1047 1048 1049 1050 1051 1052 1053 1054 1055 1056 1057 1058 1059 1060 1061 1062 1063 1064 1065 1066 1067 1068 1069 1070 1071 1072 1073 1074 1075 1076 1077 1078 1079 
+
+Under review as a conference paper at ICLR 2026 
+
+referencing the document’s title to maintain clarity about the discussion’s focus. introduction: "" principles: "" examples: "" generation: |Here is the format you should follow for your response: ### Discussion of {{document_uid}} in relation to {{entity_pair [0]}} <Rephrased content focusing on the first entity: {{entity_pair [0]}}> ### Discussion of {{document_uid}} in relation to {{entity_pair [1]}} <Rephrased content focusing on the second entity: {{entity_pair [1]}}> ### Discussion of the interaction between {{entity_pair[0]}} and {{ entity_pair[1]}} in the context of {{document_uid}} <Discussion on how the two entities interact within the document> Here are the entities and the document to rephrase and analyze: ### Entities: - {{entity_pair[0]}} - {{entity_pair[1]}} ### Document: {{document}} 
+
+# E EVALUATION PROMPTS 
+
+Figure 4: Closed-book and open-book input prompt formats for QuALITY. 
+
+Closed-Book Prompt (QuALITY) 
+
+According to [ARTICLE TITLE], [QUESTION] [Options: (A) ... (B) ... (C) ... (D) ...] 
+
+Open-Book Prompt (QuALITY) 
+
+[FULL ARTICLE TEXT] Question: [QUESTION] [Options: (A) ... (B) ... (C) ... (D) ...] 
+
+# F CORENESS MINING BFS I MPLEMENTATION DETAILS 
+
+20 1080 1081 1082 1083 1084 1085 1086 1087 1088 1089 1090 1091 1092 1093 1094 1095 1096 1097 1098 1099 1100 1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114 1115 1116 1117 1118 1119 1120 1121 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 
+
+Under review as a conference paper at ICLR 2026 
+
+Algorithm 2 Coreness Mining BFS 
+
+1: Input: Graph G = ( V, E ), {Cen (v)}v∈V , RC( ·, ·, ·)
+
+2: Output: Entity pair shortest paths list Spair 
+
+3: Spair ← ∅ 
+
+4: for each s ∈ V do 
+
+5: Initialize arrays: Dis (·) ← +∞; visited (·) ← f alse 
+
+6: Dis (s) ← 0; visited (s) ← true 
+
+7: Initialize queue Q = {s}
+
+8: while Q̸ = ∅ do 
+
+9: u ← Q.poplef t () 
+
+10: for each t in neighbors of u do 
+
+11: if visited (t) = f alse then 
+
+12: visited (t) ← true 
+
+13: Dis (t) ← Dis (u) + 1 
+
+14: Q.append (t)
+
+15: Spair .append  s, t, RC( Cen (s), Cen (t), Dis (t)) 
+
+16: end if 
+
+17: end for 
+
+18: end while 
+
+19: end for 
+
+20: return Spair 
+
+# G THEORETICAL EFFECTIVENESS OF CORENESS -A WARE SAMPLING 
+
+Analysis Setup and Notation. Let us now return to the initial setting of our mathematical model. Remember that I is the collection of entity pairs and Si,j is the importance score for entity pair 
+
+(enti i, enti j ) ∈ I . (See Section 3.2) Suppose that the test set contains Te questions indexed by indexed by t = 1 , 2, . . . , T e. Each question can involve the knowledge of k entities in the context of Dsource (k ∈ [n], k ≥ 2 since we assume pairwise entity relation is the minimum knowledge units). Let qk denote the probability that an item involves exactly k entities. 
+
+Hypothesis. Since the model’s learning behavior, internal logic, and learning patterns are not di-rectly quantifiable or observable, in Appendix A, we decompose the knowledge of relations among multiple entities into atomic pairwise units. Hence, we postulate the following criterion: the model answers an question involving entities enti i1 , enti i2 , . . . , enti ik (k ∈ [n], k ≥ 2) correctly if and only if it has learned all pairwise relation knowledge among enti i1 , enti i2 , . . . , enti ik . This also indicates that we assume that (i) there is no partial learning for any pairwise entity relation knowl-edge, which will also be applied without error once it is learned; (ii) if the model has not learned a specific pairwise knowledge unit, it has no chance to infer from other knowledge or guess the correct answer. 
+
+Test Question Generation via Importance-Weighted Sampling As we have discussed in Ap-pendix A, test questions are usually biased towards more important knowledge units. To simulate the process of generating test questions based on knowledge importance, we can equivalently as-sume that the entities involved in each test question are sampled with weights derived from pairwise relation importance and increasing with each relation importance scores. More specifically, for any k-set ( k ∈ [n], k ≥ 2) S′ = {enti i1 , enti i2 , . . . , enti ik }, we can define its combination importance 
+
+g(S′) = g(enti i1 , enti i2 , . . . , enti ik )
+
+whose score only depends on 
+
+{Sc,d |c, d ∈ { i1, i 2, . . . , i k}, c ̸ = d}
+
+Also, g will have the following monotonicity. For any two sets S1, S2 ⊆ E with |S 1| = |S 2|,suppose there exists a bijection ϕ : S1 → S 2 s.t. for every entity pair {enti c, enti d} ⊆ S 1(c̸ = d), 
+
+Sc,d ≥ Sϕ(c),ϕ (d).
+
+21 1134 1135 1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152 1153 1154 1155 1156 1157 1158 1159 1160 1161 1162 1163 1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177 1178 1179 1180 1181 1182 1183 1184 1185 1186 1187 
+
+Under review as a conference paper at ICLR 2026 Then, we have 
+
+g(S1) ≥ g(S2).
+
+Let Sk = { S ′ ⊆ E : |S ′| = k } (k ∈ [n], k ≥ 2) and define the normalizer 
+
+Zk = X
+
+> S∈S k
+
+g(S) (13) Hence, the probability that each question involves exactly the set S′ ∈ S k is 
+
+Pr( each question involves exactly S′) = qk · g(S)
+
+Zk
+
+, k ∈ [n], k ≥ 2. (14) 
+
+Expected Accuracy Recall that our goal is to maximize the expected accuracy on the test set. We define a random variable 
+
+Xt = 1{question t is answered correctly } ∈ { 0, 1}, t ∈ [Te]
+
+Trivially, we have E[Xt] = Pr( Xt = 1) . Define the empirical accuracy Acc as 
+
+Acc = 1
+
+TeTeX
+
+> t=1
+
+Xt. (15) So we have the expectation 
+
+E[Acc] = 1
+
+Te
+
+E[
+
+> Te
+
+X
+
+> t=1
+
+Xt] = 1
+
+TeTeX
+
+> t=1
+
+E[Xt] = 1
+
+TeTeX
+
+> t=1
+
+Pr( Xt = 1) . (16) For each entity pair (enti i, enti j ) ∈ I , Let Wi,j ∈ { 0, 1} indicate whether the model has learned the corresponding knowledge ( Wi,j = 1 ) or not ( Wi,j = 0 ). We write  S′
+
+> 2
+
+ = {(enti c, enti d) : 
+
+enti c, enti d ∈ S ′, c ̸ = d} for the set of entity pairs in S′. By our hypothesis and importance-weighted sampling principle, we have 
+
+Pr( Xt = 1) = 
+
+> n
+
+X
+
+> k=2
+
+qk
+
+X
+
+> S′∈S k
+
+g(S′)
+
+Zk
+
+· Y 
+
+> (enti u,enti v)∈
+
+(S′ 
+
+> 2
+
+)
+
+Wu,v , (17) Consequently, we have expected accuracy 
+
+E[Acc] = 1
+
+TeTeX
+
+> t=1
+> n
+
+X
+
+> k=2
+
+qk
+
+X
+
+> S′∈S k
+
+g(S′)
+
+Zk
+
+· Y 
+
+> (enti u,enti v)∈
+
+(S′ 
+
+> 2
+
+)
+
+Wu,v , (18) 
+
+Remark. If the questions are i.i.d. under the above mechanism, then Pr( Xt = 1) is the same for all 
+
+t, and E[accuracy] = Pr( X = 1) for a generic question. 
+
+NP completeness of maximizing expected accuracy Theorem 4 (NP-completeness of maximizing expected accuracy) Consider the decision variant of the following problem: given a budget y and a threshold τ ∈ [0 , 1] , does there exist a learned set 
+
+L ⊆ I with |L| = y such that E[Acc | L ] ≥ τ ? This decision problem is NP-complete, even when 
+
+qk > 0 for a single k ≥ 3 and g is constant on Sk.
+
+We easily reduce the NP-hard problem k-C LIQUE to this problem. 
+
+Theorem 5 (Optimality of coreness-aware sampling when q2 = 1 ) Suppose q2 = 1 and qk = 0 
+
+for all k̸ = 2 . Then for any budget y, the Coreness Sampling rule that selects the top-y entity pairs by importance score attains an L that maximizes E[Acc | L ] among all L ⊆ I with |L| = y.
+
+We can easily prove it because of the monotonicity of g(·)
+
+22 1188 1189 1190 1191 1192 1193 1194 1195 1196 1197 1198 1199 1200 1201 1202 1203 1204 1205 1206 1207 1208 1209 1210 1211 1212 1213 1214 1215 1216 1217 1218 1219 1220 1221 1222 1223 1224 1225 1226 1227 1228 1229 1230 1231 1232 1233 1234 1235 1236 1237 1238 1239 1240 1241 
+
+Under review as a conference paper at ICLR 2026 
+
+Coreness Sampling vs. Random Sampling Theorem 6 (Coreness-aware sampling has better upper bound than random sampling) L et 
+
+UP( L) be the upper bound on E[Acc | L ]. For any budget y and any value of qk (k ≥ 2) and g(·),we have 
+
+UP( Lcore ) ≥ UP( Lrand ).
+
+We compare two selection rules under the same budget y, i.e., the model will learn y entity pairs from I: (i) Coreness Sampling : sort entity pairs by the importance score in a descending order and pick the set Lcore of top-y entity pairs. (ii) Random Sampling : pick Lrand uniformly at random among all y-subsets of I (without replacement). We define any set of entity pairs H (H ⊆ I ). Suppose that  Sh
+
+> 2
+
+ = H and |S h| = h. Note that there either exits one unique Sh ⊆ E satisfying the above condition, or there does not exist such Sh. If not, we define wH = 0 . Otherwise, we define a contribution weight for each H
+
+wH = qh · g(Sh)
+
+Zh
+
+For any entity pair set L ⊆ I , we give the expected accuracy conditioned on L
+
+E[Acc |L ] = 1
+
+TeTeX
+
+> t=1
+> n
+
+X
+
+> k=2
+
+qk
+
+X
+
+> S′∈S k
+
+g(S′)
+
+Zk
+
+· Y 
+
+> (enti u,enti v)∈
+
+(S′ 
+
+> 2
+
+)
+
+Wu,v 
+
+= 1
+
+TeTeX
+
+> t=1
+> n
+
+X
+
+> k=2
+
+qk
+
+X
+
+> S′∈S k
+
+g(S′)
+
+Zk
+
+· 1{
+
+S′
+
+2
+
+
+
+⊆ L }
+
+= 1
+
+TeTeX
+
+> t=1
+
+X
+
+> H⊆I
+
+wH 1{H ⊆ L} 
+
+In other words, each H contributes its weight wH if and only if all pairs in H are present in the learned set L; otherwise it contributes zero. Now let us try to distribute the contribution to each entity pair in H. Note that we have 
+
+1{H ⊆ L} ≤ 1
+
+|H| 
+
+X
+
+> (enti c,enti d)∈H
+
+1{(enti c, enti d) ∈ L} 
+
+So we have 
+
+E[Acc |L ] ≤ 1
+
+TeTeX
+
+> t=1
+
+X
+
+> H⊆I
+
+wH
+
+|H| 
+
+X
+
+> (enti c,enti d)∈H
+
+1{(enti c, enti d) ∈ L} 
+
+= 1
+
+TeTeX
+
+> t=1
+
+X
+
+> (enti c,enti d)∈L
+
+X
+
+> H⊆I
+> (enti c,enti d)∈H
+
+wH
+
+|H| 
+
+We define μ(enti c, enti d) = P 
+
+> H∋ (enti c,enti d)
+> wH
+> |H|
+
+, ( ∀(enti c, enti d) ∈ I )So we have the upper bound UP( L)
+
+E[Acc |L ] ≤ 1
+
+TeTeX
+
+> t=1
+
+X
+
+> (enti c,enti d)∈L
+
+μ(enti c, enti d) = UP( L)
+
+Note that μ(enti c, enti d) will increase with Senti c,enti d because of the monotonicity of g(·). When 
+
+L = y, UP( L) will be maximized if L = Lcore . So we will always have 
+
+UP( Lcore ) ≥ UP( Lrand ),
+
+i.e. coreness sampling method can always have a better upper bound for the expected accuracy. 23 1242 1243 1244 1245 1246 1247 1248 1249 1250 1251 1252 1253 1254 1255 1256 1257 1258 1259 1260 1261 1262 1263 1264 1265 1266 1267 1268 1269 1270 1271 1272 1273 1274 1275 1276 1277 1278 1279 1280 1281 1282 1283 1284 1285 1286 1287 1288 1289 1290 1291 1292 1293 1294 1295 
+
+Under review as a conference paper at ICLR 2026 
+
+# H EMPIRICAL FEATURES OF ENTITY RELATION GRAPHS 
+
+Figure 5 shows that the entity graphs constructed from real-world documents satisfy social network graph features, such as, low edge density and long-tail connectivity. This motivates the usage of graph-theoretic centrality concepts that are commonly leveraged in social network analysis. 0.0 0.2 0.4 0.6 0.8 1.0       
+
+> Edge Density
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> # of Documents
+> Edge Density Distribution
+> 010 20 30 40 50 60
+> Entity Degree
+> 0
+> 100
+> 200
+> 300
+> 400
+> Frequency
+> Edge Degree Distribution
+
+Figure 5: Distributions of edge properties of the entity graph on QuALITY dataset. Left: histogram of edge densities across documents, showing the sparsity of entity graphs. Right: histogram of entity degrees, highlighting the long-tail connectivity pattern where most entities have few links while a small number have disproportionately many. 24

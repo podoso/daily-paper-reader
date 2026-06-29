@@ -1,0 +1,684 @@
+Title: 13150_MDocAgent_A_Multi_Modal_.pdf
+
+URL Source: https://openreview.net/pdf?id=05SHW9ai9e
+
+Number of Pages: 19
+
+Markdown Content:
+000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053 
+
+Under review as a conference paper at ICLR 2026 
+
+# MD OC AGENT : A MULTI -M ODAL MULTI -A GENT 
+
+# FRAMEWORK FOR DOCUMENT UNDERSTANDING 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+## ABSTRACT 
+
+Document Question Answering (DocQA) is a very common task. Existing meth-ods using Large Language Models (LLMs) or Large Vision Language Models (LVLMs) and Retrieval Augmented Generation (RAG) often prioritize informa-tion from a single modal, failing to effectively integrate textual and visual cues. These approaches struggle with complex multi-modal reasoning, limiting their performance on real-world documents. We present MDocAgent (A Multi-Modal Multi-Agent Framework for Document Understanding), a novel RAG and multi-agent framework that leverages both text and image. Our system employs five specialized agents: a general agent, a critical agent, a text agent, an image agent and a summarizing agent. These agents engage in multi-modal context retrieval, combining their individual insights to achieve a more comprehensive understanding of the document’s content. This collaborative approach enables the system to syn-thesize information from both textual and visual components, leading to improved accuracy in question answering. Preliminary experiments on five benchmarks like MMLongBench, LongDocURL demonstrate the effectiveness of our MDocAgent, achieve an average improvement of 12.1% compared to current state-of-the-art method. This work contributes to the development of more robust and comprehen-sive DocQA systems capable of handling the complexities of real-world documents containing rich textual and visual information. 
+
+## 1 INTRODUCTION Who is the commanding officer in             
+
+> the first figure on the second page?
+> ···
+> Task LVLMs
+> .txt
+> .png
+> Our System
+> General
+> Agent
+> Critical
+> Agent
+> Image
+> Agent
+> Text
+> Agent
+> Summarizing
+> Agent
+> Long documents
+> Attention to details
+> Cross -modal understanding
+> Single -modal Context Retrieval and LLM/LVLM System
+> Text -based
+> RAG
+> Top -k
+> Image -based
+> RAG
+> LLM
+> Long documents Attention to details
+> Cross -modal understanding
+> Top -k
+> LVLM
+> Long documents Attention to details
+> Cross -modal understanding
+> Text -based
+> RAG
+> Top -k
+> Image -based
+> RAG
+> Top -k
+> Long documents Attention to details Cross -modal understanding
+
+Figure 1: Comparison of different approaches for DocQA. Answering questions based on reference documents (DocQA) is a critical task in many applications (Ding et al., 2022; Tanaka et al., 2023; Mishra et al., 2019; Cho et al., 2024; Zhang et al., 2024a; Ma et al., 2024a; Suri et al., 2024), ranging from in-formation retrieval to automated document analysis. A key challenge in DocQA lies in the diverse nature of questions and the information needed to answer them (Ma et al., 2024b; Deng et al., 2024). Questions can refer to textual content, to visual elements within the document (e.g., charts, diagrams, images), or even require the integration of information from both modal-ities. Since Large Language Models (LLMs) can only handle textual information (Naveed et al., 2023), Large Vision Lan-guage Models (LVLMs) are often used in DocQA (Luo et al., 2024; Hu et al., 2024; Chen et al., 2024). As illustrated in Figure 1, while LVLMs have shown promise in handling visual content, they often struggle in scenarios where key information is primarily textual, or where a nuanced understanding of the interplay between text and visual elements is required (Cho et al., 2024; Ma et al., 2024a; Suri et al., 2024). Another chal-lenge in DocQA lies in the huge volume of information often present in documents. Processing entire documents directly can overwhelm computational resources and make it difficult for models to identify the most pertinent information (Ma et al., 2024b; Deng et al., 2024). 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 Question                                            
+
+> Text -based
+> RAG
+> Image -based
+> RAG
+> Top -k segments
+> of text
+> Top -k segments
+> of image
+> ··· ···
+> 𝑇 !={𝑡 ",𝑡 #,...,𝑡 $}𝐼 !={𝑖 ",𝑖 #,...,𝑖 $}
+> 𝑞
+> General
+> Agent
+> Critical
+> Agent
+> Answer !
+> Critical Textual
+> Information
+> Critical Visual
+> Information
+> Text
+> Agent
+> Image
+> Agent
+> 𝑇 !𝐼 !𝑞
+> 𝑇 !={𝑡 ",𝑡 #,...,𝑡 $}
+> 𝐼 !={𝑖 ",𝑖 #,...,𝑖 $}
+> 𝑞
+> 𝑞
+> Answer "
+> Answer #
+> Summarizing Agent
+> Answer !
+> ··· Doc
+> Retrieve
+> PDF Tools Stage 4
+> Stage 1
+> Stage 2
+> Stage 3
+> Stage 5
+
+Figure 2: Overview of MDocAgent : A multi-modal multi-agent framework operating in five stages: (1) Documents are processed using PDF tools to extract text and images. (2) Text-based and image-based RAG retrieves the top-k relevant segments and image pages. (3) The general agent provides a preliminary answer, and the critical agent extracts critical information from both modalities. (4) Specialized agents process the retrieved information and critical information within their respective modalities and generate refined answers. (5) The summarizing agent integrates all previous outputs to generate the final answer. To overcome this challenge, Retrieval Augmented Generation (RAG) is used as an auxiliary tool to extract the critical information from a long document (Gao et al., 2023). While RAG methods like ColBERT (Khattab & Zaharia, 2020) and ColPali (Faysse et al., 2024a) have proven effective for retrieving textual or visual information respectively, they often fall short when a question requires integrating insights from both modalities. Existing RAG implementations typically operate in isolation, either retrieving text or images (Lewis et al., 2020; Xia et al., 2024c), but lack the ability to synthesize information across these modalities. Consider a document containing a crucial diagram and accompanying textual explanations. If a question focuses on the diagram’s content, a purely text-based RAG system would struggle to pinpoint the relevant information. Conversely, if the question pertains to a nuanced detail within the textual description, an image-based RAG would be unable to isolate the necessary textual segment. This inability to effectively combine multi-modal information restricts the performance of current RAG-based approaches in complex DocQA tasks. Moreover, the diverse and nuanced nature of these multimodal relationships requires not just retrieval, but also a mechanism for reasoning and drawing inferences across different modalities. To further address these limitations, we present a novel framework, a Multi-Modal Multi-Agent Framework for Document Understanding (MDocAgent), which leverages the power of both RAG and a collaborative multi-agent system where specialized agents collaborate to process and integrate text and image information. MDocAgent employs two parallel RAG pipelines: a text-based RAG and an image-based RAG. These retrievers provide targeted textual and visual context for our multi-agent system. MDocAgent comprises five specialized agents : a general agent for initial multi-modal processing, a critical agent for identifying key information, a text agent, an image agent for focused analysis within their respective modalities, and a summarizing agent to synthesize the final answer. This collaborative approach enables our system to effectively tackle questions that require synthesizing information from both textual and visual elements, going beyond the capabilities of traditional RAG methods. Specifically, MDocAgent operates in five stages: (1) Document Pre-processing: Text is extracted via OCR and pages are preserved as images. (2) Multi-modal Context Retrieval: text-based and image-based RAG tools retrieve the top-k relevant text segments and image pages, respectively. (3) Initial Analysis and Key Extraction: The general agent generates an initial response, and the critical agent extracts key information, providing it to the specialized agents. (4) Specialized Agent Processing: Text and image agents analyze the retrieved context within their respective modalities, guided by the critical information. (5) Answer Synthesis: The summarizing agent integrates all agent responses to produce the final answer. 2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 The primary contribution of this paper is a novel multi-agent framework for DocQA that effectively integrates specialized agents, each dedicated to a specific modality or aspect of reasoning, including text and image understanding, critical information extraction, and answer synthesis. We demonstrate the efficacy of our approach through experiments on five benchmarks: MMLongBench (Ma et al., 2024b), LongDocURL (Deng et al., 2024), PaperTab (Hui et al., 2024), PaperText (Hui et al., 2024), and FetaTab (Hui et al., 2024), showing significant improvements in DocQA performance, with an average of 12.1% compared to current SOTA method. The empirical improvements demonstrate the effectiveness of our collaborative multi-agent architecture in handling long, complex documents and questions. Furthermore, ablation studies validate the contribution of each agent and the importance of integrating multi-modalities. 
+
+## 2 RELATED WORK 
+
+LVLMs in DocQA Tasks. Document Visual Question Answering (DocVQA) has evolved from focusing on short documents to handling complex, long, and multi-document tasks (Ding et al., 2022; Tanaka et al., 2023; Mishra et al., 2019; Tito et al., 2023), often involving visually rich content such as charts and tables. This shift requires models capable of integrating both textual and visual information. Large Vision Language Models (LVLMs) have emerged to address these challenges by combining the deep semantic understanding of Large Language Models (LLMs) with the ability to process document images (Liu et al., 2024a;b; Zhu et al., 2023; Dai et al., 2023; Zhou et al., 2023; 2024a;b; Xia et al., 2024a;b; Zhu et al., 2024; Zhang et al., 2024b; Tong et al., 2025). LVLMs convert text in images into visual representations, preserving layout and visual context. However, they face challenges like input size limitations and potential loss of fine-grained textual details (Luo et al., 2024; Hu et al., 2024), making effective integration of text and visual information crucial for accurate DocVQA performance (Park et al., 2024). 
+
+Retrieval-Augmented Generation. Retrieval Augmented Generation (RAG) enhances LLMs by supplying them with external text-based context, thereby improving their performance in tasks such as DocQA (Lewis et al., 2020; Gao et al., 2023). Recently, with the increasing prevalence of visually rich documents, image RAG approaches have been developed to retrieve relevant visual content for Large Vision Language Models (LVLMs) (Xia et al., 2024d;c; Cho et al., 2024; Chen et al., 2024; Xing et al., 2025). However, existing methods struggle to effectively integrate and reason over both text and image information, as retrieval often occurs independently. This lack of integrated reasoning limits the effectiveness of current RAG techniques, especially for complex DocQA tasks that require a nuanced understanding of both modalities. 
+
+Multi-Agent Systems. Multi-agent systems have shown promise in complex domains like medicine (Wu et al., 2023; Li et al., 2023; Kim et al., 2024). These systems use specialized agents to focus on different task aspects (Chan et al., 2023; Kannan et al., 2024; Li et al., 2025), collaborating to achieve goals that a single model may struggle with. However, their application to DocQA introduces unique challenges stemming from the need to integrate diverse modalities. Simply combining the outputs of independent text and image agents often fails to capture the nuanced interplay between these modalities, which is crucial for accurate document understanding. Our framework addresses this by introducing a general agent for information integration alongside specialized text and image agents, enabling collaborative reasoning and a more comprehensive understanding of document content, ultimately improving DocVQA performance. 
+
+## 3 MULTI -M ODAL MULTI -A GENT FRAMEWORK FOR DOCUMENT 
+
+## UNDERSTANDING 
+
+This section details our proposed framework, MDocAgent, for tackling the complex challenges of DocQA. MDocAgent employs a novel five-stage multi-modal, multi-agent approach as shown in Figure 2, utilizing specialized agents for targeted information extraction and cross-modal synthesis to achieve a more comprehensive understanding of document content. Subsequently, Section 3.1 through Section 3.5 provide a comprehensive description of MDocAgent’s architecture. This detailed exposition will elucidate the mechanisms by which MDocAgent effectively integrates and leverages textual and visual information to achieve improved accuracy in DocQA. 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 
+
+Preliminary: Document Question Answering. Given a question q expressed in natural language and the corresponding document D, the goal is to generate an answer a that accurately and compre-hensively addresses q using the information provided within D.3.1 DOCUMENT PRE -P ROCESSING 
+
+This initial stage prepares the document corpus for subsequent processing by transforming it into a format suitable for both textual and visual analysis. D consists of a set of pages D = {p1, p 2, . . . , p N }.For each page pi, textual content is extracted using a combination of Optical Character Recognition (OCR) and PDF parsing techniques. OCR is employed to recognize text within image-based PDFs, while PDF parsing extracts text directly from digitally encoded text within the PDF. This dual approach ensures robust text extraction across various document formats and structures. The extracted text for each page pi is represented as a sequence of textual segments or paragraphs ti = {ti1, t i2, . . . , t iM },where M represents the number of text segments on that page. Concurrently, each page pi is also preserved as an image, retaining its original visual layout and features. This allows the framework to leverage both textual and visual cues for comprehensive understanding. This pre-processing results in two parallel representations of the document corpus: a textual representation consisting of extracted text segments and a visual representation consisting of the original page images. This dual representation forms the foundation for the multi-modal analysis performed by the framework. 3.2 MULTI -MODAL CONTEXT RETRIEVAL 
+
+The second stage focuses on efficiently retrieving the most relevant information from the document corpus, considering both text and image modalities. Algorithm 1 illustrates the whole procedure of retrieval. For the textual retrieval, extracted text segments ti of each page pi are indexed using ColBERT (Khattab & Zaharia, 2020). Given the user question q, ColBERT retrieves the top-k
+
+most relevant text segments, denoted as Tq = {t1, t 2, . . . , t k}. This provides the textual context for subsequent agent processing. Parallel to textual retrieval, visual context is extracted using ColPali (Faysse et al., 2024a). Each page image pi is processed by ColPali to generate a dense visual embedding Epi ∈ Rnv ×d, where nv represents the number of visual tokens per page and d represents the embedding dimension. Using these embeddings and the question q, ColPali retrieves the top-k
+
+most visually relevant pages, denoted as Iq = {i1, i 2, . . . , i k}. The use of ColPali allows the model to capture the visual information present in the document, including layout, figures, and other visual cues. 
+
+Algorithm 1 Multi-modal Context Retrieval 
+
+Require: Question q, Document D, Text Scores St, Image Scores Si, Text Relevance Scores Rt,Image Relevance Scores Ri.
+
+Ensure: Top-k text segments Tq , Top-k image segments Tq . 
+
+> 1:
+
+St ← {}  
+
+> 2:
+
+Si ← {} ▷ Iterate through each page in the corpus  
+
+> 3:
+
+for each p in D do  
+
+> 4:
+
+for each text segment t in p do  
+
+> 5:
+
+St[t] ← Rt(q, t ) ▷ Calculate text relevance score  
+
+> 6:
+
+end for  
+
+> 7:
+
+Si[p] ← Ri(q, p ) ▷ Calculate image relevance score  
+
+> 8:
+
+end for  
+
+> 9:
+
+Tq ← Top K (St, k ) ▷ Select top-k text segments  
+
+> 10:
+
+Iq ← Top K (Si, k ) ▷ Select top-k image segments  
+
+> 11:
+
+return Tq , Iq
+
+3.3 INITIAL ANALYSIS AND KEY EXTRACTION 
+
+The third stage aims to provide an initial interpretation of the question and pinpoint the most salient information within the retrieved context. The general agent AG, functioning as a preliminary multi-modal integrator, receives both the retrieved textual context Tq and the visual context Iq . It processes these multimodal inputs by effectively combining the information embedded within both modalities. 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 This comprehensive understanding of the combined context allows AG to generate a preliminary answer aG, which serves as a crucial starting point for more specialized analysis in the next stage. 
+
+aG = AG(q, T q , I q ). (1) Subsequently, the critical agent AC plays a vital role in refining the retrieved information. It takes as input the question q, the retrieved contexts Tq and Iq , and the preliminary answer aG generated by the general agent. The primary function of AC is to meticulously analyze these inputs and identify the most crucial pieces of information that are essential to accurately answer the question. This critical information acts as a guide for the specialized agents in the next stage, focusing their attention on the most relevant aspects of the retrieved context. 
+
+Tc = AC (q, T q , a G), Ic = AC (q, I q , a G). (2) The output of this stage consists of Tc ⊂ Tq , representing the critical textual information extracted from the retrieved text segments, and Ic, which provides a detailed textual description of the critical visual information extracted from the retrieved images Iq that capture the essence of the important visual elements. 3.4 SPECIALIZED AGENT PROCESSING 
+
+The fourth stage delves deeper into the textual and visual modalities, leveraging specialized agents guided by the critical information extracted in the previous stage. The text agent AT receives the re-trieved text segments Tq and the critical textual information Tc as input. It operates exclusively within the textual domain, leveraging its specialized knowledge and analytical capabilities to thoroughly examine the provided text segments. By focusing specifically on the critical textual information Tc,
+
+AT can pinpoint the most relevant evidence within the broader textual context Tq and perform a more focused analysis. This focused approach allows for a deeper understanding of the textual nuances related to the question and culminates in the generation of a detailed, text-based answer aT .
+
+aT = AT (q, T q , T c). (3) Concurrently, the image agent AI receives the retrieved images Iq and the critical visual information 
+
+Ic. This agent specializes in visual analysis and interpretation. It processes the images in Iq , paying particular attention to the regions or features highlighted by the critical visual information Ic. This targeted analysis allows the agent to extract valuable insights from the visual content, focusing its processing on the most relevant aspects of the images. The image agent’s analysis results in a visually-grounded answer aI , which provides a response based on the interpretation of the images. 
+
+aI = AI (q, I q , I c). (4) 3.5 ANSWER SYNTHESIS 
+
+The final stage integrates the diverse outputs from the preceding stages, combining the initial multi-modal understanding with the specialized agent analyses to produce a comprehensive and accurate answer. The summarizing agent AS receives the answers aG, aT , and aI generated by the general agent, text agent, and image agent, respectively. This comprehensive set of information provides a multifaceted perspective on the question and allows the summarizing agent to perform a thorough synthesis. The summarizing agent analyzes the individual agent answers, identifying commonalities, discrepancies, and complementary insights. It considers the supporting evidence provided by each agent. By resolving potential conflicts or disagreements between the agents and integrating their individual strengths, the summarizing agent constructs a final answer aS that leverages the collective intelligence of the multi-agent system. This final answer is not merely a combination of individual answers but a synthesized response that reflects a deeper and more nuanced understanding of the information extracted from both textual and visual modalities. The whole procedure of this multi-agent collaboration is illustrated in Algorithm 2. 
+
+## 4 EXPERIMENTS 
+
+We evaluate MDocAgent on five document understanding benchmarks covering multiple scenarios to answer the following questions: (1) Does MDocAgent effectively improve document understanding accuracy compared to existing RAG-based approaches? (2) Does each agent in our framework play a meaningful role? (3) How does our approach enhance the model’s understanding of documents? 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 
+
+Algorithm 2 Multi-agent Collaboration 
+
+Require: Question q, Top-k text segments Tq , Top-k image segments Iq , General Agent AG, Critical Agent AC , Text Agent AT , Image Agent AI , Summarizing Agent AS
+
+Ensure: Final answer as,
+
+1: aG ← AG(q, T q , I q ) ▷ General agent answer 
+
+2: (Tc, B c) ← AC (q, T q , I q , a G) ▷ Extract critical info 
+
+3: aT ← AT (q, T q , T c) ▷ Text agent answer 
+
+4: aI ← AI (q, I q , B c) ▷ Image agent answer 
+
+5: aS ← AS (q, a G, a T , a I ) ▷ Final answer synthesis 
+
+6: return aS
+
+Table 1: Performance comparison across MDocAgent and existing state-of-the-art LVLMs and RAG-based methods.                                                                               
+
+> Method MMLongBench LongDocUrl PaperTab PaperText FetaTab Avg
+> LVLMs
+> Qwen2-VL-7B-Instruct 0.165 0.296 0.087 0.166 0.324 0.208 Qwen2.5-VL-7B-Instruct 0.224 0.389 0.127 0.271 0.329 0.268 LLaVA-v1.6-Mistral-7B 0.099 0.074 0.033 0.033 0.110 0.070 Phi-3.5-Vision-Instruct 0.144 0.280 0.071 0.165 0.237 0.179 LLaVA-One-Vision-7B 0.053 0.126 0.056 0.108 0.077 0.084 SmolVLM-Instruct 0.081 0.163 0.066 0.137 0.142 0.118
+> RAG methods (top 1)
+> ColBERTv2+LLaMA-3.1-8B 0.241 0.429 0.155 0.332 0.490 0.329 M3DocRAG (ColPali+Qwen2-VL-7B) 0.276 0.506 0.196 0.342 0.497 0.363
+> MDocAgent (Ours) 0.299 0.517 0.219 0.399 0.600 0.407
+> RAG methods (top 4)
+> ColBERTv2+LLaMA-3.1-8B 0.273 0.491 0.277 0.460 0.673 0.435 M3DocRAG (ColPali+Qwen2-VL-7B) 0.296 0.554 0.237 0.430 0.578 0.419
+> MDocAgent (Ours) 0.315 0.578 0.278 0.487 0.675 0.465
+
+4.1 EXPERIMENT SETUP 
+
+Implementation Details . There are five agents in MDocAgent: general agent, critical agent, text agent, image agent and summarizing agent. We adopt Llama-3.1-8B-Instruct (Grattafiori et al., 2024) as the base model for text agent, Qwen2-VL-7B-Instruct (Wang et al., 2024) for other four agents, and select ColBERTv2 (Santhanam et al., 2021) and ColPali (Faysse et al., 2024b) as the text and image retrievers, respectively. In our settings of RAG, we retrieve 1 or 4 highest-scored segments as input context for each example. All experiments are conducted on 4 NVIDIA H100 GPUs. Details of models and settings are shown in Appendix A. 
+
+Datasets . The benchmarks involve MMLongBench (Ma et al., 2024b), LongDocUrl (Deng et al., 2024), PaperTab (Hui et al., 2024), PaperText (Hui et al., 2024), FetaTab (Hui et al., 2024). These evaluation datasets cover a variety of scenarios, including both open- and closed-domain, textual and visual, long and short documents, ensuring fairness and completeness in the evaluation. Details of dataset descriptions are in Appendix A.2. 
+
+Metrics . For all benchmarks, following (Ma et al., 2024b; Deng et al., 2024), we leverage GPT-4o (OpenAI, 2023) as the evaluation model to assess the consistency between the model’s output and the reference answer, producing a binary decision (correct/incorrect). We provide the average accuracy rate for each benchmark. 4.2 MAIN RESULTS 
+
+In this section, we provide a comprehensive comparison of MDocAgent on multiple benchmarks against existing state-of-the-art LVLMs and RAG-based methods built on them. Our findings can be summarized as: 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 Table 2: Performance comparison across different MDocAgent’s variants.                                               
+
+> Variants Agent Configuration Evaluation Benchmarks General & Critical Agent Text Agent Image Agent MMLongBench LongDocUrl PaperTab PaperText FetaTab Avg MDocAgent i✓✗✓0.287 0.508 0.196 0.376 0.552 0.384
+> MDocAgent t✓✓✗0.288 0.484 0.201 0.391 0.596 0.392
+> MDocAgent s✗✓✓0.285 0.479 0.188 0.365 0.592 0.382
+> MDocAgent ✓✓✓0.299 0.517 0.219 0.399 0.600 0.407
+
+Table 3: Performance comparison across different evidence source on MMLongBench. 
+
+Method Chart Table Pure-text Generalized-text Figure Avg 
+
+LVLMs (up to 32 pages) 
+
+Qwen2-VL-7B-Instruct 0.182 0.097 0.209 0.185 0.197 0.165 Qwen2.5-VL-7B-Instruct 0.188 0.124 0.265 0.210 0.254 0.224 LLaVA-v1.6-Mistral-7B 0.011 0.023 0.033 0.000 0.057 0.074 LLaVA-One-Vision-7B 0.045 0.051 0.076 0.017 0.084 0.053 Phi-3.5-Vision-Instruct 0.159 0.101 0.156 0.160 0.164 0.144 SmolVLM-Instruct 0.062 0.065 0.123 0.118 0.094 0.081 
+
+RAG methods (top 1) 
+
+ColBERTv2+LLaMA-3.1-8B 0.148 0.203 0.265 0.143 0.074 0.241 M3DocRAG (ColPali+Qwen2-VL-7B) 0.268 0.263 0.334 0.250 0.303 0.276 
+
+MDocAgent (Ours) 0.269 0.300 0.348 0.252 0.298 0.299 
+
+RAG methods (top 4) 
+
+ColBERTv2+LLaMA-3.1-8B 0.182 0.267 0.311 0.168 0.120 0.273 M3DocRAG (ColPali+Qwen2-VL-7B) 0.290 0.318 0.371 0.277 0.321 0.296 
+
+MDocAgent (Ours) 0.347 0.323 0.401 0.294 0.321 0.315 
+
+MDocAgent Outperforms All the Comparison Methods and Other LVLMs . We compare our method with baseline approaches on document understanding tasks, with the results presented in Table 1. Overall, our method outperforms all baselines across all benchmarks. 
+
+Top-1 Retrieval Performance. With top-1 retrieval, MDocAgent demonstrates a significant per-formance improvement. On PaperText, MDocAgent achieves a score of 0.399, surpassing the second-best method, M3DocRAG, by 16.7%. Similarly, on FetaTab, MDocAgent attains a score of 0.600, exceeding the second-best method by an impressive 21.0%. Compared to the best LVLM (Qwen2.5-VL-7B) and text-RAG-based (ColBERTv2+Llama-3.1-8B) baselines, our approach demon-strates a remarkable average improvement of 51.9% and 23.7% on average across all benchmarks. This improvement highlights the benefits of incorporating visual information and the collaborative multi-agent architecture in our framework. Furthermore, recent state-of-the-art image-RAG-based method M3DocRAG (Cho et al., 2024) show promising results, yet our approach still outperforms it by 12.1% on average. This suggests that our multi-agent framework, with its specialized agents and critical information extraction mechanism addresses the core challenges of information overload, granular attention to detail, and cross-modality understanding more effectively than existing methods. 
+
+Top-4 Retrieval Performance. When using top-4 retrieval, the advantages of our method are further demonstrated. MDocAgent consistently achieves the highest scores across all benchmarks. On average, MDocAgent outperforms Qwen2.5-VL-7B by a remarkable 73.5%. Interestingly, with top-4 retrieval, M3DocRAG slightly performs worse than ColBERTv2+Llama-3.1-8B compared to top-1 retrieval. This may suggest limitations on M3DocRAG’s capacity of selectively integrate across multiple retrieved documents when dealing with larger amounts of retrieved information. On average, MDocAgent exceeds M3DocRAG by 10.9%. Meanwhile, compared to ColBERTv2+Llama-3.1-8B, MDocAgent demonstrates a 6.9% improvement. This consistent improvement suggests that our method effectively harnesses the additional contextual information provided by the top-4 retrieved items, offering a greater benefit with more retrieval results. 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Table 4: Performance comparison between using ColPali and ColQwen2-v1.0 as MDocAgent’s image-based RAG model.                  
+
+> MMLongBench LongDocUrl PaperTab PaperText FetaTab Avg +ColPali 0.299 0.517 0.219 0.399 0.600 0.407 +ColQwen2-v1.0 0.303 0.520 0.216 0.391 0.603 0.407
+
+4.3 QUANTITATIVE ANALYSIS 
+
+In this section, we conduct three quantitative analyses to understand the effectiveness and contribution of different components within our proposed framework. First, we perform ablation studies to assess the impact of removing individual agents or groups of agents. Second, we present a fine-grained performance analysis, examining MDocAgent’s performance across different evidence modalities on MMLongBench to pinpoint the source of its improvements. Third, a compatibility analysis explores the framework’s performance with different image-based RAG backbones to demonstrate its robustness and generalizability. Additionally, we present experimental results showcasing its performance with different model backbones in Appendix B.2. 4.3.1 ABLATION STUDIES 
+
+Table 2 presents a comparison of our full method (MDocAgent) against it’s variants: MDocAgent i
+
+(without the text agent) and MDocAgent t (without the image agent). Across all benchmarks, the full MDocAgent method consistently achieves the highest performance. The removal of either specialized agent, text or image, results in a noticeable performance drop. This underscores the importance of incorporating both text and image modalities through specialized agents within our framework. The performance difference is most pronounced in benchmarks like LongDocURL and PaperText, which likely contain richer visual or textual information respectively, further highlighting the value of specialized processing. This ablation study clearly demonstrates the synergistic effect of combining specialized agents dedicated to each modality. Table 2 also compares MDocAgent with MDocAgent s, where both the general agent and the critical agent are removed, to evaluate their contribution. The consistent improvement of the full method over MDocAgent s across all datasets clearly underscores the importance of these two agents. The general agent establishes a crucial foundation by initially integrating both text and image modalities, providing a holistic understanding of the context. Removing this integration step noticeably reduces the subsequent agents’ capacity to focus their analysis of critical information and answer effectively. On top of general modal integration, removing the critical agent limits the framework’s ability to effectively identify and leverage crucial information. This highlights the essential role of the critical agent in focusing the specialized agents’ attention and facilitating more targeted and efficient information extraction. 4.3.2 FINE -G RAINED PERFORMANCE ANALYSIS 
+
+We present an in-depth analysis of the performance in different types of evidence modalities, by further analyzing the scores on MMLongBench in Table 3, to gain a better understanding of the performance improvements achieved by MDocAgent. We also illustrate the results of evidence modalities of LongDocURL in Appendix B.1. According to the results, MDocAgent outperforms all LVLM baselines among all types of evidence modalities. When comparing RAG methods using the top 1 retrieval approach, though M3DocRAG performs slightly better on Figure category, MDocAgent show strong performance in Chart, Table and Text categories, reflecting its enhanced capability to process textual and visual information. With the top 4 retrieval strategy, MDocAgent enhances its performance in the all categories, specifically in Figure, highlighting its effective handling of large and varied information sources. We also provide experiments and analysis about different document lengths and retrieval module performance in Appendix B.3 and B.4. 4.3.3 COMPATIBILITY ANALYSIS 
+
+We further analyze the compatibility of MDocAgent with different RAG backbones. Table 4 presents results using two image-based RAG models, ColPali and ColQwen2-v1.0, within our proposed 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 The image does not provide information about the degree of Prof. Lebour. M.A.   
+
+> Evidence pages: 1
+
+Question 
+
+> What degree does LEBOUR have?
+
+Answer    
+
+> According to the text, G. A. Lebour has the following degrees:
+> 1. M.A. (Master of Arts)
+> 2. F.G.S. (Fellow of the Geological Society)
+
+Details : ✓
+
+Conclusion: Χ  
+
+> General Agent:
+> Based on the information provided in
+> the text and the image, G. A. Lebour
+> holds the degree of M.A. and F.G.S.
+
+Details: Χ
+
+Conclusion: Χ          
+
+> ColBERT: 1
+> ColPali :5
+> Critical Agent:
+> Critical Info:
+> •Text: M.A.
+> •Image :M.A.
+> Text Agent: Based on the extracted key details, I found that LEBOUR has
+> an M.A. degree. The text states: "By G. A. LEBOUR, M.A., F.G.S., PROFESSOR
+> OF GEOLOGY IN THE DURHAM COLLEGE OF SCIENCE, NEWCASTLE -
+> UPON -TYNE." Here, "M.A." stands for Master of Arts, indicating the degree
+> held by LEBOUR.
+> Image Agent: Based on the information given from the clue, it can be
+> inferred that Prof. Lebour holds a Master of Arts (M.A.) degree.
+> Final Answer: Prof. Lebour holds a Master of Arts (M.A.) degree.
+
+Details: ✓
+
+Conclusion: ✓
+
+M3DocRAG 
+
+ColBERT + Llama 3.1 8B 
+
+> Top -1
+> Page
+> Retrieval
+
+Ours 
+
+Figure 3: A Case study of MDocAgent compared with other two RAG-method baselines. In this case, ColPali fails to retrieve the correct evidence page, hindering M3DocRAG. While ColBERT succeeds in retrieval, the ColBERT + Llama baseline still provides an incorrect answer. Only our multi-agent framework, through precise critical information extraction and agent collaboration, correctly identifies the M.A. degree. framework. Both models achieve comparable overall performance, with an identical average score of 0.407 across all benchmarks. While ColQwen2-v1.0 shows a slight advantage on MMLongBench, LongDocUrl, and FetaTab, ColPali performs marginally better on PaperTab and PaperText. This suggests that the choice of image-based RAG model has minimal impact on the framework’s overall effectiveness, underscoring the robustness of our multi-agent architecture. Moreover, the consistency in performance across different RAG models highlights that the core strength of our approach lies in the multi-agent architecture itself, rather than reliance on a specific retrieval model. This further reinforces the compatibility of our proposed method. 4.4 CASE STUDY 
+
+We perform a case study to better understand MDocAgent. Figure 3 illustrates an example. The question asks for Professor Lebour’s degree. ColPali fails to retrieve the relevant page, rendering M3DocRAG ineffective. While ColBERT correctly retrieves the page, ColBERT + Llama still produces an incorrect answer because it incorrectly adds ”F.G.S.” to the answer, which is not a degree. MDocAgent, on the other hand, correctly identifies the ”M.A. degree”. The general agent provides an initial answer, and the critical agent identifies the ”M.A.” designation in both text and image. Based on the clue, the text agent adds a more detailed explanation, and the image agent directly uses the clue as its answer. Finally, the summarizing agent synthesizes the results to provide the verified answer. This case study demonstrates how our structured, multi-agent framework outperforms methods struggling with integrated text and image analysis (See more case studies in Appendix B.5). 
+
+## 5 CONCLUSION 
+
+This paper presents a multi-agent framework MDocAgent for DocQA that integrates text and visual information through specialized agents and a dual RAG approach. Our framework addresses the limitations of existing methods by employing agents dedicated to text processing, image analysis, and critical information extraction, culminating in a synthesizing agent for final answer generation. Experimental results demonstrate significant improvements over LVLMs and multi-modal RAG methods, highlighting the efficacy of our collaborative multi-agent architecture. Our framework effectively handles information overload and promotes detailed cross-modal understanding, leading to more accurate and comprehensive answers in complex DocQA tasks. Future work will explore more advanced inter-agent communication and the integration of external knowledge sources. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+## 6 ETHICS STATEMENT 
+
+This work does not involve human subjects, personal data collection, or any sensitive demographic attributes. All datasets used in our experiments (MMLongBench, LongDocURL, PaperTab, PaperText, and FetaTab) are publicly available, and we strictly follow their respective licenses and intended usage. We have carefully considered potential risks: our framework improves document question answering by integrating textual and visual cues, but does not generate or manipulate personal or confidential data. To mitigate concerns of bias or fairness, we report results across multiple benchmarks covering diverse modalities and domains. We further note that no funding sources or sponsorships introduce conflicts of interest. Overall, the research complies with standard practices of research integrity, reproducibility, and legal compliance. 
+
+## 7 REPRODUCIBILITY STATEMENT 
+
+We have made extensive efforts to ensure the reproducibility of our results. All experimental settings, including datasets, models, and hyperparameters, are described in detail in Section 4 and Appendix A. We provide ablation studies and compatibility analyses (Sections 4.3 and B.2) to clarify the contributions of different components. Complete descriptions of evaluation metrics and prompts are provided in Appendix A.4. In addition, we indicate the usage of open-source retrieval models (ColBERTv2, ColPali) and base LLMs (Llama-3.1, Qwen2-VL, GPT-4o). Anonymous code and implementation scripts, including preprocessing and evaluation, are submitted as supplementary material. These resources collectively allow independent researchers to replicate and validate our findings. 
+
+## REFERENCES 
+
+Marah Abdin, Jyoti Aneja, Hany Awadalla, Ahmed Awadallah, Ammar Ahmad Awan, Nguyen Bach, Amit Bahree, Arash Bakhtiari, Jianmin Bao, Harkirat Behl, et al. Phi-3 technical report: A highly capable language model locally on your phone. arXiv preprint arXiv:2404.14219 , 2024. Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, Humen Zhong, Yuanzhi Zhu, Mingkun Yang, Zhaohai Li, Jianqiang Wan, Pengfei Wang, Wei Ding, Zheren Fu, Yiheng Xu, Jiabo Ye, Xi Zhang, Tianbao Xie, Zesen Cheng, Hang Zhang, Zhibo Yang, Haiyang Xu, and Junyang Lin. Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 , 2025. Chi-Min Chan, Weize Chen, Yusheng Su, Jianxuan Yu, Wei Xue, Shanghang Zhang, Jie Fu, and Zhiyuan Liu. Chateval: Towards better llm-based evaluators through multi-agent debate. arXiv preprint arXiv:2308.07201 , 2023. Zhanpeng Chen, Chengjin Xu, Yiyan Qi, and Jian Guo. Mllm is a strong reranker: Advancing multimodal retrieval-augmented generation via knowledge-enhanced reranking and noise-injected training. arXiv preprint arXiv:2407.21439 , 2024. Jaemin Cho, Debanjan Mahata, Ozan Irsoy, Yujie He, and Mohit Bansal. M3docrag: Multi-modal retrieval is what you need for multi-page multi-document understanding. arXiv preprint arXiv:2411.04952 , 2024. Wenliang Dai, Junnan Li, Dongxu Li, Anthony Meng Huat Tiong, Junqi Zhao, Weisheng Wang, Boyang Li, Pascale Fung, and Steven Hoi. Instructblip: Towards general-purpose vision-language models with instruction tuning. arXiv preprint arXiv:2305.06500 , 2023. Chao Deng, Jiale Yuan, Pi Bu, Peijie Wang, Zhong-Zhi Li, Jian Xu, Xiao-Hui Li, Yuan Gao, Jun Song, Bo Zheng, et al. Longdocurl: a comprehensive multimodal long document benchmark integrating understanding, reasoning, and locating. arXiv preprint arXiv:2412.18424 , 2024. Yihao Ding, Zhe Huang, Runlin Wang, YanHang Zhang, Xianru Chen, Yuzhong Ma, Hyunsuk Chung, and Soyeon Caren Han. V-doc: Visual questions answers with documents. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 21492–21498, 2022. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, C ´eline Hudelot, and Pierre Colombo. Colpali: Efficient document retrieval with vision language models. In The Thirteenth International Conference on Learning Representations , 2024a. Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, C ´eline Hudelot, and Pierre Colombo. Colpali: Efficient document retrieval with vision language models, 2024b. URL 
+
+https://arxiv.org/abs/2407.01449 .Yunfan Gao, Yun Xiong, Xinyu Gao, Kangxiang Jia, Jinliu Pan, Yuxi Bi, Yi Dai, Jiawei Sun, Haofen Wang, and Haofen Wang. Retrieval-augmented generation for large language models: A survey. 
+
+arXiv preprint arXiv:2312.10997 , 2, 2023. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. Anwen Hu, Haiyang Xu, Jiabo Ye, Ming Yan, Liang Zhang, Bo Zhang, Chen Li, Ji Zhang, Qin Jin, Fei Huang, et al. mplug-docowl 1.5: Unified structure learning for ocr-free document understanding. 
+
+arXiv preprint arXiv:2403.12895 , 2024. Yulong Hui, Yao Lu, and Huanchen Zhang. Uda: A benchmark suite for retrieval augmented generation in real-world document analysis. arXiv preprint arXiv:2406.15187 , 2024. Shyam Sundar Kannan, Vishnunandan LN Venkatesh, and Byung-Cheol Min. Smart-llm: Smart multi-agent robot task planning using large language models. In 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 12140–12147. IEEE, 2024. Omar Khattab and Matei Zaharia. Colbert: Efficient and effective passage search via contextualized late interaction over bert. In Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval , pp. 39–48, 2020. Yubin Kim, Chanwoo Park, Hyewon Jeong, Yik Siu Chan, Xuhai Xu, Daniel McDuff, Hyeonhoon Lee, Marzyeh Ghassemi, Cynthia Breazeal, Hae Park, et al. Mdagents: An adaptive collaboration of llms for medical decision-making. Advances in Neural Information Processing Systems , 37: 79410–79452, 2024. Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich K ¨uttler, Mike Lewis, Wen-tau Yih, Tim Rockt ¨aschel, et al. Retrieval-augmented genera-tion for knowledge-intensive nlp tasks. Advances in neural information processing systems , 33: 9459–9474, 2020. Bingxuan Li, Yiwei Wang, Jiuxiang Gu, Kai-Wei Chang, and Nanyun Peng. Metal: A multi-agent framework for chart generation with test-time scaling. arXiv preprint arXiv:2502.17651 , 2025. Bo Li, Yuanhan Zhang, Dong Guo, Renrui Zhang, Feng Li, Hao Zhang, Kaichen Zhang, Yanwei Li, Ziwei Liu, and Chunyuan Li. Llava-onevision: Easy visual task transfer. arXiv preprint arXiv:2408.03326 , 2024. Guohao Li, Hasan Hammoud, Hani Itani, Dmitrii Khizbullin, and Bernard Ghanem. Camel: Com-municative agents for” mind” exploration of large language model society. Advances in Neural Information Processing Systems , 36:51991–52008, 2023. Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee. Improved baselines with visual instruction tuning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pp. 26296–26306, 2024a. Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning. Advances in neural information processing systems , 36, 2024b. Chuwei Luo, Yufan Shen, Zhaoqing Zhu, Qi Zheng, Zhi Yu, and Cong Yao. Layoutllm: Layout instruction tuning with large language models for document understanding. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 15630–15640, 2024. 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Xueguang Ma, Shengyao Zhuang, Bevan Koopman, Guido Zuccon, Wenhu Chen, and Jimmy Lin. Visa: Retrieval augmented generation with visual source attribution. arXiv preprint arXiv:2412.14457 , 2024a. Yubo Ma, Yuhang Zang, Liangyu Chen, Meiqi Chen, Yizhu Jiao, Xinze Li, Xinyuan Lu, Ziyu Liu, Yan Ma, Xiaoyi Dong, Pan Zhang, Liangming Pan, Yu-Gang Jiang, Jiaqi Wang, Yixin Cao, and Aixin Sun. Mmlongbench-doc: Benchmarking long-context document understanding with visualizations, 2024b. URL https://arxiv.org/abs/2407.01523 .Andr ´es Marafioti, Orr Zohar, Miquel Farr ´e, Merve Noyan, Elie Bakouch, Pedro Cuenca, Cyril Zakka, Loubna Ben Allal, Anton Lozhkov, Nouamane Tazi, Vaibhav Srivastav, Joshua Lochner, Hugo Larcher, Mathieu Morlon, Lewis Tunstall, Leandro von Werra, and Thomas Wolf. Smolvlm: Redefining small and efficient multimodal models. 2025. Anand Mishra, Shashank Shekhar, Ajeet Kumar Singh, and Anirban Chakraborty. Ocr-vqa: Visual question answering by reading text in images. In 2019 international conference on document analysis and recognition (ICDAR) , pp. 947–952. IEEE, 2019. Humza Naveed, Asad Ullah Khan, Shi Qiu, Muhammad Saqib, Saeed Anwar, Muhammad Usman, Naveed Akhtar, Nick Barnes, and Ajmal Mian. A comprehensive overview of large language models. arXiv preprint arXiv:2307.06435 , 2023. OpenAI. Gpt-4 technical report, 2023. https://arxiv.org/abs/2303.08774 .Jaeyoo Park, Jin Young Choi, Jeonghyung Park, and Bohyung Han. Hierarchical visual feature aggregation for ocr-free document understanding. Advances in Neural Information Processing Systems , 37:105972–105996, 2024. Keshav Santhanam, Omar Khattab, Jon Saad-Falcon, Christopher Potts, and Matei Zaharia. Colbertv2: Effective and efficient retrieval via lightweight late interaction. arXiv preprint arXiv:2112.01488 ,2021. Manan Suri, Puneet Mathur, Franck Dernoncourt, Kanika Goswami, Ryan A Rossi, and Dinesh Manocha. Visdom: Multi-document qa with visually rich elements using multimodal retrieval-augmented generation. arXiv preprint arXiv:2412.10704 , 2024. Ryota Tanaka, Kyosuke Nishida, Kosuke Nishida, Taku Hasegawa, Itsumi Saito, and Kuniko Saito. Slidevqa: A dataset for document visual question answering on multiple images. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 37, pp. 13636–13645, 2023. Rub `en Tito, Dimosthenis Karatzas, and Ernest Valveny. Hierarchical multimodal transformers for multipage docvqa. Pattern Recognition , 144:109834, 2023. Haibo Tong, Zhaoyang Wang, Zhaorun Chen, Haonian Ji, Shi Qiu, Siwei Han, Kexin Geng, Zhongkai Xue, Yiyang Zhou, Peng Xia, et al. Mj-video: Fine-grained benchmarking and rewarding video preferences in video generation. arXiv preprint arXiv:2502.01719 , 2025. Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Yang Fan, Kai Dang, Mengfei Du, Xuancheng Ren, Rui Men, Dayiheng Liu, Chang Zhou, Jingren Zhou, and Junyang Lin. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 , 2024. Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu, Li Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, et al. Autogen: Enabling next-gen llm applications via multi-agent conversation. arXiv preprint arXiv:2308.08155 , 2023. Peng Xia, Ze Chen, Juanxi Tian, Yangrui Gong, Ruibo Hou, Yue Xu, Zhenbang Wu, Zhiyuan Fan, Yiyang Zhou, Kangyu Zhu, et al. Cares: A comprehensive benchmark of trustworthiness in medical vision language models. Advances in Neural Information Processing Systems , 37:140334–140365, 2024a. Peng Xia, Siwei Han, Shi Qiu, Yiyang Zhou, Zhaoyang Wang, Wenhao Zheng, Zhaorun Chen, Chen-hang Cui, Mingyu Ding, Linjie Li, et al. Mmie: Massive multimodal interleaved comprehension benchmark for large vision-language models. arXiv preprint arXiv:2410.10139 , 2024b. 12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 Peng Xia, Kangyu Zhu, Haoran Li, Tianze Wang, Weijia Shi, Sheng Wang, Linjun Zhang, James Zou, and Huaxiu Yao. Mmed-rag: Versatile multimodal rag system for medical vision language models. arXiv preprint arXiv:2410.13085 , 2024c. Peng Xia, Kangyu Zhu, Haoran Li, Hongtu Zhu, Yun Li, Gang Li, Linjun Zhang, and Huaxiu Yao. Rule: Reliable multimodal rag for factuality in medical vision language models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pp. 1081–1093, 2024d. Shuo Xing, Yuping Wang, Peiran Li, Ruizheng Bai, Yueqi Wang, Chengxuan Qian, Huaxiu Yao, and Zhengzhong Tu. Re-align: Aligning vision language models via retrieval-augmented direct preference optimization. arXiv preprint arXiv:2502.13146 , 2025. Junyuan Zhang, Qintong Zhang, Bin Wang, Linke Ouyang, Zichen Wen, Ying Li, Ka-Ho Chow, Conghui He, and Wentao Zhang. Ocr hinders rag: Evaluating the cascading impact of ocr on retrieval-augmented generation. arXiv preprint arXiv:2412.02592 , 2024a. Yaqi Zhang, Di Huang, Bin Liu, Shixiang Tang, Yan Lu, Lu Chen, Lei Bai, Qi Chu, Nenghai Yu, and Wanli Ouyang. Motiongpt: Finetuned llms are general-purpose motion generators. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, pp. 7368–7376, 2024b. Yiyang Zhou, Chenhang Cui, Jaehong Yoon, Linjun Zhang, Zhun Deng, Chelsea Finn, Mohit Bansal, and Huaxiu Yao. Analyzing and mitigating object hallucination in large vision-language models. 
+
+arXiv preprint arXiv:2310.00754 , 2023. Yiyang Zhou, Chenhang Cui, Rafael Rafailov, Chelsea Finn, and Huaxiu Yao. Aligning modalities in vision large language models via preference fine-tuning. arXiv preprint arXiv:2402.11411 , 2024a. Yiyang Zhou, Zhiyuan Fan, Dongjie Cheng, Sihan Yang, Zhaorun Chen, Chenhang Cui, Xiyao Wang, Yun Li, Linjun Zhang, and Huaxiu Yao. Calibrated self-rewarding vision language models. arXiv preprint arXiv:2405.14622 , 2024b. Deyao Zhu, Jun Chen, Xiaoqian Shen, Xiang Li, and Mohamed Elhoseiny. Minigpt-4: En-hancing vision-language understanding with advanced large language models. arXiv preprint arXiv:2304.10592 , 2023. Kangyu Zhu, Peng Xia, Yun Li, Hongtu Zhu, Sheng Wang, and Huaxiu Yao. Mmedpo: Aligning medical vision-language models with clinical-aware multimodal preference optimization. arXiv preprint arXiv:2412.06141 , 2024. 13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 
+
+## A EXPERIMENTAL SETUP 
+
+A.1 BASELINE MODELS 
+
+• Qwen2-VL-7B-Instruct (Wang et al., 2024): A large vision-language model developed by Alibaba, designed to handle multiple images as input. • Qwen2.5-VL-7B-Instruct (Bai et al., 2025): An enhanced version of Qwen2-VL-7B-Instruct, offering improved performance in processing multiple images. • llava-v1.6-mistral-7b (Liu et al., 2024a): Also called LLaVA-NeXT, a vision-language model improved upon LLaVa-1.5, capable of interpreting and generating content from multiple images. • Phi-3.5-vision-instruct (Abdin et al., 2024): A model developed by Microsoft that integrates vision and language understanding, designed to process and generate responses based on multiple images. • llava-one-vision-7B (Li et al., 2024): A model trained on LLaVA-OneVision, based on Qwen2-7B language model with a context window of 32K tokens. • SmolVLM-Instruct (Marafioti et al., 2025): A compact vision-language model developed by HuggingFace, optimized for handling image inputs efficiently. • ColBERTv2+Llama-3.1-8B-Instruct (Santhanam et al., 2021; Grattafiori et al., 2024): A text-based RAG pipeline that utilizes ColBERTv2 (Santhanam et al., 2021) for retrieving text segments and Llama-3.1-8B-Instruct as the LLM to generate responses. • M3DocRAG (Cho et al., 2024): An image-based RAG pipeline that employs ColPali (Faysse et al., 2024a) for retrieving image segments and Qwen2-VL-7B-Instruct (Wang et al., 2024) as the LVLM for answer generation. Table 5: Performance comparison across different evidence source on LongDocURL. 
+
+Method Layout Text Figure Table Others Avg 
+
+LVLMs 
+
+Qwen2-VL-7B-Instruct 0.264 0.386 0.308 0.207 0.500 0.296 Qwen2.5-VL-7B-Instruct 0.357 0.479 0.442 0.299 0.375 0.389 llava-v1.6-mistral-7b 0.067 0.165 0.088 0.051 0.250 0.099 llava-one-vision-7B 0.098 0.200 0.144 0.057 0.125 0.126 Phi-3.5-vision-instruct 0.245 0.375 0.291 0.187 0.375 0.280 SmolVLM-Instruct 0.128 0.224 0.164 0.100 0.250 0.163 
+
+RAG methods (top 1) 
+
+ColBERTv2+Llama-3.1-8B 0.257 0.529 0.471 0.428 0.775 0.429 M3DocRAG (ColPali+Qwen2-VL-7B) 0.340 0.605 0.546 0.520 0.625 0.506 
+
+MDocAgent (Ours) 0.341 0.612 0.540 0.527 0.750 0.517 
+
+RAG methods (top 4) 
+
+ColBERTv2+Llama-3.1-8B 0.349 0.599 0.491 0.485 0.875 0.491 M3DocRAG (ColPali+Qwen2-VL-7B) 0.426 0.660 0.595 0.542 0.625 0.554 
+
+MDocAgent (Ours) 0.438 0.675 0.592 0.581 0.875 0.578 
+
+A.2 EVALUATION BENCHMARKS 
+
+• MMLongBench (Ma et al., 2024b): Evaluates models’ ability to understand long docu-ments with rich layouts and multi-modal components, comprising 1091 questions and 135 documents averaging 47.5 pages each. 14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 • LongDocURL (Deng et al., 2024): Provides a comprehensive multi-modal long document benchmark integrating understanding, reasoning, and locating tasks, covering over 33,000 pages of documents and 2,325 question-answer pairs. • PaperTab (Hui et al., 2024): Focuses on evaluating models’ ability to comprehend and extract information from tables within NLP research papers, covering 393 questions among 307 documents. • PaperText (Hui et al., 2024): Assesses models’ proficiency in understanding the textual content of NLP research papers, covering 2804 questions among 1087 documents. • FetaTab (Hui et al., 2024): a question-answering dataset for tables from Wikipedia pages, challengeing models to generate free-form text answers, comprising 1023 questions and 878 documents. A.3 HYPERPARAMETER SETTINGS 
+
+• Temperature : All models use their default temperature setting. • Max New Tokens : 256. • Max Tokens per Image (Qwen2-VL-7B-Instruct) :
+
+– Top-1 retrieval : 16,384 (by default). 
+
+– Top-4 retrieval : 2,048. • Image Resolution : 144 (for all benchmarks). A.4 PROMPT SETTINGS 
+
+General Agent 
+
+You are an advanced agent capable of analyzing both text and images. Your task is to use both the textual and visual information provided to answer the user’s question accurately. 
+
+Extract Text from Both Sources : If the image contains text, extract it and consider both the text in the image and the provided textual content. 
+
+Analyze Visual and Textual Information : Combine details from both the image (e.g., objects, scenes, or patterns) and the text to build a comprehensive understanding of the content. 
+
+Provide a Combined Answer : Use the relevant details from both the image and the text to provide a clear, accurate, and context-aware response to the user’s question. 
+
+When responding: 
+
+• If both the image and text contain similar or overlapping information, cross-check and use both to ensure consistency. • If the image contains information not present in the text, include it in your response if it is relevant to the question. • If the text and image offer conflicting details, explain the discrepancies and clarify the most reliable source. 
+
+Critical Agent 
+
+Provide a Python dictionary of critical information based on all given information—one for text and one for image. Respond exclusively in a valid dictionary format without any additional text. The format should be: 
+
+{”text”: ”critical information for text”, ”image”: ”critical information for image” }
+
+15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 
+
+Text Agent 
+
+You are a text analysis agent. Your job is to extract key information from the text and use it to answer the user’s question accurately. 
+
+Your tasks: 
+
+• Extract key details. Focus on the most important facts, data, or ideas related to the question. • Understand the context and pay attention to the meaning and details. • Use the extracted information to give a concise and relevant response to the user’s question. Provide a clear answer. 
+
+Image Agent 
+
+You are an advanced image processing agent specialized in analyzing and extracting in-formation from images. The images may include document screenshots, illustrations, or photographs. 
+
+Your tasks: 
+
+• Extract textual information from images using Optical Character Recognition (OCR). • Analyze visual content to identify relevant details (e.g., objects, patterns, scenes). • Combine textual and visual information to provide an accurate and context-aware answer to the user’s question. 
+
+Summarizing Agent 
+
+You are tasked with summarizing and evaluating the collective responses provided by multiple agents. You have access to the following information: • Answers : The individual answers from all agents. 
+
+Your tasks: 
+
+• Analyze : Evaluate the quality, consistency, and relevance of each answer. Identify commonalities, discrepancies, or gaps in reasoning. • Synthesize : Summarize the most accurate and reliable information based on the evidence provided by the agents and their discussions. • Conclude : Provide a final, well-reasoned answer to the question or task. Your conclusion should reflect the consensus (if one exists) or the most credible and well-supported answer. Return the final answer in the following dictionary format: 
+
+{”Answer”: Your final answer here }
+
+Evaluation 
+
+Question : {question }
+
+Predicted Answer : {answer }
+
+Ground Truth Answer : {gt }
+
+Please evaluate whether the predicted answer is correct. • If the answer is correct, return 1. • If the answer is incorrect, return 0. Return only a string formatted as a valid JSON dictionary that can be parsed using 
+
+json.loads , for example: {”correctness”: 1 }
+
+16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 A.5 EVALUATION METRICS 
+
+The metric of all benchmarks is the average binary correctness evaluated by GPT-4o. The evaluation prompt is given in Section A.4. We use a python script to extract the result provided by GPT-4o. 
+
+## B ADDITIONAL RESULTS 
+
+B.1 FINE -GRAINED PERFORMANCE OF LONG DOC URL We present the fine-grained performance of LongDocURL, as illustrated in Table 5. Similar to MMLongBench, MDocAgent outperforms all LVLM baselines. When using the top 1 retrieval approach, though M3DocRAG performs slightly better on Figure and ColBERTv2+Llama3.1-8B performs slightly better on the type Others, MDocAgent show strong performance in Layout, Text, Table and get the highest average accuracy. With the top 4 retrieval strategy, MDocAgent improves its performance and reach the highest score in the all categories. B.2 EXPERIMENTS ON DIFFERENT MODEL BACKBONES IN MD OC AGENT 
+
+Table 6: Performance comparison of using different backbone LVLMs in MDocAgent.                                    
+
+> MMLongBench LongDocUrl PaperTab PaperText FetaTab Avg
+> With top 1 retrieval
+> +Qwen2-VL-7B-Instruct 0.299 0.517 0.219 0.399 0.600 0.407
+> +Qwen2.5-VL-7B-Instruct 0.351 0.519 0.211 0.382 0.589 0.410
+> +GPT-4o OpenAI (2023) 0.420 0.595 0.293 0.474 0.716 0.500
+> With top 4 retrieval
+> +Qwen2-VL-7B-Instruct 0.315 0.578 0.278 0.487 0.675 0.467
+> +Qwen2.5-VL-7B-Instruct 0.389 0.566 0.277 0.454 0.671 0.471
+
+Table 6 presents an ablation study evaluating the impact of different LVLMs on the performance of our framework. Three LVLMs: Qwen2-VL-7B-Instruct, Qwen2.5-VL-7B-Instruct, and GPT-4o were integrated as the backbone model for all agents except the text agent. Qwen2.5-VL-7B-Instruct performs worse than Qwen2-VL-7B-Instruct on PaperTab, PaperText, and FetaTab, with both top-1 and top-4 retrieval. However, Qwen2.5-VL shows an extremely marked improvement over Qwen2-VL on MMLongBench, resulting higher average scores. MMLongBench’s greater reliance on image-based questions might explain Qwen2.5-VL’s superior performance on this benchmark, possibly indicating that Qwen2.5-VL is better at handling visual question-answering tasks, but worse at handling textual tasks. Importantly, GPT-4o significantly outperforms both Qwen2-VL and Qwen2.5-VL across all bench-marks. Remarkably, GPT-4o’s top-1 performance surpasses even the top-4 results of both Qwen models in almost all cases. This substantial performance increase strongly suggests that our frame-work effectively leverages more powerful backbone models, showcasing its adaptability and capacity to benefit from improvements in the underlying LVLMs. B.3 EXPERIMENTS ON DIFFERENT DOCUMENT LENGTHS 
+
+We categorized the dataset MMLongBench into three groups based on page count. The results(Table 7) demonstrate that our method consistently outperforms baselines across all document length categories. Table 7: Comparison of Scores Across Page Ranges 
+
+Method 1–20 Pages 20–40 Pages >40 Pages 
+
+Top 1 Top 4 Top 1 Top 4 Top 1 Top 4 ColBert+LLama3.1 0.298 0.306 0.216 0.262 0.224 0.263 M3DocRAG 0.309 0.340 0.242 0.255 0.276 0.311 
+
+MDocAgent (Ours) 0.347 0.381 0.250 0.269 0.291 0.319 
+
+17 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 
+
+Under review as a conference paper at ICLR 2026 The reason that does not include any person in the corresponding figure 
+
+> is " Prestigious Scholarships and Comprehensive Financial Aid ”.
+
+Most Beautiful 
+
+Campus 
+
+Evidence pages: 
+
+3
+
+Question 
+
+Among the top 10 reasons why NTU 
+
+smart campus is for you, which is the 
+
+reason that does not include any 
+
+person in the corresponding figure? 
+
+Answer  
+
+> …the top 10 reasons why NTU smart campus is for you are not
+> explicitly listed . However, the content provided includes a list of 10
+> reasons, but they are not numbered…
+
+Details: Χ
+
+Conclusion: Χ
+
+> General Agent:
+> The reason … is "Most Beautiful
+> Campus." This reason is represented
+> by a figure showing the NTU campus.
+
+Details: Χ
+
+Conclusion: Χ           
+
+> ColBERT: 1
+> ColPali: 3
+> Critical Agent:
+> Critical Info:
+> •Text : Most beautiful Campus,
+> •Image: NTU campus
+> Text Agent: I found the section "CONTENTS 2 TOP 10 REASONS WHY
+> NTU SMART CAMPUS IS FOR YOU". However, the text does not explicitly
+> list the top 10 reasons… The text mentions "Most Beautiful Campus" as a
+> clue. This might be a reason why NTU smart campus is for you.
+> Image Agent: The reason that does not include any person in the
+> corresponding figure is "NTU campus without people.”
+> Final Answer: The reason … is 'Most Beautiful Campus’.This
+> reason focuses on the physical appearance of the NTU campus, as
+> represented by a figure showing the campus without any people.
+
+Details: ✓
+
+Conclusion: ✓
+
+M3DocRAG 
+
+ColBERT + Llama 3.1 8B 
+
+Top -1 Page 
+
+Retrieval 
+
+Ours 
+
+Figure 4: A Case study of MDocAgent compared with other two baselines. While only ColPali correctly retrieves the evidence page, neither baseline method identifies the correct answer. Our method, through critical information sharing and specialized agent collaboration, correctly pinpoints the ”Most Beautiful Campus” as the only reason without a corresponding image containing people. B.4 EXPERIMENTS ON RETRIEVAL MODULE PERFORMANCE 
+
+We evaluated our retrieval module on LongDocURL and MMLongBench, analyzing text and image retrieval separately and jointly. We measured the percentage of instances where at least one evidence page was present within the top-k retrieved pages. Results (Table 8) indicate significant accuracy im-provements when leveraging both modalities together, demonstrating mutual compensation between text and image retrieval. Table 8: Comparison of Retrieval Accuracy 
+
+RAG Method LondDocURL MMLongBench 
+
+Top 1 Top 4 Top 1 Top 4 Text 75.74% 89.46% 6.99% 23.48% Image 80.77% 94.84% 6.99% 31.33% Mixed Modalities 88.22% 97.08% 11.47% 38.86% 
+
+B.5 ADDITIONAL CASE STUDIES 
+
+In Figure 4, the question requires identifying a reason from a list that lacks explicit numbering and is accompanied by images. ColBERT fails to retrieve the correct evidence page, resulting ColBERT + Llama’s inability to answer the question. Although ColPali correctly locates the evidence page, M3DocRAG fails to get the correct answer. However, our framework successfully identifies the correct answer (”Most Beautiful Campus”) through the concerted efforts of all agents. The general agent arrives at a preliminary answer and the critical agent identifies critical textual clues (”Most Beautiful Campus”) and corresponding visual elements (images of the NTU campus). Image agent then refines the answer, leveraging the critical information to correctly pinpoint the description lacking people. Though text agent can’t find the related information from the given context, information provided by the critical agent helps it to guess that the answer is ”Most Beautiful Campus”. The summarizing agent combines these insights to arrive at the correct final answer. In Figure 5, the question requires extracting and comparing numerical information related to two distinct Latino populations from both textual and tabular data within a document. While both ColBERT and ColPali successfully retrieve the relevant page containing the necessary information, 18 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 
+
+Under review as a conference paper at ICLR 2026 The population of foreign -born Latinos is greater in the survey. … 795 
+
+> respondents were foreign -born (excluding Puerto Rico), while 705
+> respondents were U.S. born (including Puerto Rico).
+
+Latinos interviewed by cellphone .
+
+Evidence pages: 1 9, 20 
+
+Question 
+
+According to the report, which one is 
+
+greater in population in the survey? 
+
+Foreign born Latinos, or the Latinos 
+
+interviewed by cellphone ?
+
+Answer      
+
+> …the population of foreign born Latinos is greater in the survey . … 795
+> respondents were foreign born (excluding Puerto Rico), while 1,051
+> respondents were interviewed by cellphone .
+
+Ours 
+
+Details: ✓
+
+Conclusion: Χ
+
+Details: Χ
+
+Conclusion: Χ      
+
+> ColBERT: 19
+> ColPali: 19
+> General Agent:
+> Latinos interviewed by
+> cellphone is greater than
+> foreign -born Latinos.
+> Critical Agent:
+> Critical Info :
+> •Text: Foreign born (excl. PR),
+> •Image: cellphone sampling frame
+> Text Agent: … Foreign born (excluding Puerto Rico): 795. … The
+> sample consisted … and a cellphone sampling frame (1,051 interviews).
+> Image Agent: The cellphone sampling frame yielded 1,051 interviews,
+> while the foreign -born … respondents numbered 795.
+> Final Answer:The number of Latinos interviewed by cellphone
+> (1,051) is greater than the number of foreign -born Latinos (795).
+
+Details: ✓
+
+Conclusion: ✓
+
+M3DocRAG 
+
+ColBERT + Llama 3.1 8B 
+
+Top -1 Page 
+
+Retrieval 
+
+Figure 5: A Case study of MDocAgent compared with other two baselines. Although correctly retrieve the results, both baseline methods fail to arrive at the correct answer. Our framework, through the collaborative efforts of its specialized agents, successfully identifies the relevant information from both text and a table within the image, ultimately synthesizing the correct answer. both baseline methods fail to synthesize the correct answer. The ColBERT + Llama-3.1-8B baseline, relying solely on text, incorrectly concludes that the foreign-born Latino population is greater, demonstrating a failure to accurately interpret the numerical data presented within the document’s textual content. Similarly, M3DocRAG fails to correctly interpret the question due to capturing wrong information. In contrast, our multi-agent framework successfully navigates this complexity and gives the correct answer. Specifically, the general agent provides a correct but vague answer, making the critical agent essential for identifying key phrases like “Foreign born (excl. PR)” and the “cellphone sampling frame” table. This guides specialized agents to precise locations for efficient data extraction. Both text agent and image agent correctly extract 795 for foreign-born Latinos and 1,051 for cellphone-interviewed Latinos. The summarizing agent then integrates these insights for accurate comparison and a comprehensive final answer. These two cases highlight MDocAgent’s resilience to imperfect retrieval, demonstrating the effective-ness of collaborative multi-modal information processing and the importance of the general-critical agent’s guidance in achieving high accuracy even with potentially insufficient or ambiguous informa-tion. 
+
+## C DISCLOSURE OF LARGE LANGUAGE MODEL USAGE 
+
+All content in this article is entirely authored by the writers. The LLM was used solely for language refinement and stylistic polishing, without contributing to content generation. All LLM-refined passages were subsequently reviewed and revised by the authors. 19

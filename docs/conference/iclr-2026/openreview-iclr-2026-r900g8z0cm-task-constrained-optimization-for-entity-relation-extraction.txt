@@ -1,0 +1,640 @@
+Title: 17619_Task_Constrained_Optimiz.pdf
+
+URL Source: https://openreview.net/pdf?id=R900G8z0cm
+
+Number of Pages: 19
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# TASK -C ONSTRAINED OPTIMIZATION FOR ENTITY -RELATION EXTRACTION 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+## ABSTRACT 
+
+Multi-task learning for entity–relation extraction often suffers from implicit task interference and the absence of explicit mechanisms for structural task prioritiza-tion. We propose Hyperbolic Barrier-based Adaptive Hierarchical Optimization ,a constraint-driven framework that treats entity recognition as a dynamic hard constraint via a numerically stable hyperbolic barrier, while adaptively reweighting relation classification through a curriculum-based thresholding strategy. This princi-pled approach enforces strict task prioritization throughout training, yielding up to 
+
+6.4% absolute gains in triplet F1 across five benchmarks. Furthermore, the method generalizes effectively to structurally divergent domains such as recommender sys-tems. These findings underscore that explicitly modeling task hierarchies through constrained optimization represents a critical yet underexplored paradigm for achieving stable and effective multi-task learning. 
+
+## 1 INTRODUCTION 
+
+Entity–relation extraction (ERE) aims to identify structured triples (subject, relation, object) from unstructured text, serving as a foundation for structured knowledge acquisition (Zhang et al., 2025a). The task is inherently multi-faceted, requiring the joint modeling of entity recognition and relation classification. Recent advances in unified ERE models (Zhang et al., 2025a; Yang et al., 2023b) have achieved notable progress via end-to-end architectures. However, a critical asymmetry remains under-addressed: relation classification is only meaningful when entity boundaries are correctly identified . Without reliable entity boundaries, relation classification becomes ill-defined—akin to inferring a friendship without knowing who the individuals are. This asymmetry gives rise to two central challenges. First, current models lack structural prioritization : they treat entity recognition and relation classification as peers, despite their hierarchical dependence. Second, shared optimization often results in training rigidity : relation losses, which typically converge faster, may prematurely dominate training and suppress entity learning, ultimately degrading triplet extraction. To address these issues, we propose a new optimization paradigm that encodes the dependency structure directly into the objective, rather than heuristically balancing tasks. We introduce Hyperbolic 
+
+Barrier-based Adaptive Hierarchical Optimization ( HB-AHO ), a principled framework that enforces task priorities through differentiable constraints. HB-AHO treats entity recognition as a dynamic hard constraint and adaptively reweights relation optimization using a smooth hyperbolic barrier function together with a curriculum-guided thresholding strategy. This constraint-driven mechanism ensures that learning progresses in alignment with the task hierarchy, yielding both empirical and theoretical benefits. In summary, our contributions are as follows: • We propose HB-AHO, a general constrained optimization framework for multi-task learning that explicitly encodes task hierarchies via dynamic hard constraints. To enable smooth and stable optimization, we design a numerically stable hyperbolic barrier function and a curriculum-guided scheduling strategy. We further provide theoretical analysis demonstrat-ing monotonicity, Lipschitz continuity, and feasibility preservation. • The advantages of HB-AHO are validated on five diverse ERE benchmarks, achieving up to 6.4% absolute gains in triplet F1 over strong baselines. Beyond ERE, HB-AHO is also 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 demonstrated to generalize effectively to structurally distinct domains such as multi-task recommendation, underscoring its broad applicability. 
+
+## 2 RELATED WORK 
+
+2.1 MULTI -T ASK LEARNING PERSPECTIVES ON ERE ERE jointly predicts structured triples by identifying entities and classifying their relations. Existing models typically fall into two categories, namely, parameter-sharing methods and joint-decoding methods. Parameter-sharing methods, such as TDEER (Li et al., 2021) and TPLinker (Wang et al., 2020), employ shared encoders with separate decoders. These approaches reduce redundancy but often suffer from weak cross-task coupling and redundant optimization efforts (Duan et al., 2023; Sun et al., 2024). In contrast, joint-decoding methods, such as OneRel (Shang et al., 2022) and UNIRE (Wang et al., 2021), predict complete triples in a single step, enhancing output coherence. However, they often neglect the asymmetric dependency between tasks, where relation prediction critically depends on accurate identification of entity boundaries. Recent advances have sought to enhance task interaction through hypergraph structures (Yan et al., 2023), bidirectional update mechanisms (Qian et al., 2024), feature-enhanced modules (Zhou et al., 2019; Wang et al., 2025), and text-to-graph generation (Zaratiana et al., 2024). Document-level reasoning approaches (Chen, 2025) and domain-specific designs for biomedical extraction (Liu & Qi, 2025) further demonstrate the importance of robust entity modeling. Nevertheless, these methods still optimize both tasks simultaneously without enforcing a strict learning order. 2.2 TASK COORDINATION AND PRIORITIZATION IN MULTI -T ASK LEARNING 
+
+Multi-task learning (MTL) aims to improve generalization on all tasks by jointly optimizing multiple related tasks (Boyd & Vandenberghe, 2004; Caruana, 1997). Traditional MTL frameworks adopt parameter-sharing backbones—such as tower-based or expert-based models—to facilitate cross-task information flow (Yang et al., 2025). However, such designs often encounter gradient conflicts and negative transfer, especially when task objectives are unequally scaled or loosely related (Navon et al., 2022). To address these challenges, various techniques have been proposed. Dynamic loss weighting methods, such as GradNorm (Chen et al., 2018) and PCGrad (Yu et al., 2020), aim to balance learning rates or mitigate gradient interference. Pareto optimization methods, including IMTL-GG (Liu et al., 2021), MoE-MTL (Zhang et al., 2025b), and DRGrad (Liu et al., 2025), formulate MTL as a multi-objective optimization problem. Task prioritization strategies, such as Lagrangian-based formulations (Cheng et al., 2025) and connection-based methods (Li et al., 2025), dynamically adjust the focus among tasks. Despite these efforts, most approaches lack explicit architectural enforcement of task hierarchy. Methods like gradient ranking (Mahapatra et al., 2023) or distillation-based ranking (Tang et al., 2024) encode task importance implicitly, without explicitly specifying when or to what extent subordinate tasks should be subordinated to foundational ones. In contrast, our method introduces a principled constrained optimization framework with differentiable hard constraints. By embedding task hierarchy as an inherent part of the optimization architecture—rather than as an auxiliary tuning strategy—we ensure that the learning process faithfully adheres to the structural dependencies among tasks. 
+
+## 3 HYPERBOLIC BARRIER -BASED ADAPTIVE HIERARCHICAL OPTIMIZATION 
+
+ERE inherently involves hierarchical task dependencies: relation classification is only meaningful when entity boundaries are correctly identified. For example, in “Barack Obama was born in Hon-olulu” , mislabeling Obama as a location renders the correct born-in relation unreachable, regardless of how well the relation classifier performs. Such asymmetry motivates the design of an optimization paradigm that explicitly respects this hierarchical dependency. 2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 1: Conceptual overview of HB-AHO. Traditional MTL (top right) treats entity and relation losses symmetrically, leading to flat optimization L = Lent +Lrel . HB-AHO reformulates the problem as constrained optimization, enforcing an entity-first regime: relation updates are gated until entity loss satisfies a dynamic threshold. The barrier-weighted loss φ(x) ensures smooth prioritization, yielding feasible trajectories in loss space that differ fundamentally from flat MTL. 3.1 FROM SYMMETRIC MTL TO HIERARCHICAL OPTIMIZATION 
+
+The standard MTL formulation jointly minimizes multiple task losses: 
+
+min  
+
+> θ
+
+[Lent (θ), Lrel (θ)] . (1) This vector-valued objective problem is often approximately solved in practice using a weighted sum, which implicitly assumes that the tasks are symmetric and independently learnable. However, this assumption is violated in ERE, where relation classification is contingent upon the accuracy of upstream entity recognition. Intuitively, this is analogous to identifying the relationship between two individuals in a sentence without first recognizing who those individuals are. If entity boundaries are misidentified, relation classification becomes unreliable. Furthermore, conventional summation-based MTL suffers from gradient imbalance : faster-converging relation losses can prematurely dominate the optimization process, thereby suppressing the slower but foundational entity module and ultimately degrading triplet-level performance. 3.2 CONSTRAINED OPTIMIZATION WITH TASK HIERARCHY 
+
+To address the aforementioned limitations, we introduce HB-AHO, a constrained optimization framework that explicitly models task priority via dynamic constraints. Figure 1 contrasts traditional MTL with HB-AHO. While flat MTL optimizes entity and relation losses symmetrically, HB-AHO enforces an entity-first hierarchy through a barrier-based constraint. This reformulation yields fundamentally different optimization trajectories: relation updates are deferred until entity loss satisfies the constraint, resulting in cleaner inputs for downstream relation classification. Specifically, we enforce task prioritization by requiring the entity recognition loss to satisfy a predefined constraint before relation optimization can proceed freely. This reflects a “first-things-first” strategy: if entity boundaries remain uncertain, relation learning should be deferred—much like understanding roles in a sentence (who did what to whom) necessitates first identifying the participants. Without clearly defined entity spans, attempts to learn relations risk becoming unreliable noise. Our approach formalizes this dependency through explicit constraints rather than ad hoc heuristics. The problem is formulated as: 
+
+min  
+
+> θ
+
+Lrel (θ) s.t. Lent (θ) ≤ εt. (2) where εt is a dynamic threshold that governs the activation of relation training. This formulation encapsulates our core intuition: downstream optimization should be contingent upon the maturity of upstream tasks. 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 3.3 BARRIER -B ASED RELAXATION AND UNIFIED LOSS 
+
+Directly solving Eq. 2 is computationally intractable in deep learning, due to the non-differentiability of inequality constraints. To circumvent this, we embed the constraint into the objective using a smooth barrier function. Classical choices (e.g., logarithmic, inverse) suffer from gradient instability near the boundary ( x → 0−), which may destabilize training. To ensure smooth optimization and bounded gradients, we propose a novel hyperbolic barrier: 
+
+φ(x) = tanh(3 x + 1) , where x = Lent − εt. (3) This function is monotonic, Lipschitz continuous, and saturates smoothly, offering stable guidance near the constraint boundary. The final composite objective becomes: 
+
+Lfinal = φ(x)Lent 
+
+| {z }
+
+> Constraint Term
+
++ (1 + φ(x)) −1Lrel 
+
+| {z }
+
+> Optimization Term
+
+. (4) This is the core of HB-AHO: a dynamic reweighting scheme that enforces task priority without breaking differentiability. When entity performance is unsatisfactory ( Lent > ε t), φ(x) → 1 and the entity term dominates. As the constraint is gradually satisfied, relation loss regains influence. Thus, Eq. 4 encodes both hard prioritization (via constraint dominance) and soft adaptability (via weight decay). 3.4 ADAPTIVE THRESHOLD SCHEDULING 
+
+We further enhance flexibility by dynamically adjusting the constraint threshold. Inspired by curricu-lum learning, we decay εt over time only when the constraint is satisfied: 
+
+εt+1 = εt · 0.95 δ(Lent ≤εt), (5) where δ(·) is the Kronecker delta. This ensures that early training allows relaxed constraints for exploration, while later stages progressively tighten the boundary for stricter prioritization. 3.5 GENERALIZATION TO MULTI -T ASK HIERARCHIES 
+
+While our primary focus is on ERE, HB-AHO naturally generalizes to deeper task hierarchies (e.g., detection → recognition → reasoning). For N ordered tasks with losses {L i}Ni=1 , the loss becomes: 
+
+Lfinal = φ(L1 − ε1)L1 +
+
+> N
+
+X
+
+> i=2
+
+Li
+
+1 + φ(Li−1 − εi−1) . (6) Each task is gated by the success of its predecessor, enforcing recursive priority while maintaining full differentiability. This formulation scales linearly with the number of tasks, offering both flexibility and efficiency in structured learning scenarios. 
+
+## 4 EXPERIMENTAL RESULTS AND ANALYSIS 
+
+4.1 EXPERIMENT SETTINGS 
+
+4.1.1 EXPERIMENTAL SETUP 
+
+In ERE tasks, our model architecture follows the design illustrated in Appendix E.1. The initial threshold ε in Eq. 3 is set to 0.05. All models are trained for 100 epochs with a batch size of 4. Experiments are conducted on NVIDIA RTX 4090 GPUs. Early stopping is applied based on validation triplet F1 to prevent overfitting; training is terminated if no improvement is observed within 10 consecutive epochs. The compared baseline models include: BADS (Zhou et al., 2019), SPN4RE (Sui et al., 2024), ERFD-RTE (Chen et al., 2024), ERGM (Gao et al., 2023), MFSF (Wang et al., 2025). 4.1.2 DATASETS 
+
+4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 Table 1: Statistics of the five ERE benchmarks used in our experiments, spanning diverse domains (news, Wikipedia, biomedicine) and task granularity. NYT and WebNLG are sentence-level datasets, whereas DocRED, CDR, and GDA require document-level reasoning. # indicates instance count per split. 
+
+Dataset Domain #Train #Val. #Test 
+
+NYT News 56k 5k 5k WebNLG Wikipedia 35k 1.7k 1.7k DocRED Wikipedia 3k 300 700 CDR Biomedical 500 500 500 GDA Biomedical 19k 4.7k 4.7k We evaluate HB-AHO on five benchmarks spanning diverse domains, including News (NYT (Riedel et al., 2010)), Wikipedia (WebNLG (Riedel et al., 2010), DocRED (Yao et al., 2019)), and biomedicine (CDR (Li et al., 2016), GDA (Wu et al., 2019)). These datasets differ widely in relation types and instance scales, posing unique challenges for multi-task optimization. The dataset statistics are sum-marized in Table 1. For clarity, we categorize them into sentence-level (NYT, WebNLG) and document-level (DocRED, CDR, GDA) set-tings, based on whether relation reasoning is confined to a single sentence or spans multiple sentences. Table 2: Results on five ERE benchmarks (NYT, WebNLG, DocRED, CDR, GDA). For each model, we report relation, entity, and triplet F1 scores with and without the proposed HB-AHO optimization. Rather than competing for absolute state-of-the-art, this table highlights that HB-AHO consistently improves the more challenging entity and triplet metrics across strong baselines, while relation F1 may fluctuate slightly. The results confirm HB-AHO’s robustness and its effectiveness in enforcing task hierarchy, especially on document-level datasets (DocRED, CDR, GDA) where improvements in entity recognition translate into larger gains in triplet extraction. 
+
+Model Dataset Without HB-AHO With HB-AHO 
+
+Relation Entity Triplet Relation Entity Triplet BADS NYT 86.5 73.2 79.3 86.9 ( ↑0.4%) 78.6 ( ↑5.4%) 85.7 ( ↑6.4%) SPN4RE NYT 92.5 92.2 92.3 91.7 ( ↓0.8%) 94.3 ( ↑2.1%) 94.8 ( ↑2.1%) ERFD-RTE NYT 94.0 91.4 92.7 92.1 ( ↓1.9%) 94.6 ( ↑3.2%) 95.1 ( ↑2.4%) ERGM NYT 93.3 91.5 92.4 93.4 ( ↑0.1%) 93.6 ( ↑2.1%) 94.1 ( ↑1.7%) MFSF NYT 93.6 91.7 92.6 93.6( ↑0.0%) 94.3 ( ↑2.6%) 94.8 ( ↑2.2%) BADS WebNLG 85.3 83.1 84.2 85.7 ( ↑0.4%) 86.9 ( ↑3.8%) 87.6 ( ↑3.4%) SPN4RE WebNLG 93.1 93.6 93.4 92.6 ( ↓0.5%) 95.0 ( ↑1.4%) 94.7 ( ↑1.3%) ERFD-RTE WebNLG 91.2 87.4 89.3 90.7 ( ↓0.5%) 92.5 ( ↑5.1%) 93.6 ( ↑4.3%) ERGM WebNLG 94.2 91.2 92.7 94.4 ( ↑0.2%) 93.8 ( ↑2.6%) 94.8 ( ↑2.1%) MFSF WebNLG 94.9 92.3 93.5 94.8 ( ↓0.1%) 94.7 ( ↑2.4%) 95.1 ( ↑1.6%) BADS DocRED 52.1 54.8 46.9 51.8 ( ↓0.3%) 59.0 ( ↑4.2%) 51.0 ( ↑4.1%) SPN4RE DocRED 68.3 57.3 50.1 69.5 ( ↑1.2%) 60.4 ( ↑3.1%) 54.9 ( ↑4.8%) ERFD-RTE DocRED 66.9 56.4 49.7 66.4 ( ↓0.5%) 60.1 ( ↑3.7%) 54.2 ( ↑4.5%) ERGM DocRED 67.1 57.1 50.0 68.0 ( ↑0.9%) 60.7 ( ↑3.6%) 55.3 ( ↑5.3%) MFSF DocRED 68.0 57.5 50.5 68.9 ( ↑0.9%) 61.2 ( ↑3.7%) 55.8 ( ↑5.3%) BADS CDR 93.5 50.6 46.7 93.2 ( ↓0.3%) 55.0 ( ↑4.4%) 51.5 ( ↑4.8%) SPN4RE CDR 96.6 52.9 48.3 96.4 ( ↓0.2%) 57.8 ( ↑4.9%) 53.1 ( ↑4.8%) ERFD-RTE CDR 95.7 51.2 47.2 95.9 ( ↑0.2%) 55.8 ( ↑4.6%) 52.0 ( ↑4.8%) ERGM CDR 96.1 52.1 47.9 96.2 ( ↑0.1%) 56.5 ( ↑4.4%) 52.6 ( ↑4.7%) MFSF CDR 96.3 52.7 48.1 96.5 ( ↑0.2%) 57.1 ( ↑4.4%) 52.8 ( ↑4.7%) BADS GDA 98.5 61.5 59.3 98.7 ( ↑0.2%) 65.9 ( ↑4.4%) 64.5 ( ↑5.2%) SPN4RE GDA 99.1 62.3 60.3 99.0 ( ↓0.1%) 67.5 ( ↑5.2%) 65.7 ( ↑5.4%) ERFD-RTE GDA 98.7 61.2 59.1 98.9 ( ↑0.2%) 65.7 ( ↑4.5%) 64.0 ( ↑4.9%) ERGM GDA 99.0 62.0 60.0 99.2 ( ↑0.2%) 66.8 ( ↑4.8%) 65.3 ( ↑5.3%) MFSF GDA 99.2 62.7 60.7 99.1 ( ↓0.1%) 67.4 ( ↑4.7%) 65.9 ( ↑5.2%) 
+
+4.2 EXPERIMENTAL RESULTS 
+
+Our objective is not to pursue incremental state-of-the-art scores on already saturated datasets, but to examine whether inserting HB-AHO as an optimization layer consistently improves learning dynamics across architectures and data regimes. Table 2 summarizes results on five benchmarks, comparing backbones with and without HB-AHO. 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 On sentence-level datasets (NYT, WebNLG), where existing models are already close to ceiling, the effect of HB-AHO is moderate but systematic: entity and triplet F1 rise across nearly all backbones, while relation F1 exhibits small positive or negative fluctuations. This outcome is consistent with the design of HB-AHO, which enforces entity recognition as a prerequisite before fully engaging relation updates. In practice, this means that relation-only accuracy may occasionally decline, yet the quality of triplets—the end task—benefits from reduced boundary errors. These findings indicate that task hierarchy remains a useful inductive bias even when architectural expressiveness has largely plateaued. On document-level datasets (DocRED, CDR, GDA), the picture is more striking. Because these tasks require reasoning over multiple sentences, error propagation from entity boundaries is amplified. Here, HB-AHO yields substantially larger improvements: entity F1 increases consistently across all backbones, and these upstream gains propagate into disproportionately higher triplet F1—often by several points. Small swings in relation F1 thus become immaterial compared to the robustness gained at the triplet level. This suggests that HB-AHO does not merely reweight losses, but actively restructures the learning trajectory to supply cleaner entity candidates for downstream relation decisions. The credibility of these gains rests on two observations. First, improvements occur across diverse architectures (BADS, SPN4RE, ERFD-RTE, ERGM, MFSF), supporting that the effect arises from optimization rather than model-specific heuristics. Second, the empirical signature is coherent: entity F1 shows the largest gains, triplet F1 the next, while relation F1 fluctuates within a narrow band—a pattern precisely predicted by the dependency structure of the task. Taken together, the evidence demonstrates that HB-AHO functions as a general optimization layer encoding the asymmetry of ERE. Even in cases where relation F1 decreases slightly, the overall utility measured by triplet extraction improves, particularly in long-context settings where entity errors are most damaging. These results provide concrete support for the view that hierarchical optimization, rather than flat multi-task fusion, is the more principled bias for structurally dependent problems. 4.3 COMPARISONS WITH MTL M ETHODS 
+
+Table 3: F1 scores of MTL optimization strategies on DocRED. HB-AHO outperforms gradi-ent/Pareto/Lagrangian baselines in triplet F1, validating the benefit of constraint-based task hierarchy. Bold indicates best results. 
+
+Method Entity F1 Relation F1 Triplet F1 
+
+SPN4RE (Baseline) 68.3 57.3 50.1 +PCGrad (Yu et al., 2020) 68.6 ( ↑0.3) 58.7 ( ↑1.4) 52.6 ( ↑2.5) +IMTL-GG (Liu et al., 2021) 68.4 ( ↑0.1) 58.2 ( ↑0.9) 52.1 ( ↑2.0) +AdaTask (Yang et al., 2023a) 69.7 ( ↑1.4) 57.6 ( ↑0.3) 51.9 ( ↑1.8) +NMT (Cheng et al., 2025) 69.2 ( ↑0.9) 58.3 ( ↑1.0) 53.1 ( ↑3.0) +DRGrad (Liu et al., 2025) 68.1 ( ↓0.2) 59.1 ( ↑1.8) 52.8 ( ↑2.7) 
+
+HB-AHO 69.8 ( ↑1.5) 60.4 ( ↑3.1) 54.9 ( ↑4.8) 
+
+As shown in Table 3, HB-AHO consistently outperforms widely adopted multi-task optimization base-lines, including gradient-based (PCGrad), Pareto-front (IMTL-GG), and Lagrangian-based (NMT) methods. Although these approaches mitigate gradient interference through different formulations, they share a structural limitation: all assume tasks coexist symmetrically in a flat optimization space. This assumption conflicts with hierarchical problems such as ERE, where relation classification is ill-defined without reliable entity boundaries. Consequently, strategies that merely rebalance gradients or losses can reduce conflicts but cannot ensure that learning progresses in the correct order. HB-AHO addresses this misalignment by embedding task hierarchy directly into the objective via a barrier-based constraint, thereby enforcing an entity-first regime. Relation updates are naturally deferred until entity recognition reaches sufficient stability, so improvements in triplet F1 arise less from marginal relation modeling and more from preventing noisy entity predictions from propagating downstream. This distinction highlights why HB-AHO surpasses task-agnostic baselines even when their balancing strategies appear effective. More broadly, the results suggest that task prioritization in hierarchical MTL is better understood as a fundamental architectural principle rather than an 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 auxiliary regularizer. By treating hierarchy as a first-class constraint, HB-AHO offers a scalable, optimization-theoretic alternative that provides stronger guarantees for structurally dependent learning scenarios. 4.4 ABLATION STUDIES 
+
+4.4.1 THE EFFECTS OF DYNAMIC THRESHOLD 
+
+Table 4: Effect of initial threshold ε on DocRED F1 scores. HB-AHO remains stable across a wide range of ε, with best performance around 0.05–0.10. 
+
+Variant ε Violations Relation Entity Triplet 
+
+SPN4RE (Baseline) — — 68.3 57.3 50.1 HB-AHO 1.00 34 69.0 ( ↑0.7) 60.2 ( ↑2.9) 54.1 ( ↑4.0) 0.50 30 69.2 ( ↑0.9) 60.4 ( ↑3.1) 54.4 ( ↑4.3) 0.10 15 69.5 (↑1.2) 60.4 ( ↑3.1) 54.3 ( ↑4.2) 0.05 7 69.4 ( ↑1.1) 60.5 (↑3.2) 54.5 (↑4.4) 0.01 1 69.1 ( ↑0.8) 60.1 ( ↑2.8) 54.2 ( ↑4.1) 0.005 0 68.9 ( ↑0.6) 60.3 ( ↑3.0) 54.2 ( ↑4.1) 0.001 0 69.0 ( ↑0.7) 60.2 ( ↑2.9) 54.1 ( ↑4.0) 0 50 100 150 200     
+
+> Step
+> 0.00
+> 0.50
+> 1.00
+> 1.50
+> 2.00
+> 2.50
+> 3.00
+> 3.50
+> Loss
+> Entity & Relation Loss
+> w/o - Entity
+> w/o - Relation
+> =0.05 - Entity
+> =0.05 - Relation
+> 050 100 150 200
+> Step
+> 0.40
+> 0.50
+> 0.60
+> 0.70
+> 0.80
+> 0.90
+> 1.00
+> Weight
+> Relation & Entity Weight
+> w/o - Rel Weight
+> w/o - Ent Weight
+> =0.05 - Rel Weight
+> =0.05 - Ent Weight
+
+Figure 2: Training loss and dynamic task weight curves over time. HB-AHO initially prioritizes entity optimization, then gradually shifts focus to relation learning as constraints are satisfied. This behavior confirms our dynamic scheduling design for task prioritization. To examine sensitivity to initialization, we varied the threshold ε across several orders of magnitude. Figure 2 shows that, regardless of the starting value, HB-AHO always begins by emphasizing entity recognition and then gradually shifts weight to relation learning once the constraint is met; only the timing of this transition changes slightly. Table 4 confirms that the final triplet F1 remains tightly bounded (54.1–54.5, +4.0% to +4.4% over SPN4RE) across all tested ε. These results demonstrate that the gains of HB-AHO arise from its structural enforcement of hierarchy, not from fragile hyperparameter tuning. Larger thresholds accelerate relation updates, smaller ones delay them, yet both converge to the same balance through the barrier and curriculum mechanism. Constraint violations appear only as transient triggers for threshold decay and do not affect end performance. Taken together, the evidence shows that HB-AHO is robust to ε: the barrier ensures smooth weight adjustment, the curriculum harmonizes different initializations, and practitioners can simply choose any moderate value (e.g., 0.01–0.1) without hyperparameter sweeps. This robustness underscores that the improvement reflects a principled optimization design rather than parameter sensitivity. 4.4.2 BARRIER FUNCTION DESIGN 
+
+To assess whether HB-AHO’s advantage stems from the specific barrier formulation, we compared the hyperbolic barrier against classical polynomial and neural-inspired alternatives under identical 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Table 5: Ablation study of barrier function choices ( ε = 0 .05 ). The hyperbolic barrier provides the most balanced and robust gains in both entity and triplet F1. Red arrows = improvement; green arrows = decline. 
+
+Type Function Violations Relation Entity Triplet 
+
+SPN4RE (Baseline) — 7 68.3 57.3 50.1 
+
+Hyperbolic tanh(3 x + 1) 8 69.5 (↑1.4) 60.4 (↑3.1) 54.9 (↑4.8) Sigmoid (1 + e−x)−1 6 69.2 ( ↑0.9) 59.8 ( ↑2.5) 54.5 ( ↑4.4) Gaussian 1 − e−x2
+
+6 69.1 ( ↑0.8) 59.9 ( ↑2.6) 54.7 ( ↑4.6) Softplus log(1 + ex) 5 69.0 ( ↑0.7) 59.5 ( ↑2.2) 54.3 ( ↑4.2) Exponential ex − 1 7 68.9 ( ↑0.6) 58.7 ( ↑1.4) 53.9 ( ↑3.8) Quadratic x2 10 57.8 ( ↑0.5) 67.9 ( ↓0.4) 50.0 ( ↓0.1) Cubic x3 12 66.9 ( ↓1.4) 58.6 ( ↑1.3) 47.0 ( ↓3.1) 0 10 20 30 40 50 60              
+
+> Epoch
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> Score
+> Entity & Relation F1
+> x3- Rel F1
+> x3- Ent F1
+> x2- Rel F1
+> x2- Ent F1
+> tanh(3 x+ 1) - Rel F1
+> tanh(3 x+ 1) - Ent F1
+> 010 20 30 40 50 60
+> Epoch
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> Score
+> Triplet F1
+> x3
+> x2
+> tanh(3 x+ 1)
+
+Figure 3: Training F1 trends for different barrier functions. Hyperbolic barrier enables smooth and effective optimization, while polynomial variants lead to instability, validating the robustness of our proposed design. settings (Table 5). A consistent pattern emerges: only the hyperbolic variant simultaneously improves relation F1 (+1.4), entity F1 (+3.1), and triplet F1 (+4.8), whereas other choices either yield weaker gains or improve one component at the expense of another. From these results we can distill three principles for effective constraint design in deep learning optimization: • Limitations of Polynomial Growth : Quadratic and cubic barriers amplify small violations into unstable updates, producing severe gradient imbalance near the constraint boundary and ultimately destabilizing hierarchical training. • Smoothness Alone Is Insufficient : Sigmoid and softplus functions are smooth and differen-tiable, yet their shallow slopes around the boundary provide inadequate responsiveness. As a result, they deliver only moderate improvements (+4.4 to +4.2 in triplet F1), underscoring that stability must be coupled with precise task-weight modulation. • Hyperbolic Balance : The proposed φ(x) = tanh(3 x + 1) achieves the strongest and most balanced gains. Its strict monotonicity enforces task order consistently, its globally bounded derivative ( ∥φ′∥ ≤ 3) prevents gradient explosion, and its sigmoidal transition enables a smooth yet decisive shift from entity-dominant to relation-inclusive optimization. This geometric balance translates directly into stable training dynamics (Figure 3) and maximal triplet-level improvements. Unlike heuristics that rely on delicate tuning, the hyperbolic barrier improves performance robustly without additional hyperparameters. This ablation not only corroborates our theoretical analy-sis—linking monotonicity, stability, and boundedness to effective optimization—but also highlights 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 that principled constraint geometry, rather than ad hoc weighting schemes, is indispensable for reliable gains in hierarchical multi-task learning. 4.5 CROSS -D OMAIN GENERALIZATION : B EYOND ERE TO RECOMMENDATION SYSTEMS 
+
+To assess cross-domain generalization beyond ERE, we further evaluate HB-AHO on KuaiRand1k (Yuan et al., 2022), a large-scale recommendation dataset capturing sequential user be-haviors. KuaiRand1k defines eight sequential user behaviors that form a decision hierarchy, with task priority assigned from high to low as: click, long-view, like, follow, comment, forward, profile-enter, and hate. This setting differs substantially from ERE—both in modality and in the complexity of task dependencies—yet it offers an equally clear hierarchical structure. As shown in Table 6, HB-AHO improves the average AUC of all tested backbones (STEM, Shared-Bottom, MMoE, PLE, AITM, and OMoE) by +2.1–2.6%. The strongest gains are observed on downstream, higher-commitment tasks, where accurate modeling of upstream actions provides the most leverage. These improvements are achieved without modifying the architectures themselves, confirming that HB-AHO operates as a plug-and-play optimization layer rather than an architectural tweak. Overall, the KuaiRand1k results strengthen our central claim: HB-AHO captures structural task dependencies across domains and scales, from sentence-level extraction to multi-behavior recom-mendation. The fact that consistent 2.1–2.6% gains are realized on business-critical outcomes in a high-capacity industrial dataset underscores its practical impact and supports its view as a 
+
+domain-agnostic optimization principle rather than a task-specific trick. Table 6: Results on the KuaiRand1k dataset with eight hierarchically dependent tasks. HB-AHO consistently raises the overall Avg. AUC by 2.1–2.6% across diverse backbones, showing that its benefits extend beyond NLP to large-scale recommendation and to settings with more than two tasks.                                                                                                                                   
+
+> Model Task A Task B Task C Task D Task E Task F Task G Task H Avg. AUC MTL Gain
+> STEM 98.7 98.8 94.9 90.5 98.8 91.0 91.7 98.2 94.6 ––HB-AHO 99.1 98.5 95.3 92.6 99.0 92.0 92.4 98.0 96.8 ↑+2.2%
+> SharedBottom 97.9 99.0 93.6 88.9 98.3 88.8 89.2 92.2 91.8 ––HB-AHO 98.5 99.1 94.2 90.1 98.6 89.9 90.7 93.1 94.2 ↑+2.4%
+> MMoE 98.1 98.9 94.1 88.6 98.4 85.6 90.7 94.1 93.9 ––HB-AHO 98.7 99.0 94.6 90.3 98.7 87.4 91.5 95.2 96.0 ↑+2.1%
+> PLE 97.3 98.0 94.2 89.9 98.5 88.2 91.0 96.1 92.7 ––HB-AHO 97.9 98.3 94.8 91.5 98.7 90.5 91.6 97.5 95.3 ↑+2.6%
+> AITM 98.6 98.2 93.7 89.7 98.1 88.9 90.0 97.7 91.7 ––HB-AHO 99.0 98.1 94.9 91.0 98.5 90.2 91.2 98.4 94.1 ↑+2.4%
+> OMoE 97.6 97.9 94.2 87.8 98.4 87.0 90.8 90.9 92.6 ––HB-AHO 98.2 98.4 94.7 89.4 98.7 89.1 91.2 92.8 95.0 ↑+2.3%
+
+## 5 CONCLUSION 
+
+We introduced HB-AHO, a constraint-driven optimization framework that encodes task hierarchies through hyperbolic barrier functions. By enforcing an entity-first regime, HB-AHO improves both sentence-level and document-level ERE, with gains that are robust across diverse backbones. Beyond empirical performance, our study highlights a broader principle: hierarchical task structuring is not a matter of heuristic loss weighting, but a fundamental optimization geometry that stabilizes multi-task learning. HB-AHO demonstrates how classical constrained optimization can be reinterpreted for deep learning, yielding both theoretical guarantees and practical benefits. Looking forward, the same paradigm offers a natural foundation for domains where tasks form layered dependencies, including hierarchical reasoning, symbolic planning, and multi-modal alignment. More generally, we argue that MTL should be viewed not as a static balance among objectives, but as a guided progression across levels of abstraction—a perspective that HB-AHO makes concrete. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+## REPRODUCIBILITY STATEMENT 
+
+To ensure reproducibility, we provide the following: 
+
+Algorithm. HB-AHO is implemented in Python/PyTorch. Source code, training scripts, and configurations are included in the supplementary material, covering barrier function, curriculum scheduling, and integration with standard ERE backbones. 
+
+Theory. Appendix B contains full proofs, including monotonicity, Lipschitz continuity, KKT equivalence, and stability guarantees. 
+
+Experiments. Section 4.2 describes the setup. Hyperparameters and training protocols are docu-mented in Appendix E, with sensitivity analyses for α and γ in Appendix B.5. 
+
+Resources. Experiments were run on NVIDIA RTX 4090 GPUs. 
+
+Data. We use five public ERE benchmarks (NYT, WebNLG, DocRED, CDR, GDA) and the KuaiRand1k dataset. Preprocessing, splits, and evaluation follow prior work. 
+
+## REFERENCES 
+
+Stephen Boyd and Lieven Vandenberghe. Convex Optimization . Cambridge University Press, 2004. Rich Caruana. Multitask learning. Machine Learning , 28:41–75, 1997. Juan Chen, Jie Hu, Tianrui Li, Fei Teng, and Shengdong Du. An effective relation-first detection model for relational triple extraction. Expert Syst. Appl. , 238(Part B):122007, 2024. Zhao Chen, Vijay Badrinarayanan, Chen-Yu Lee, and Andrew Rabinovich. Gradnorm: Gradient normalization for adaptive loss balancing in deep multitask networks. In ICML , volume 80 of 
+
+Proceedings of Machine Learning Research , pp. 793–802. PMLR, 2018. Zhiqin Chen. Construction and mathematical application of document-level relationship extraction model combining R-GCN and text features. IEEE Access , 13:109593–109606, 2025. Zhengxing Cheng, Yuheng Huang, Zhixuan Zhang, Dan Ou, and Qingwen Liu. No more tuning: Prioritized multi-task learning with lagrangian differential multiplier methods. In AAAI , pp. 11536–11543. AAAI Press, 2025. Guiduo Duan, Yunrui Dong, Jiayu Miao, and Tianxi Huang. Position-aware attention mechanism-based bi-graph for dialogue relation extraction. Cogn. Comput. , 15(1):359–372, 2023. Chen Gao, Xuan Zhang, LinYu Li, JinHong Li, Rui Zhu, Kunpeng Du, and Qiuying Ma. ERGM: A multi-stage joint entity and relation extraction with global entity match. Knowl. Based Syst. , 271: 110550, 2023. Pengcheng He, Jianfeng Gao, and Weizhu Chen. Debertav3: Improving deberta using electra-style pre-training with gradient-disentangled embedding sharing. In ICLR . OpenReview.net, 2023. Jiao Li, Yueping Sun, Robin J Johnson, Daniela Sciaky, Chih-Hsuan Wei, Robert Leaman, Allan Peter Davis, Carolyn J Mattingly, Thomas C Wiegers, and Zhiyong Lu. BioCreative V CDR Task Corpus: A resource for chemical disease relation extraction. Database , 2016, 2016. Kexin Li, Yu Hu, Jielei Wang, Lin Li, Shuyuan Zhang, and Guangchun Luo. Task prioritization in multiagent environments: A novel approach using nash q-learning. IEEE Trans. Consumer Electron. , 71(2):4206–4220, 2025. Xianming Li, Xiaotian Luo, Chenghao Dong, Daichuan Yang, Beidi Luan, and Zhen He. TDEER: an efficient translating decoding schema for joint extraction of entities and relations. In EMNLP (1) ,pp. 8055–8064. Association for Computational Linguistics, 2021. Bao Liu and Guilin Qi. Document-level relation extraction with double graph guidance for long-tailed distributions. Comput. Electr. Eng. , 123:110237, 2025. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Liyang Liu, Yi Li, Zhanghui Kuang, Jing-Hao Xue, Yimin Chen, Wenming Yang, Qingmin Liao, and Wayne Zhang. Towards impartial multi-task learning. In International Conference on Learning Representations , 2021. Yuguang Liu, Yiyun Miao, and Luyao Xia. Direct routing gradient (drgrad): A personalized information surgery for multi-task learning (MTL) recommendations. In AAAI , pp. 12238–12245. AAAI Press, 2025. Debabrata Mahapatra, Chaosheng Dong, Yetian Chen, and Michinari Momma. Multi-label learning to rank through multi-objective optimization. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pp. 4605–4616, 2023. Aviv Navon, Shie Mannor, and Gal Chechik. Multi-task learning as a bargaining game. In Proceedings of the 39th International Conference on Machine Learning (ICML) , 2022. Yili Qian, Enlong Ren, and Haonan Xu. Joint entity and relation extraction based on bidirectional update and long-term memory gate mechanism. In CCL , volume 14761 of Lecture Notes in Computer Science , pp. 174–190. Springer, 2024. Sebastian Riedel, Limin Yao, and Andrew McCallum. Modeling relations and their mentions without labeled text. In Proceedings of ECML PKDD , pp. 148–163, 2010. Yuming Shang, Heyan Huang, and Xianling Mao. Onerel: Joint entity and relation extraction with one module in one step. In AAAI , pp. 11285–11293. AAAI Press, 2022. Noam Shazeer. GLU variants improve transformer. CoRR , abs/2002.05202, 2020. Dianbo Sui, Xiangrong Zeng, Yubo Chen, Kang Liu, and Jun Zhao. Joint entity and relation extraction with set prediction networks. IEEE Trans. Neural Networks Learn. Syst. , 35(9):12784–12795, 2024. Jiazheng Sun, Huaicheng Yan, Yue Li, Hao Li, Ke Bai, and Zhichen Li. Joint entity-relation extraction model for epidemiological reports based on SMART adversarial training. In ASCC , pp. 141–146. IEEE, 2024. Jie Tang, Huiji Gao, Liwei He, and Sanjeev Katariya. Multi-objective learning to rank by model distillation. In KDD , pp. 5783–5792. ACM, 2024. Ting Wang, Wenjie Yang, Tao Wu, Chuan Yang, Jiaying Liang, Hongyang Wang, Jia Li, Dong Xiang, and Zheng Zhou. Joint entity and relation extraction with fusion of multi-feature semantics. J. Intell. Inf. Syst. , 63(1):21–42, 2025. Yijun Wang, Changzhi Sun, Yuanbin Wu, Hao Zhou, Lei Li, and Junchi Yan. Unire: A unified label space for entity relation extraction. In ACL/IJCNLP (1) , pp. 220–231. Association for Computational Linguistics, 2021. Yucheng Wang, Bowen Yu, Yueyang Zhang, Tingwen Liu, Hongsong Zhu, and Limin Sun. Tplinker: Single-stage joint extraction of entities and relations through token pair linking. In COLING , pp. 1572–1582. International Committee on Computational Linguistics, 2020. Ye Wu, Ruibang Luo, Henry C. M. Leung, Hing-Fung Ting, and Tak Wah Lam. RENET: A deep learning approach for extracting gene-disease associations from literature. In RECOMB , volume 11467 of Lecture Notes in Computer Science , pp. 272–284. Springer, 2019. Zhaohui Yan, Songlin Yang, Wei Liu, and Kewei Tu. Joint entity and relation extraction with span pruning and hypergraph neural networks. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 7512–7526, 2023. Enneng Yang, Junwei Pan, Ximei Wang, Haibin Yu, Li Shen, Xihua Chen, Lei Xiao, Jie Jiang, and Guibing Guo. Adatask: A task-aware adaptive learning rate approach to multi-task learning. In 
+
+AAAI , pp. 10745–10753. AAAI Press, 2023a. Yaming Yang, Dilxat Muhtar, Yelong Shen, Yuefeng Zhan, Jianfeng Liu, Yujing Wang, Hao Sun, Weiwei Deng, Feng Sun, Qi Zhang, Weizhu Chen, and Yunhai Tong. Mtl-lora: Low-rank adaptation for multi-task learning. In AAAI , pp. 22010–22018. AAAI Press, 2025. 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Zhe Yang, Yi Huang, and Junlan Feng. Learning to leverage high-order medical knowledge graph for joint entity and relation extraction. In Findings of the Association for Computational Linguistics: ACL 2023 , pp. 9023–9035, 2023b. Yuan Yao, Deming Ye, Peng Li, Xu Han, Yankai Lin, Zhenghao Liu, Zhiyuan Liu, Lixin Huang, Jie Zhou, and Maosong Sun. Docred: A large-scale document-level relation extraction dataset. In 
+
+ACL (1) , pp. 764–777. Association for Computational Linguistics, 2019. Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol Hausman, and Chelsea Finn. Gradient surgery for multi-task learning. In NeurIPS , 2020. Guanghu Yuan, Fajie Yuan, Yudong Li, Beibei Kong, Shujie Li, Lei Chen, Min Yang, Chenyun Yu, Bo Hu, Zang Li, Yu Xu, and Xiaohu Qie. Tenrec: A large-scale multipurpose benchmark dataset for recommender systems. In NeurIPS , 2022. Urchade Zaratiana, Nadi Tomeh, Pierre Holat, and Thierry Charnois. An autoregressive text-to-graph framework for joint entity and relation extraction. In AAAI , pp. 19477–19487. AAAI Press, 2024. Fu Zhang, Yi Yan, and Jingwei Cheng. Document-level relation extraction with global relations and entity pair reasoning. In ACL (Findings) , pp. 19556–19567. Association for Computational Linguistics, 2025a. Gong-Duo Zhang, Ruiqing Chen, Qian Zhao, Zhengwei Wu, Fengyu Han, Huan-Yi Su, Ziqi Liu, Lihong Gu, and Lin Zhou. Bagging-expert network for multi-task learning: A depolarization solution in multi-gate mixture-of-experts. In AAAI , pp. 22389–22397. AAAI Press, 2025b. Yan Zhou, Longtao Huang, Tao Guo, Songlin Hu, and Jizhong Han. An attention-based model for joint extraction of entities and relations with implicit entity features. In WWW (Companion Volume) , pp. 729–737. ACM, 2019. 
+
+## A USE OF LLM S
+
+Large language models (LLMs) were used solely for language polishing; all technical content, methods, and experiments were developed and validated by the authors. 
+
+## B PROPERTIES OF HYPERBOLIC BARRIER FUNCTION 
+
+B.1 DEFINITIONS AND THEORETICAL GUARANTEES 
+
+Definition 1 (Parameterized Hyperbolic Barrier Function) . Given the constraint violation 
+
+x = Lent − ε, (7) 
+
+define the barrier family as 
+
+φα(x) = tanh( αx + 1) , α > 0. (8) 
+
+Here α controls the sharpness of the barrier. The choice α = 3 is used in practice, but the theoretical analysis holds for any α > 0.
+
+Theorem 1 (Monotonicity) . φα(x) is strictly monotonically increasing for all x ∈ R.
+
+Theorem 2 (Lipschitz Continuity) . φα(x) is globally Lipschitz continuous with constant L = α.
+
+Theorem 3 (Feasibility Preservation and Limit Equivalence) . Consider the constrained problem 
+
+min  
+
+> θ
+
+Lrel (θ) s.t. Lent (θ) ≤ ε. (9) 
+
+For any α > 0, if ∇θ Lfinal (θ; α) = 0 with 
+
+Lfinal (θ; α) = φα(x) Lent (θ) + 11 + φα(x) Lrel (θ), (10) 
+
+then there exists λ∗(α) ≥ 0 such that (θ, λ ∗(α)) satisfies the KKT conditions of the constrained problem. Moreover, as α → ∞ , any sequence of stationary points θ∗(α) converges to a KKT stationary point of the original constrained problem. 
+
+12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 B.2 PROOF OF MONOTONICITY 
+
+Proof. The derivative is given by 
+
+φ′
+
+> α
+
+(x) = α · sech 2(αx + 1) . (11) Since sech 2(z) > 0 for all z ∈ R, it follows that φ′
+
+> α
+
+(x) > 0. Hence, φα(x) is strictly increasing. B.3 PROOF OF LIPSCHITZ CONTINUITY 
+
+Proof. φ′
+
+> α
+
+(x) is bounded by 
+
+|φ′
+
+> α
+
+(x)| = α · sech 2(αx + 1) ≤ α. (12) By the Mean Value Theorem, for any x1, x 2 ∈ R:
+
+|φα(x1) − φα(x2)| ≤ α|x1 − x2|. (13) Thus, φα(x) is globally Lipschitz with constant L = α.B.4 PROOF OF FEASIBILITY PRESERVATION AND LIMIT EQUIVALENCE 
+
+Proof sketch. Step 1: KKT conditions of the constrained problem. The Lagrangian is 
+
+L(θ, λ ) = Lrel (θ) + λ(Lent (θ) − ε). (14) Stationarity requires 
+
+∇θ Lrel + λ∇θ Lent = 0 , λ ≥ 0, λ(Lent − ε) = 0 . (15) 
+
+Step 2: Stationarity of the barrier formulation. For Lfinal (θ; α), we have 
+
+∇θ Lfinal = φ′
+
+> α
+
+(x) ∇θ Lent + 1 − φα(x)(1 + φα(x)) 2 ∇θ Lrel . (16) Setting ∇θ Lfinal = 0 gives 
+
+∇θ Lrel = − (1 + φα(x)) 2 φ′
+
+> α
+
+(x)1 − φα(x) ∇θ Lent . (17) Defining 
+
+λ∗(α) = (1 + φα(x)) 2 φ′
+
+> α
+
+(x)1 − φα(x) , (18) we recover ∇θ Lrel + λ∗(α)∇θ Lent = 0 , with λ∗(α) ≥ 0. Thus (θ, λ ∗(α)) satisfies the KKT conditions. 
+
+Step 3: Limit equivalence. As α → ∞ :• If x > 0 (Lent > ε ), then φα(x) → 1 and λ∗(α) → +∞, enforcing feasibility by penalizing violations. • If x < 0, then φα(x) < 1 and λ∗(α) remains finite, recovering the unconstrained relation optimization. • If x = 0 , then λ∗(α) is finite and positive, exactly matching the boundary case of the KKT conditions. Hence, in the limit α → ∞ , stationary points of Lfinal converge to stationary points of the constrained problem. This result shows that the hyperbolic barrier is not only smooth and bounded (avoiding gradient explosion) but also a consistent surrogate for the original inequality constraint: it yields KKT-equivalent stationary points for finite α, and recovers the constrained optimum in the asymptotic limit. 13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 B.5 HYPERPARAMETER SENSITIVITY 
+
+To verify that the gains of HB-AHO are not due to fragile tuning, we examined two key hyperparame-ters: the parameterization of the hyperbolic barrier function φ(x) and the curriculum decay factor γ
+
+in Eq. equation 5. Results on the DocRED validation set are summarized below. 
+
+Barrier parameterization. Different hyperbolic forms yield nearly identical performance, with triplet F1 consistently improving by about +4% to +5% over the baseline. The choice φ(x) = tanh(3 x + 1) achieves the best trade-off between gradient sensitivity and stability, but the narrow performance band across alternatives indicates that HB-AHO is robust to the exact parameterization. Table 7: Effect of barrier parameterization on DocRED (validation set). All variants yield stable improvements; tanh(3 x + 1) provides the most balanced gains. 
+
+Form Entity F1 ( ∆) Relation F1 ( ∆) Triplet F1 ( ∆)
+
+tanh( x) +4.7 +2.2 +4.6 
+
+tanh(2 x + 1) +4.5 +2.1 +4.6 
+
+tanh(3 x + 1) +4.8 +2.3 +4.8 
+
+tanh(5 x + 1) +4.7 +2.2 +4.7 
+
+Curriculum decay factor. We also varied the decay factor γ ∈ { 0.99 , 0.97 , 0.95 , 0.93 , 0.90 }. As shown in Table 8, triplet F1 remains within a narrow band (51.3–51.5), with γ = 0 .95 providing the best balance between convergence speed and stability. Larger values slow down constraint enforcement, while smaller ones introduce mild instability, but neither substantially alters the final outcome. Table 8: Effect of curriculum decay factor γ on DocRED (validation set). Performance remains stable across a wide range; γ = 0 .95 offers the most balanced trade-off. 
+
+γ Entity F1 Relation F1 Triplet F1 0.99 58.7 64.7 51.4 0.97 58.9 64.6 51.3 
+
+0.95 59.0 64.8 51.5 
+
+0.93 58.9 64.8 51.4 0.90 58.9 64.6 51.3 
+
+Takeaway. Across both ablations, triplet F1 fluctuates within less than one point, demonstrating that HB-AHO’s improvements stem from its structural enforcement of task hierarchy rather than from delicate hyperparameter tuning. B.6 THEORETICAL IMPLICATIONS AND EXTENDED ANALYSIS 
+
+Smoothness and Analyticity. Proposition 4 (Smoothness and Analyticity) . The hyperbolic barrier function φ(x) is infinitely differentiable over R, i.e., φ ∈ C∞(R), and is a real analytic function. Proof. The hyperbolic tangent tanh( z) is analytic on R, and 3x + 1 is affine. The composition of analytic functions is analytic, hence φ(x) is analytic. 
+
+Quasi-Convexity near the Constraint. Proposition 5 (Quasi-Convexity near Constraint Boundaries) . In the neighborhood of x = 0 , Lfinal 
+
+is quasi-convex. 
+
+14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 
+
+Proof. Let x = Lent − ε. Near x = 0 , expand φ(x) via Taylor series: 
+
+φ(x) ≈ tanh(1) + 3 sech 2(1) · x + O(x2). (19) Substituting into Lfinal :
+
+Lfinal ≈ c1Lent + c2Lrel + O(x2), (20) where c1, c 2 > 0 are constants. The Hessian of Lfinal is positive semi-definite in this region, implying quasi-convexity. 
+
+Lyapunov Stability of Training Dynamics. Theorem 6. Assume that Lent and Lrel are smooth and bounded below. Then gradient descent on 
+
+Lfinal is asymptotically stable and converges to a stationary point. Proof. Let θ(t) denote the training trajectory. Define the Lyapunov candidate function: 
+
+V (θ) = Lfinal (θ) − inf Lfinal . (21) Then, along the trajectory of gradient descent: 
+
+dV dt = −∥∇ θ Lfinal (θ)∥2 ≤ 0. (22) This implies V (θ) is non-increasing, and by LaSalle’s invariance principle, the system converges to the set of stationary points {θ : ∇θ Lfinal = 0 }. Hence, the training dynamics are asymptotically stable around local minima. 
+
+Strong Duality and Slater Condition. Proposition 7. If ∃θ0 such that Lent (θ0) < ε (Slater condition), then strong duality holds. Proof. The perturbed problem 
+
+min Lrel s.t. Lent ≤ ε + r (23) is convex for fixed r, and Slater’s condition ensures zero duality gap. 
+
+Bounded Gradient Effects. The derivative of the hyperbolic barrier satisfies 
+
+|φ′(x)| ≤ 3, (24) which ensures stable gradient magnitudes throughout training, especially near the constraint boundary 
+
+x → 0−. This avoids the instability common in classical barrier methods like − log( −x) or −1/x .1.0 0.5 0.0 0.5 1.0 1.5 2.0     
+
+> Constraint Violation x
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> Gradient Magnitude
+> Gradient Comparison of Barrier Functions
+> Hyperbolic: 3 sech 2(3 x+ 1)
+> Log: 1
+> x
+> Inverse: 1
+> x2
+
+Figure 4: Comparison of φ′(x) (hyperbolic), − log( −x), and −1/x gradient behaviors near the constraint boundary. 15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 
+
+Task Priority Enforcement Mechanism. The hyperbolic barrier naturally suppresses the relative influence of Lrel under severe constraint violation, by reshaping the gradient flow: 
+
+∂Lfinal 
+
+∂Lrel 
+
+= 11 + φ(x) − φ′(x)(1 + φ(x)) 2 Lrel . (25) When φ(x) → 1, the gradient contribution from the relation loss diminishes, enforcing strict prioritization for constraint satisfaction. 
+
+Computational Complexity. Traditional multi-task learning approaches often rely on exhaustive grid search to identify the optimal weighting scheme for each task-specific loss. For m tasks and p
+
+discretized candidates per task, the total number of combinations grows as O(pm).By contrast, HB-AHO reformulates the constrained optimization problem into an unconstrained one via the hyperbolic barrier function φ(x), enabling standard gradient-based solvers to converge in O(m) sequential optimization stages, corresponding to the natural hierarchical structure of task priorities. This complexity reduction not only eliminates manual tuning but also significantly improves scalability for high-dimensional multi-task learning, similar to the efficiency advantage reported in Cheng et al. (2025). 
+
+Summary. The hyperbolic barrier function not only empirically enhances training stability but also satisfies theoretical properties including smoothness, gradient boundedness, quasi-convexity near feasible regions, and strong duality-based feasibility guarantees. These theoretical insights establish the barrier’s effectiveness as a principled alternative to classical barrier functions in constrained multi-task learning. 
+
+## C GENERALIZATION TO MULTI -L EVEL PRIORITY 
+
+C.1 GENERALIZED FORMULATION 
+
+For N tasks with priorities P1 > P 2 > · · · > P N , the loss is: 
+
+Lfinal = φ(L1 − ε1)) L1 +
+
+> N
+
+X
+
+> i=2
+
+Li
+
+1 + φ(Li−1 − εi−1) . (26) where φ(·) is the hyperbolic barrier defined in Eq. equation 10, and εi−1 are dynamic thresholds updated via: 
+
+εi(t + 1) = εi(t) · 0.95 δ(Li(t)≤εi(t)) (Eq. equation 5 in main text) . (27) C.2 RECURSIVE CONVERGENCE PROOF 
+
+Lemma 8 (Priority Activation) . When Li−1 ≤ εi−1, φ(Li−1 − εi−1) ≈ tanh(1) ≈ 0.76 . The effective weight for Li becomes: 
+
+11 + φ(·) ≈ 11 + 0 .76 ≈ 0.57 . (28) 
+
+For violations Li−1 > ε i−1, φ(3 x + 1) → 1 exponentially as x → +∞, suppressing Li via  
+
+> 11+ φ(·)
+
+→ 0.5.
+
+Theorem 9 (Priority Preservation) . If task Pk violates constraints ( Lk > ε k), then ∀j > k , ∂Lfinal  
+
+> ∂Lj
+
+→
+
+0, ensuring strict prioritization. Proof. Let m denote the highest violated priority ( Lm > ε m). For any j > m , the gradient is: 
+
+∂Lfinal 
+
+∂Lj
+
+=
+
+> j−1
+
+Y
+
+> i=1
+
+11 + φi
+
+| {z }
+
+> Cumulative suppression
+
+·
+
+"
+
+1 −
+
+> j−1
+
+X
+
+> i=1
+
+Liφ′
+
+> i
+
+(1 + φi)2
+
+#
+
+. (29) 16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 When ∃i ≤ m with φi ≫ 0 (constraint violation), each term 11+ φi ≤ 11+ e3x decays exponentially. Specifically: 
+
+> m
+
+Y
+
+> i=1
+
+11 + φi
+
+≤
+
+ 11 + e3x
+
+m
+
+→ 0 as x → +∞. (30) Thus ∂Lfinal  
+
+> ∂Lj
+
+vanishes exponentially. 
+
+Empirical Alignment: Table 3 shows when ε = 0 .001 , relation F1 drops as the model focuses solely on L1, validating the theorem. C.3 DYNAMIC THRESHOLD COMPATIBILITY 
+
+Proposition 10. If thresholds initialize with εi(0) ≥ E[Li(0)] and update via Eq. equation 5, then 
+
+∃T > 0 such that ∀t ≥ T , Li(t) ≤ εi(t) almost surely. Proof. Define the Lyapunov function Vi(t) = Li(t) − εi(t). From Eq. equation 5: 
+
+εi(t + 1) = εi(t) · 0.95 δ(Li(t)≤εi(t)) . (31) 
+
+Case 1 : If Li(t) ≤ εi(t), then εi(t + 1) = 0 .95 εi(t). By barrier properties (Theorem 3), Li(t + 1) ≤
+
+εi(t + 1) holds eventually. 
+
+Case 2 : If Li(t) > ε i(t), εi(t + 1) = εi(t). The gradient term φ′(x)Li dominates (Lemma 1), forcing Li(t + 1) < Li(t).Combining both cases, Vi(t) is monotonically decreasing and bounded below by 0. By Lyapunov convergence theorem, lim t→∞ Vi(t) = 0 .
+
+## D CONVERGENCE ADVANTAGE OF HB-AHO OVER PARETO -B ASED 
+
+## MULTI -T ASK LEARNING 
+
+D.1 FORMAL STATEMENT 
+
+Pareto-based multi-task learning methods (e.g., IMTL-GG (Liu et al., 2021)) optimize all task objec-tives simultaneously, often requiring computationally expensive gradient projections and suffering from scaling inefficiencies as the number of tasks grows. In contrast, our HB-AHO framework dynamically enforces a sequential task hierarchy using hyper-bolic barrier functions, allowing prioritized and adaptive optimization. We formalize the efficiency benefit as follows: 
+
+Proposition 11. Let {Li(θ)}Ni=1 denote N smooth, convex task losses, each L-Lipschitz and bounded below. Under HB-AHO, the iteration complexity to reach an ϵ-stationary point scales as O(N log(1 /ϵ )) , whereas Pareto-based multi-task optimization typically requires O(N 2 log(1 /ϵ )) 
+
+steps due to multi-objective gradient projection overheads. 
+
+D.2 SKETCH OF PROOF 
+
+HB-AHO Sequential Optimization. HB-AHO enforces that lower-priority tasks are only opti-mized after higher-priority tasks satisfy dynamic constraints. This effectively decomposes the N -task optimization into N sequential subproblems. For each subproblem: - The feasible region is restricted by the barrier function corresponding to the preceding higher-priority task. - First-order convergence to an ϵ-stationary point within each subproblem requires O(log(1 /ϵ )) iterations (Boyd & Vandenberghe, 2004). Summing across N
+
+levels yields an overall complexity of O(N log(1 /ϵ )) .17 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 
+
+Under review as a conference paper at ICLR 2026 
+
+Pareto Optimization Simultaneity. Pareto MTL simultaneously optimizes all N tasks by comput-ing generalized descent directions via multi-gradient projection at each step. - Projection onto a Pareto front incurs O(N ) per-iteration computational overhead. - Moreover, gradient conflicts among N tasks worsen condition numbers, compounding iteration complexity by an additional O(N ). Thus, the overall iteration complexity is O(N 2 log(1 /ϵ )) .
+
+Conclusion. HB-AHO’s dynamic prioritization leads to a more efficient linear scaling with N ,while Pareto-based methods suffer from quadratic scaling. D.3 DISCUSSION : W HEN IS HB-AHO A DVANTAGE MOST PRONOUNCED ?The efficiency gain of HB-AHO becomes particularly significant under the following conditions: • High Task Asymmetry: When task difficulties differ substantially (e.g., entity recognition much harder than relation classification), prioritizing hard tasks first prevents wasted effort on easier but dependent tasks. • Large Number of Tasks: In scenarios involving deep multi-task hierarchies (e.g., relation extraction → entity recognition), HB-AHO scales gracefully while Pareto optimization becomes increasingly inefficient. • Strong Task Dependency: When lower-level tasks are prerequisites for meaningful opti-mization of higher-level tasks, HB-AHO’s constraint mechanism ensures effective learning scheduling, while Pareto-based methods may prematurely optimize dependent tasks. These properties align with our empirical observations across entity-relation extraction datasets, where enforcing entity-first constraints substantially improved downstream relation and triplet extraction performance. 
+
+## E SUPPLEMENTARY METHOD DETAILS AND EMPIRICAL OBSERVATIONS 
+
+E.1 PRELIMINARY 
+
+Given a document D, the task of entity-relation extraction is to predict triples (es, r, e o), where 
+
+es, e o ∈ E are entities and r ∈ R is their semantic relation. This involves two interdependent subtasks: entity recognition (to detect spans) and relation classification (to link entity pairs). The latter critically relies on accurate entity boundaries, reflecting a hierarchical dependency. The input is encoded by a pretrained language model (PLM), followed by a Transformer encoder. Predictions are made via task-specific heads, and optimization is performed using our proposed HB-AHO method. The input document D = [ xt]lt=1 is first encoded by a pretrained language model (PLM) into contextual representations H ∈ Rl×d, where l is the sequence length and d the hidden size. These representations are refined through k standard Transformer encoder layers, which capture contextual dependencies. Each Transformer layer applies multi-head self-attention followed by a feed-forward network with SwiGLU activation (Shazeer, 2020). Let X ∈ Rl×d be the input to the layer; we adopt standard architecture without modification. For joint entity and relation prediction: • Entity Recognition: We adopt bilinear attention to detect boundary positions: 
+
+ppos = Softmax (We tanh( WsZ + WoH)) . (32) • Relation Classification: A fully connected layer followed by softmax predicts relation types: 
+
+pr = Softmax (Wr Z). (33) 18 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 
+
+Under review as a conference paper at ICLR 2026 Here, Z denotes the output of the final Transformer layer. The variable pos refers to entity boundary types, including subject and object spans (i.e., subject start , subject end ,
+
+object start , object end ). The matrices We, Ws, Wo, and Wr are learnable parameters. We use cross-entropy losses for both subtasks. The entity loss Lent is computed over boundary tag predictions, while the relation loss Lrel measures classification errors: 
+
+Lent = X
+
+> pos
+
+− X
+
+> i
+
+log ppos (ypos  
+
+> i
+
+). (34) 
+
+Lrel = − X
+
+> i
+
+log pr (ri). (35) Here, pr (ri) denotes the predicted probability of relation ri, and ppos (ypos  
+
+> i
+
+) is the probability of token 
+
+i being assigned the correct boundary label. E.2 EXPERIMENTAL DETAILS 
+
+We implement our model using DeBERTa-v3 (He et al., 2023) as the encoder, with AdamW optimizer (learning rate 2e-5, decay 1e-2, weight decay 1e-5). The number of Transformer layers is 3. The dynamic constraint threshold is initialized to 0.05. 19

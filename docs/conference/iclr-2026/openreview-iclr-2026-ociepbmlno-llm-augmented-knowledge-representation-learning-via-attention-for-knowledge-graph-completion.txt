@@ -1,0 +1,1641 @@
+Title: 3968_LLM_AUGMENTED_KNOWLEDGE_R.pdf
+
+URL Source: https://openreview.net/pdf?id=OcIepBMLnO
+
+Number of Pages: 19
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# LLM-A UGMENTED KNOWLEDGE REPRESENTATION 
+
+# LEARNING VIA ATTENTION FOR KNOWLEDGE GRAPH 
+
+# COMPLETION 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+ABSTRACT 
+
+Knowledge Graph Completion (KGC) is a critical task, yet its performance is of-ten hindered by the data sparsity problem arising from the long-tail distribution of entities. While existing works attempt to enrich representations by incorpo-rating auxiliary information like entity descriptions, this kind of implicit learning approaches often proved ineffective due to the introduction of irrelevant noise. To address this, we propose a novel framework LAKRA, which shifts the paradigm from implicit knowledge encoding to explicit data augmentation. LAKRA lever-ages a Large Language Model (LLM) to proactively reason and generate high-quality, schema-compliant triples for sparse entities, mitigating data sparsity at its source. Besides, we design a powerful encoder-decoder architecture for rep-resentation learning, which features a query-aware hybrid attention encoder and a deep feature interaction decoder to capture complex structural and semantic patterns. Experiments conducted on the benchmark datasets demonstrate that LAKRA achieves highly competitive performance on link prediction tasks involv-ing infrequent entities. Our work presents an effective new paradigm for tackling data sparsity in knowledge graphs. 
+
+1 INTRODUCTION 
+
+Knowledge Graphs (KGs), such as Freebase and WordNet, have become a cornerstone of modern artificial intelligence, organizing structured factual knowledge in the form of triples (h, r, t ). These graphs serve as the backbone for a myriad of downstream applications, including question answer-ing (Hao et al., 2022), recommendation systems (Qin et al., 2023), and semantic search. Despite their large scale, KGs are notoriously incomplete, thus, the task of Knowledge Graph Completion (KGC) has been proposed inferring these missing links. We divide existing KGC methods into three categories, including embedding-based models, NN-based models and LLM-based models. Early embedding-based models like TransE (Bordes et al., 2013) and RotatE (Sun et al., 2019) learn vector representations for this task, but their performance is heavily dependent on link density, mak-ing them vulnerable to data sparsity. To mitigate this, some methods (Wang et al., 2024a; Xue et al., 2021) enrich representations by incorporating auxiliary information like entity descriptions. How-ever, this approach relies on an implicit learning paradigm, tasking the model with distilling useful cues from often noisy textual data, which can increase complexity without guaranteed gains. Neural Network (NN)-based methods such as GNN could better leverage graph topology by aggregating neighborhood information. However, they also struggle with the long-tail distribution of entities, where low-degree “tail” entities lack sufficient neighbors to learn high-quality representations, thus perpetuating data sparsity. Moreover, existing GNN approaches often treat all queries uniformly, failing to adapt their representations to the specific relation being predicted. The recent advent of LLMs has introduced new approaches which we refer to such models as LLM-based models. These models have been explored in various ways, such as serving as encoders to provide richer initial entity representations or being directly prompted to predict missing links in a few-shot or zero-shot manner. Many existing LLM-based approaches treat the model’s knowledge as an implicit source to be encoded or fine-tuned, failing to solve the graph’s underlying structural sparsity. Moreover, due to the massive parameter scale of the models, these approaches also incur high computational costs. To bridge these gaps, we propose LAKRA, a framework that shifts the paradigm from implicit en-coding to explicit data augmentation. We firstly employ an LLM stage to generate high-quality, 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 schema-compliant triples for sparse entities, directly tackling the long-tail problem. This enriched graph is then processed by LAKRA’s powerful encoder-decoder architecture, which features a query-aware hybrid attention encoder and a 3D convolutional decoder. Our main contributions are as follows: • We propose a novel framework that leverages Large Language Models for explicit data augmen-tation to address the data sparsity problem in knowledge graphs, generating high-quality, schema-aware triples for infrequent entities. • We design a powerful encoder-decoder model, LAKRA, which features a query-aware hybrid attention encoder for learning expressive representations to address the issue of indiscriminate neighborhood aggregation by focusing only on relevant information for a given query and a 3D convolutional decoder for capturing deep, multi-level feature interactions. • We conduct extensive experiments on benchmark datasets, demonstrating that our proposed framework achieves highly competitive performance, particularly in predicting links involving sparse entities. 
+
+2 RELATED WORK 
+
+Embedding-based models learn low-dimensional vector representations for entities and relations. Translational models interpret relations as geometric operations, such as translation in TransE, pro-jection in TransH and TransR (Lin et al., 2015), or rotation in the complex space in RotatE. Tensor factorization models frame KGC as a 3D tensor completion problem. RESCAL uses a full matrix for each relation, which DistMult simplifies to a diagonal matrix, and ComplEx (Trouillon et al., 2016) extends to the complex space to handle asymmetry. To better model hierarchical structures, non-Euclidean models like MuRP (Balazevic et al., 2019) and AttH (Liu et al., 2019) leverage hy-perbolic geometry. While computationally efficient, embedding-based models are fundamentally limited by data sparsity, as their reliance on observed triples alone hinders their ability to model complex graph structures. Another line of work enriches representations by incorporating auxiliary information. Models like TAPR (Wang et al., 2014), SSP (Xiao et al., 2017), TKRL (Xie et al., 2016), and MTE (Wang et al., 2021) integrate textual descriptions and type hierarchies to enhance embeddings. Similarly, KG-BERT (Yao et al., 2019) reframes link prediction as a sequence classification task for language models, relying on the model to implicitly distill facts from text. Neural network architectures are used to capture more complex patterns. CNN-based models fo-cus on local interactions. ConvE reshapes embeddings into 2D “images” for convolution, a tech-nique enhanced by InteractE (Vashishth et al., 2020) with feature permutation and circular convolu-tion. ConvKB (Nguyen et al., 2017) applies 1D convolution over concatenated triple embeddings. GNN-based models learn representations by aggregating neighborhood information. R-GCN uses relation-specific matrices, while GAT introduces dynamic attention weights to differentiate neighbor importance. CompGCN (Vashishth et al., 2019) improves parameter efficiency by using composi-tion operators during message passing. SACN (Shang et al., 2019) combines a GNN encoder with a convolutional decoder. While powerful, GNNs are fundamentally limited by neighborhood density, a key issue our data augmentation strategy is designed to resolve. LLMs are increasingly used in KGC due to their vast parametric knowledge. One approach uses LLMs as feature encoders, such as KG-BERT, which fine-tunes BERT on textualized triples. iHT (Chen et al., 2023) initializes its entity encoder with pre-trained BERT weights to create rich en-tity representations for knowledge graph completion. Another reframes KGC as a generation or question-answering task, either by prompting large-scale LLMs or by fine-tuning models like KGT5 (Saxena et al., 2022) to inject structural knowledge. These methods use LLMs implicitly at infer-ence time. In stark contrast, our work employs an LLM in an explicit data augmentation role during a pre-processing stage to directly enrich the graph structure itself. RAA-KGC (Yuan et al., 2025) enhances PLM-based knowledge graph completion by augmenting input queries with relation-aware anchor entities to create a more discriminative representation for link prediction. 
+
+3 METHODOLOGY 
+
+In this section, we introduce our proposed model for knowledge graph completion(KGC), named LAKRA. LAKRA is designed to mitigate data sparsity via explicit, LLM-based data augmenta-2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 tion and then capture both deep relational semantics and complex structural patterns within the knowledge graph. The overall architecture, depicted in Figure 1, consists of three main compo-nents: (1)LLM-based data augmentation for sparse entities, (2) a novel query aware graph attention encoder for learning expressive entity and relation representations, and (3) a 3D deep feature inter-action decoder for link prediction. Knowledge Graph 
+
+G = (E, R, T)  
+
+> ht
+
+... 
+
+Knowledge Graph 
+
+G = (E, R, T)  
+
+> ht
+
+... 
+
+Query -aware Graph Encoder 
+
+with Hybrid Attention 
+
+Dynamic Gating 
+
+Enhanced Entity Representations 
+
+Query -aware Graph Encoder 
+
+with Hybrid Attention 
+
+Dynamic Gating 
+
+Enhanced Entity Representations 
+
+Gaussian Feature 
+
+Enhancement 
+
+Gaussian Feature 
+
+Enhancement 
+
+Dual Training Objective 
+
+Ranking -based Loss 
+
+L_rank = Cross -entropy loss 
+
+> Maximize true tail entity score
+> over negative samples
+> Link Prediction Performance
+
+Supervised Contrastive Loss 
+
+L_con = SupConLoss 
+
+> Pull similar entities closer
+> Push dissimilar entities apart
+> Representation Quality
+
+L_total = L_rank + λL_con 
+
+Dual Training Objective 
+
+Ranking -based Loss 
+
+L_rank = Cross -entropy loss 
+
+> Maximize true tail entity score
+> over negative samples
+> Link Prediction Performance
+
+Supervised Contrastive Loss 
+
+L_con = SupConLoss 
+
+> Pull similar entities closer
+> Push dissimilar entities apart
+> Representation Quality
+
+L_total = L_rank + λL_con 
+
+Predicted Entity 
+
+score(h, r, t) 
+
+t
+
+Predicted Entity 
+
+score(h, r, t) 
+
+t
+
+Key Components 
+
+Entity 
+
+Relation 
+
+Processing Module 
+
+Main Component 
+
+Key Components 
+
+Entity 
+
+Relation 
+
+Processing Module 
+
+Main Component 
+
+Input 
+
+Query 
+
+Decoder 
+
+Enhance  Decode 
+
+Predict Transformed Relation Representations 
+
+Aggre gation 
+
+r
+
+Max 
+
+hh
+
+Query Triple 
+
+(h, r, ?) 
+
+h
+
+r
+
+Candidate 
+
+Tail 
+
+Entities 
+
+Hybrid Attention Mechanism 
+
+Cross -Attention 
+
+> Multi -head
+> Relation -aware
+
+MLP -based 
+
+> Attention
+> Non -linear
+
+Hybrid Attention Mechanism 
+
+Cross -Attention 
+
+> Multi -head
+> Relation -aware
+
+MLP -based 
+
+> Attention
+> Non -linear
+
+hh
+
+Softmax 
+
+3D Convolutional  Decoder 
+
+5-Layer Feature Stack 
+
+Cosine Similarity Scoring 
+
+> ρ(r)
+> ρ(e_h)
+> ρ(r^ Φ)
+> ρ(e_h^ Φ)
+> ρ(r)
+> ρ(r)
+> ρ(e_h)
+> ρ(r^ Φ)
+> ρ(e_h^ Φ)
+> ρ(r)
+> 3D Convolution
+
+3D Convolutional Decoder 
+
+5-Layer Feature Stack 
+
+Cosine Similarity Scoring 
+
+> ρ(r)
+> ρ(e_h)
+> ρ(r^ Φ)
+> ρ(e_h^ Φ)
+> ρ(r)
+> 3D Convolution
+
+r
+
+hh
+
+LLM LLM 
+
+Input 
+
+new triplets Generation 
+
+> Entity name
+> Entity desc
+> Entity context
+
+…. ….
+
+3D Convolution kernel 
+
+Start  End 
+
+> … …
+> h
+
+e
+
+rhe
+
+LLM -based data 
+
+augmentation 
+
+3D Deep Feature Interaction 
+
+De coder 
+
+Knowledge Graph 
+
+G = (E, R, T)  
+
+> ht
+
+... 
+
+Knowledge Graph 
+
+G = (E, R, T)  
+
+> ht
+
+... 
+
+Query -aware Graph Encoder 
+
+with Hybrid Attention 
+
+Dynamic Gating 
+
+Enhanced Entity Representations 
+
+Query -aware Graph Encoder 
+
+with Hybrid Attention 
+
+Dynamic Gating 
+
+Enhanced Entity Representations 
+
+Gaussian Feature 
+
+Enhancement 
+
+Gaussian Feature 
+
+Enhancement 
+
+Dual Training Objective 
+
+Ranking -based Loss 
+
+L_rank = Cross -entropy loss 
+
+> Maximize true tail entity score
+> over negative samples
+> Link Prediction Performance
+
+Supervised Contrastive Loss 
+
+L_con = SupConLoss 
+
+> Pull similar entities closer
+> Push dissimilar entities apart
+> Representation Quality
+
+L_total = L_rank + λL_con 
+
+Dual Training Objective 
+
+Ranking -based Loss 
+
+L_rank = Cross -entropy loss 
+
+> Maximize true tail entity score
+> over negative samples
+> Link Prediction Performance
+
+Supervised Contrastive Loss 
+
+L_con = SupConLoss 
+
+> Pull similar entities closer
+> Push dissimilar entities apart
+> Representation Quality
+
+L_total = L_rank + λL_con 
+
+Predicted Entity 
+
+score(h, r, t) 
+
+t
+
+Predicted Entity 
+
+score(h, r, t) 
+
+t
+
+Key Components 
+
+Entity 
+
+Relation 
+
+Processing Module 
+
+Main Component 
+
+Key Components 
+
+Entity 
+
+Relation 
+
+Processing Module 
+
+Main Component 
+
+Input 
+
+Query 
+
+Decoder 
+
+Enhance  Decode 
+
+Predict Transformed Relation Representations 
+
+Aggre gation 
+
+r
+
+Max 
+
+hh
+
+Query Triple 
+
+(h, r, ?) 
+
+h
+
+r
+
+Candidate 
+
+Tail 
+
+Entities 
+
+Hybrid Attention Mechanism 
+
+Cross -Attention 
+
+> Multi -head
+> Relation -aware
+
+MLP -based 
+
+> Attention
+> Non -linear
+
+Hybrid Attention Mechanism 
+
+Cross -Attention 
+
+> Multi -head
+> Relation -aware
+
+MLP -based 
+
+> Attention
+> Non -linear
+
+hh
+
+Softmax 
+
+3D Convolutional  Decoder 
+
+5-Layer Feature Stack 
+
+Cosine Similarity Scoring 
+
+> ρ(r)
+> ρ(e_h)
+> ρ(r^ Φ)
+> ρ(e_h^ Φ)
+> ρ(r)
+> ρ(r)
+> ρ(e_h)
+> ρ(r^ Φ)
+> ρ(e_h^ Φ)
+> ρ(r)
+> 3D Convolution
+
+3D Convolutional Decoder 
+
+5-Layer Feature Stack 
+
+Cosine Similarity Scoring 
+
+> ρ(r)
+> ρ(e_h)
+> ρ(r^ Φ)
+> ρ(e_h^ Φ)
+> ρ(r)
+> 3D Convolution
+
+r
+
+hh
+
+LLM LLM 
+
+Input 
+
+new triplets Generation 
+
+> Entity name
+> Entity desc
+> Entity context
+
+…. ….
+
+3D Convolution kernel 
+
+Start  End 
+
+> … …
+> h
+
+e
+
+rhe
+
+LLM -based data 
+
+augmentation 
+
+3D Deep Feature Interaction 
+
+De coder 
+
+Figure 1: Overall architecture of the LAKRA framework showing the LLM-based data augmentation module and the encoder-decoder architecture. 3.1 PROBLEM FORMULATION 
+
+A knowledge graph (KG) is denoted as G = ( E, R, T ), where E is the set of entities, R is the set of relations, and T is the set of factual triples (h, r, t ), with h, t ∈ E representing the head and tail entities, and r ∈ R representing the relation. The task of KGC aims to predict a missing entity, i.e., 
+
+t given (h, r, ?) or h given (? , r, t ).3.2 LLM-BASED DATA AUGMENTATION FOR SPARSE ENTITIES 
+
+We propose a novel LLM-based data augmentation methodology to mitigate data sparsity arising from the long-tail distribution in knowledge graphs. Our core idea is to guide an LLM with the existing information and graph-native structural priors to generate high-quality, schema-compliant new triples for “tail entities.” The methodology comprises three main stages: tail entity identification and augmentation targeting, type-Constrained candidate set construction, two-stage generation via LLMs. Technical details are as follows: 
+
+Tail Entity Identification and Augmentation Targeting. Knowledge graphs exhibit a long-tail dis-tribution where most entities appear infrequently, hindering model performance.To precisely target the entities most in need of augmentation, we first calculate the dgree f (e) of each entity e in the training set Ttrain . The degree f (e) is defined as the degree of the entity e as either a head or a tail in Ttrain .
+
+f (e) = | { (h, r, t ) ∈ T train | h = e ∨ t = e} | (1) We rank all entities in descending order based on their degree f (e) and select the bottom 20% as our target set for augmentation. This set, denoted as Etrain , represents the entities most adversely affected by data sparsity. 
+
+Type-Constrained Candidate Set Construction. To ensure the generated triples are both seman-tically plausible and structurally consistent with the knowledge graph’s in-trinsic schematic prop-erties, we construct two type-constrained candidate sets: a Relation Candidate Table Crel and an Entity Candidate Table Cent . Crel maps each entity type to its frequently co-occurring relations (as head or tail), while Cent maps each relation to its common head and tail entity types, subject to a minimum frequency threshold. 
+
+Crel (te, head ) = {r | ∃ (h, r, t ) ∈ T train , type (h) = te, f rh > min } (2) 
+
+Crel (te, tail ) = {r | ∃ (h, r, t ) ∈ T train , type (t) = te, f rt > min } (3) 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 where frh and frt represent the frequencies of the corresponding relations when the entity type te
+
+serves as either the head entity or the tail entity. 
+
+Cent (r′, head ) = {th | ∃ (h, r, t ) ∈ T train , r = r′, f h > min } (4) 
+
+Cent (r′, tail ) = {tt | ∃ (h, r, t ) ∈ T train , r = r′, f t > min } (5) where fh and ft denote the frequencies of the types of corresponding head or tail entities when the relation is r′.These candidate tables (example illustrated conceptually in Figure 2) serve as a form of “soft con-straint,” furnishing the subsequent LLM generation phase with structured, graph-native prior knowl-edge. Entity Type  Role  Candidate Relations  Frequency 
+
+Person  Head  Profession  5011 
+
+Person  Tail  directedBy  274 
+
+Location 
+
+Location 
+
+Head 
+
+Tail  filmReleaseRegion  582 
+
+locationContains  885 
+
+Organization  Head 
+
+Tail Organization 
+
+webpageCategory  73 
+
+739 memberOrganization 
+
+Relation  Role  Candidate Entity Type  Frequency 
+
+bornIn  Head  Person  954 
+
+bornIn  Tail  Location  383 
+
+Gender 
+
+Gender 
+
+Head 
+
+Tail  Biology  2914 
+
+Actor  752 
+
+Industry  Head 
+
+Tail Industry 
+
+Company  199 
+
+75 Entertainment 
+
+Entity Type  Role  Candidate Relations  Frequency 
+
+Person  Head  Profession  5011 
+
+Person  Tail  directedBy  274 
+
+Location 
+
+Location 
+
+Head 
+
+Tail  filmReleaseRegion  582 
+
+locationContains  885 
+
+Organization  Head 
+
+Tail Organization 
+
+webpageCategory  73 
+
+739 memberOrganization 
+
+Relation  Role  Candidate Entity Type  Frequency 
+
+bornIn  Head  Person  954 
+
+bornIn  Tail  Location  383 
+
+Gender 
+
+Gender 
+
+Head 
+
+Tail  Biology  2914 
+
+Actor  752 
+
+Industry  Head 
+
+Tail Industry 
+
+Company  199 
+
+75 Entertainment 
+
+Figure 2: An example of type-constrained candidate set. The relation candidate table Crel stores relations associated with each entity type, while the entity candidate table Cent stores entity types associated with each relation. 
+
+Two-Stage Generation via LLMs. For each tail entity etail ∈ E tail , we employ a two-stage gener-ation process to create new triples, including relation generation and entity generation. In relation Stage 1:Relation Generation 
+
+System Prompt: 
+
+Task:  Select the most relevant relations from the candidate 
+
+list for the given tail entity. 
+
+Entity Information: 
+
+• Name: Albert Einstein 
+
+• Type: Person 
+
+• Desc:  Theoretical physicist known for theory 
+
+of relativity  … …
+
+Contextual Examples: 
+
+(Albert Einstein, BornIn, Ulm) 
+
+(Albert Einstein,  diedIn , Princeton )
+
+(Albert Einstein,  nationality , German )
+
+Candidate Relations: 
+
+BornIn  worksFor  graduatedFrom 
+
+marriedTo  knownFor  influenced 
+
+Please select the most appropriate relations for generating 
+
+new triples. 
+
+LLM Response: 
+
+Based on the entity information and contextual 
+
+examples, I select the following relations as most 
+
+relevant for Albert Einstein: 
+
+Selected Relations: 
+
+• worksFor 
+
+• KnownFor 
+
+• graduatedFrom 
+
+Stage 1:Relation Generation 
+
+System Prompt: 
+
+Task:  Select the most relevant relations from the candidate 
+
+list for the given tail entity. 
+
+Entity Information: 
+
+• Name: Albert Einstein 
+
+• Type: Person 
+
+• Desc:  Theoretical physicist known for theory 
+
+of relativity  … …
+
+Contextual Examples: 
+
+(Albert Einstein, BornIn, Ulm) 
+
+(Albert Einstein,  diedIn , Princeton )
+
+(Albert Einstein,  nationality , German )
+
+Candidate Relations: 
+
+BornIn  worksFor  graduatedFrom 
+
+marriedTo  knownFor  influenced 
+
+Please select the most appropriate relations for generating 
+
+new triples. 
+
+LLM Response: 
+
+Based on the entity information and contextual 
+
+examples, I select the following relations as most 
+
+relevant for Albert Einstein: 
+
+Selected Relations: 
+
+• worksFor 
+
+• KnownFor 
+
+• graduatedFrom Stage 2:Entity Generation 
+
+System Prompt: 
+
+Task:  Select the most appropriate entity from the candidate 
+
+pool to complete the given triple. 
+
+Entity Information: 
+
+• Name: Albert Einstein 
+
+• Type: Person 
+
+• Desc:  Theoretical physicist known for theory 
+
+of relativity  … …
+
+Contextual Examples: 
+
+(Albert Einstein, BornIn, Ulm) 
+
+(Albert Einstein,  diedIn , Princeton )
+
+(Albert Einstein,  nationality , German )
+
+Candidate Entities: 
+
+ETH Zurich  University of Berlin  Princeton University 
+
+Kaiser Wilhelm Institute  Institute for Advanced Study 
+
+Please select suitable entit ies  to complete this  triples. 
+
+LLM Response: 
+
+Based on Albert Einstein's career history and the 
+
+context provided, I select: 
+
+Selected Entities: 
+
+Partial Triple: 
+
+(Albert Einstein, worksFor, ？)
+
+Institute for Advanced Study 
+
+Generated Triple: 
+
+(Albert Einstein, worksFor ,Institute for Advanced Study )
+
+Stage 2:Entity Generation 
+
+System Prompt: 
+
+Task:  Select the most appropriate entity from the candidate 
+
+pool to complete the given triple. 
+
+Entity Information: 
+
+• Name: Albert Einstein 
+
+• Type: Person 
+
+• Desc:  Theoretical physicist known for theory 
+
+of relativity  … …
+
+Contextual Examples: 
+
+(Albert Einstein, BornIn, Ulm) 
+
+(Albert Einstein,  diedIn , Princeton )
+
+(Albert Einstein,  nationality , German )
+
+Candidate Entities: 
+
+ETH Zurich  University of Berlin  Princeton University 
+
+Kaiser Wilhelm Institute  Institute for Advanced Study 
+
+Please select suitable entit ies  to complete this  triples. 
+
+LLM Response: 
+
+Based on Albert Einstein's career history and the 
+
+context provided, I select: 
+
+Selected Entities: 
+
+Partial Triple: 
+
+(Albert Einstein, worksFor, ？)
+
+Institute for Advanced Study 
+
+Generated Triple: 
+
+(Albert Einstein, worksFor ,Institute for Advanced Study )
+
+Figure 3: Two-stage LLM-based triple generation process. (a) Stage 1 generates candidate relations based on entity type constraints. (b) Stage 2 generates target entities based on relation and type constraints. generation stage, we aim to identify plausible relations given entity etail . We handle cases where 
+
+etail acts as a head and as a tail entity separately. Specifically, given a tail entity etail , we first retrieve a list of candidate relations from the Relation Candidate Table Crel based on its type, type (etail ).Subsequently, we provide the LLM with a structured prompt, Prel (shown in Figure 3), containing a task description, entity information (name, type, description), contextual examples, and the candi-date relation list from Crel (type (etail ), head ). The LLM output a subset of relations, Rpred , which are most likely to form a factual statement with etail .
+
+Rpred = LLM ( Prel (etail , Crel )) (6) Entity generation stage, for each predicted relation rpred ∈ R pred , finds suitable entities to com-plete the triple (etail , r pred , ?) or (? , r pred , e tail ). We first determine the common entity types for the relation rpred from an Entity Candidate Table Cent and create a candidate entity pool of those types. A new prompt similar to Prel , Pent (shown in Figure 3), is designed, containing the partial triple and a candidate entity list constrained by Cent (rpred , tail ). The LLM then selects the most suitable tail entities tpred from candidate entity list, thereby forming a complete generated triple 
+
+(etail , r pred , t pred ).
+
+tpred = LLM ( Pent (etail , r pred , Cent )) (7) 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 Through this two-stage process, we generate a set of new candidate triples, Tgen , for each tail entity and we filter out any triples that already exist in the original training set to ensure the novelty of the augmented knowledge. Conventional knowledge graph enhancement techniques often seek to ad-dress data sparsity by enriching entity representations. These methods typically integrate auxiliary information, such as entity names, descriptions, and types, into the learning process, compelling the completion model to implicitly decipher relational patterns from this encoded knowledge. The efficacy of such an approach is indirect, as it remains uncertain whether the model can effectively capitalize on this supplementary context. In a distinct departure, our methodology re-frames this challenge from one of implicit representation learning to one of explicit knowledge generation. We leverage potent reasoning capabilities of an LLM to proactively distill salient knowledge and mate-rialize it as structured triples, offering a more direct and verifiable approach to data augmentation. 3.3 QUERY -AWARE GRAPH ATTENTION ENCODER WITH HYBRID ATTENTION 
+
+Our encoder learns expressive, query-aware entity representations by aggregating neighborhood in-formation guided by the specific query relation, departing from traditional GNNs that handle mes-sage passing uniformly. To capture a wide range of interaction patterns, we introduce a hybrid attention mechanism that integrates two parallel components: (1) Query-aware Multi-head Cross Attention and (2) MLP-based Additive Attention. Given a triple (ei, r ij , e j ), the attention score αij 
+
+between the central node i and a neighbor node j is computed as follows. 
+
+Query-aware Multi-head Cross Attention. This mechanism is designed to filter irrelevant context by making the aggregation specific to the link prediction query. Specifically, for each attention head, the query Q is derived from the central entity and the query relation, while the key K is derived from neighboring entities and their connecting relations: 
+
+Q(k,l ) = W(k,l ) 
+
+> q
+
+(Wcombine [e(l) 
+
+> i
+
+⊕ r(l) 
+
+> q
+
+]) (8) 
+
+K(k,l ) = W(k,l ) 
+
+> k
+
+e(l) 
+
+> j
+
++ W(k,l ) 
+
+> rel
+
+r(l) 
+
+> ij
+
+(9) where W(k,l ) 
+
+> q
+
+, W(k,l ) 
+
+> k
+
+, W(k,l ) 
+
+> rel
+
+∈ Rd′×d are the dedicated projection matrices for the k-th head in the l-th layer. e(l) 
+
+> i
+
+is the central entity and e(l) 
+
+> j
+
+is a neighboring entity at the l-th layer. The resulting scaled cross attention score is calculated with a learnable, relation-specific bias: 
+
+s(k,l ) 
+
+> dot
+
+= (Q(k,l ))T K(k,l )
+
+√d′ + brij (10) This formulation captures complex intrinsic connections among entities, relations and queries to discover “semantic relevance”. 
+
+MLP-based Additive Attention. The alternative attention mechanism involves concatenating the embeddings of the central entity ei, the neighboring entity ej , and the relation between them rij ,which is then passed through an MLP layer. This non-linear transformation enables the learning of more complex, localized feature combinations and even structurally complementary correlations. The computation is as follows: 
+
+s(l) 
+
+> mlp
+
+= w(l) 
+
+> a
+
+LeakyReLU (W(l)
+
+> att
+
+[e(l) 
+
+> i
+
+⊕ r(l) 
+
+> ij
+
+⊕ e(l) 
+
+> j
+
+] (11) where ⊕ denotes the concatenation operation, and Watt ∈ Rd×3d and wa ∈ R1×d are learnable weight matrices at the l-th layer. 
+
+Hybrid Attention. To capture a comprehensive set of relational patterns, our final attention score is derived from a dynamic fusion of the cross-attention and MLP-based attention paradigms. This is achieved through a gating mechanism that adaptively weighs the two components for each edge based on the context of its nodes. This design endows the model with the flexibility to handle diverse neighborhood dependencies more effectively than any single-mechanism approach. The dynamic gating mechanism is calculated as follows: 
+
+g(l) 
+
+> ij
+
+= σ(W(l) 
+
+> g
+
+[e(l) 
+
+> i
+
+⊕ e(l) 
+
+> j
+
+]) (12) 
+
+s(l) 
+
+> irj
+
+= g(l)
+
+> ij
+
+1
+
+K
+
+> K
+
+X
+
+> k=1
+
+s(k,l )
+
+> dot
+
+!
+
++ (1 − g(l) 
+
+> ij
+
+)s(l) 
+
+> mlp
+
+(13) 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 Here, s(l) 
+
+> irj
+
+is the final attention score. The gate weight gij is dynamically computed from the em-beddings of the central node e(l) 
+
+> i
+
+and the neighboring node e(l) 
+
+> j
+
+, representing the weights assigned to the two attention mechanisms, which sum to one. Then, each attention score is normalized using softmax: 
+
+α(l) 
+
+> irj
+
+= softmax rj 
+
+
+
+s(l)
+
+> irj
+
+
+
+=exp 
+
+
+
+s(l)
+
+> irj
+
+P
+
+> j′∈N i
+
+P 
+
+> r′∈R ij
+
+exp 
+
+
+
+s(l)
+
+> ir ′j′
+
+ (14) where Ni is the set of neighboring entities of entity i, Rij is the set of relations connecting entity i
+
+and entity j, and α(l) 
+
+> irj
+
+represents the final normalized attention weight at the l-th layer. 
+
+Aggregation. Inspired by advanced models (Nickel et al., 2016), we employ the circular cross-correlation function, denoted as corr (ej , rij ), to fuse entity and relation embeddings. Unlike sim-pler element-wise operators, this method models comprehensive, dimension-level interactions be-tween vectors using Fast Fourier Transform. Then the message function is defined below: 
+
+m(ej , rij ) = Wvcorr (ej , rij ) (15) where Wv is a projection matrix that corresponds to the previously mentioned Wq and Wk.Thus, with m(ej , rij ) acting as the aggregated message and value V corresponding to query Q and key K, the final entity representation is updated as follows: 
+
+e(l+1)  
+
+> i
+
+= T anh 
+
+X  
+
+> (e(l)
+> j,r (l)
+> ij )∈N i
+
+α(l) 
+
+> irj
+
+m(e(l) 
+
+> j
+
+, r(l) 
+
+> ij
+
+) + W (l)o e(l)
+
+> i
+
+ (16) where α(l) 
+
+> irj
+
+is the attention weight for the contextual triple. To prevent issues of gradient vanishing and over-smoothing, we have also incorporated a residual connection. After the final entity embedding is obtained, the relation representation undergoes a corresponding transformation, as follows: 
+
+r(l+1) = W(l) 
+
+> update
+
+· r(l) (17) where W(l) 
+
+> update
+
+∈ Rd×d is a learnable weight matrix for relation at the l-th layer. 3.4 3D D EEP FEATURE INTERACTION DECODER 
+
+Our deep feature interaction decoder is designed to capture complex relational patterns. Gaus-sian feature enhancement module generates a non-linear, augmented feature space from the original embeddings and 3D convolutional network processes a multi-view stack of both the original and enhanced representations to model their deep, multi-level interactions for link prediction. 
+
+Gaussian Feature Enhancement. This module projects the original entity and relation embeddings into a higher-dimensional space using a set of learnable Gaussian kernels ϕk(x). The intuition is to capture the uncertainty and create a non-linear feature space that highlights specific characteristics of the embeddings based on their proximity to learned “concept centers”. For an embedding x (either an entity eh or relation r), its Gaussian-mapped representation xΦ is computed as: 
+
+xΦ = [ ϕ1(x), ϕ 2(x), . . . , ϕ N (x)] (18) where ϕk(x) is the k-th kernel function. 
+
+3D Convolutional Decoder. For link prediction, we utilize a 3D convolutional network inspired by the work of (Zhang et al., 2024) to model deep feature interactions. First, a 5-layer 3D feature stack 
+
+S ∈ R5×H×W is constructed from the original and Gaussian-enhanced embeddings of the head entiy eh and relation r:
+
+S = stack ([ ρ(r), ρ (eh), ρ (rΦ), ρ (eΦ 
+
+> h
+
+), ρ (r)] , axis=2 ) (19) 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 This multi-view stack is then processed by a 3D convolution using a kernel Ω ∈ RC×5×kw ×kh to produce an interaction vector vhr :
+
+vhr = f (vec (S ∗ Ω)Wp) (20) where ∗ denotes the 3D convolution and vec() is the vectorization operation. A key design element is the convolutional kernel, which simultaneously processes two adjacent layers. As the kernel traverses the depth and spatial dimensions (kh × kw), it systematically evalu-ates four interaction pairings in a single pass, original-original (eh, r), original-enhanced (eh, rϕ),enhanced-enhanced (eϕh, rϕ), and enhanced-original (eϕh, r). This approach captures rich, multi-level interactions across different representational spaces, offering a more comprehensive modeling capacity than standard 2D methods. The final score for a candidate triple (h, r, t ), score (h, r, t ), is computed as the cosine similarity between the resulting interaction vector vhr and the candidate tail entity embedding et.3.5 TRAINING OBJECTIVE 
+
+For the primary link prediction task, we use the standard cross-entropy loss, which aims to maximize the score of the true tail entity over all other entities: 
+
+L = − 1
+
+B
+
+> B
+
+X
+
+> i=1
+
+log( σ(score (hi, r i, t i))) + 
+
+> Ns
+
+X
+
+> j=1
+
+log(1 − σ(score (hi, r i, t ′ 
+
+> ij
+
+))) 
+
+ (21) where B denotes the batch size, (hi, r i, t i) represents the i-th positive triple in the batch, (hi, r i, t ′ 
+
+> ij
+
+)
+
+denotes the j-th negative triple corresponding to the i-th positive sample. Ns represents the number of negative samples generated for each positive triple. The total loss is a weighted sum of the two components: 
+
+Ltotal = Lorig + λLaug (22) where λ is a hyperparameter balancing the two objectives. Lorig denotes the loss term computed from original datasets. Laug denotes the loss term computed solely from triples generated by LLMs. 
+
+4 EXPERIMENT 
+
+Dataset. To evaluate the performance of our model comprehensively and ensure fair comparison with existing methods, we conduct experiments on two widely adopted, challenging benchmark datasets for knowledge graph completion. Both datasets exhibit complex relational patterns essential for rigorously assessing KGC models. Dataset statistics are showed in Table 1. 
+
+Evaluation Metrics. Our evaluation framework uses four complementary ranking-based metrics to assess different aspects of model performance. The main metric is Mean Reciprocal Rank (MRR), which is the average of the reciprocal ranks of the correct answers. We also report Hits@K for K values of 1, 3, and 10, showing the percentage of correct entities ranked within the top-K predictions. Our evaluation uses a ”filtered” setting, which removes all other known true triples from the ranking process to account for the incompleteness of knowledge graphs. 
+
+Baseline. To provide a thorough evaluation, we compare our proposed model against a compre-hensive set of competitive baselines, categorized into three main paradigms: Embedding-based models including TransE, RotatE, HAKE(Zhang et al., 2020), QuatRE(Nguyen et al., 2022) and CompilE(Cui & Zhang, 2024), GNN- based models incluNetwork ding R-GCN(Schlichtkrull et al., 2018), ConvE, InteractE(Vashishth et al., 2020), BiGAT(Xie et al., 2021) and RHKH(Wang et al., 2024b), and LLM-based models including KG-BERT(Yao et al., 2019), KG-R3(Pahuja et al., 2023), iHT(Chen et al., 2023) and RAA-KGC(Yuan et al., 2025). Table 1: Base information about experimental Datasets. Dataset #ent #rel #train #valid #test FB15k-237 14,541 237 272,115 17,535 20,466 WN18RR 40,493 11 86,835 3,034 3,134 
+
+Link Prediction Task. Table 2 presents the link prediction performance of our model against state-of-the-art baselines. The results show that LAKRA is a highly competitive framework, consistently achieving top-tier performance. 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Table 2: Main experimental results on FB15K-237 and WN18RR datasets. The best results are highlighted in bold and the second best results are underlined, ’-’ indicates the result is not reported in previous work.                                                                                                                                            
+
+> Model FB15K-237 WN18RR
+> MRR Hits@1 Hits@3 Hits@10 MRR Hits@1 Hits@3 Hits@10 Embedding Based Model TransE 0.287 0.192 0.325 0.475 0.243 0.043 0.441 0.532 RotatE 0.338 0.241 0.375 0.533 0.494 0.455 0.510 0.571 HAKE 0.346 0.250 0.381 0.542 0.497 0.452 0.516 0.582 QuatRE 0.367 0.269 0.404 0.563 0.493 0.439 0.519 0.592 CompilE 0.372 0.277 0.408 0.563 0.495 0.453 0.510 0.579 Neural Network Based Model R-GCN 0.248 0.158 0.275 0.428 0.123 0.080 0.137 0.207 ConvE 0.316 0.239 0.350 0.491 0.460 0.390 0.430 0.480 InteractE 0.354 0.263 -0.535 0.463 0.430 -0.528 BiGAT 0.366 0.270 0.402 0.558 0.505 0.458 0.521 0.594 RHKH 0.353 0.271 --0.480 0.445 --PLM Based Model KG-BERT 0.268 0.197 0.289 0.420 0.438 0.412 0.465 0.524 KG-R3 0.390 0.310 0.413 0.539 0.467 0.430 0.479 0.536 iHT 0.344 --0.528 0.448 --0.678 RAA-KGC 0.315 0.224 0.341 0.493 0.597 0.506 0.649 0.760
+> LLM Based Model KICGPT 0.412 0.327 0.448 0.554 0.549 0.474 0.585 0.641 Our Model LAKRA 0.396 0.307 0.431 0.577 0.539 0.507 0.547 0.606
+
+On this complex, large-scale dataset FB15K-237, LAKRA achieves the best overall performance with top scores on MRR, Hits@3, and Hits@10. Although KG-R3 secures the best Hits@1, our explicit data augmentation provides a more globally complete graph, leading to better overall rank-ing. Similarly, on the hierarchical WN18RR, while RAA-KGC’s anchor-based method performs strongly, LAKRA again achieves the top Hits@1 score, highlighting our model’s precision in pin-pointing the single correct entity through LLM augmentation and a sophisticated decoder. The strong results across two distinct datasets validate our two-pronged strategy of enriching the data foundation via LLMs and then deeply modeling it with a powerful neural network. Table 3: Comparison of experimental results under different message functions and decoders. The best results are highlighted in bold and the second best results are underlined.                                                                                  
+
+> Message+Decoder FB15K-237 WN18RR MRR ↑Hits@1 Hits@3 Hits@10 MRR ↑Hits@1 Hits@3 Hits@10
+> sub+Conv3D 0.392 0.303 0.426 0.579 0.536 0.502 0.545 0.602 corr+Conv3D 0.396 0.307 0.431 0.577 0.539 0.507 0.547 0.606 mult+Conv3D 0.393 0.305 0.427 0.574 0.538 0.503 0.543 0.607
+> sub+ConvE 0.383 0.293 0.417 0.560 0.524 0.488 0.536 0.596 Corr+ConvE 0.386 0.296 0.420 0.566 0.527 0.494 0.540 0.597 mult+ConvE 0.384 0.295 0.418 0.567 0.525 0.488 0.538 0.594 sub+Transformer 0.378 0.287 0.411 0.558 0.518 0.485 0.529 0.588 corr+Transformer 0.379 0.289 0.414 0.561 0.521 0.487 0.532 0.588 mult+Transformer 0.379 0.288 0.413 0.560 0.517 0.486 0.530 0.586
+
+Performance of Different Decoders and Message Functions. To validate our architectural choices, we studied the performance of different message functions (sub, mult, corr) and decoders (Conv3D, ConvE, Transformer), with results presented in Table 3. The results confirm the superiority of our proposed Conv3D decoder, which consistently outper-forms the ConvE and Transformer alternatives. Its ability to model complex, multi-level interac-tions via a 3D feature stack allows it to capture richer relational patterns than 2D convolutions or standard self-attention. Furthermore, circular cross-correlation (corr) proved to be the most effective message function. It achieved the highest MRR and Hits@1 scores, validating its power as a com-position operator. Unlike simpler element-wise operations, corr models comprehensive, dimension-level interactions between embeddings, enabling our encoder to capture crucial relational patterns like symmetry and composition. 
+
+Comparison of Different Attention Mechanism Applied in Encoder. To validate our Hybrid At-tention mechanism, we compare it against its standalone components—Cross-Attention and MLP-based Attention, on four relation patterns of FB15K-237, with results presented in Table 4. This fine-grained analysis demonstrates the superiority of our Hybrid Attention, which achieves the best performance on the more complex 1-1, 1-N, and N-N relations. Notably, the standalone Cross-Attention model excels on N-1 relations, highlighting its strength in capturing clear semantic 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 regularities. This confirms that no single attention mechanism is universally optimal. Our hybrid model succeeds by adaptively fusing the semantic relevance captured by Cross-Attention with the complex structural patterns from MLP-based Attention, ensuring robust and superior performance across diverse relation types. 
+
+Ablation Studies. To validate the contribution of each key component in LAKRA, we conducted a series of ablation studies, with results detailed in Table 5. The study confirms the efficacy of our architectural choices. Replacing our 3D convolutional de-coder with a standard ConvE decoder results in the second-largest performance drop, highlighting its superior ability to model deep feature interactions. Furthermore, removing either the MLP-based attention or the cross-attention component leads to a noticeable decline, validating that their dynamic fusion is more effective than either one in isolation. The most significant finding is the critical importance of our LLM-based data augmentation. Re-moving the generated triples causes the most substantial performance degradation across all metrics. This severe decline unequivocally demonstrates that our explicit, schema-aware data augmentation strategy is the cornerstone of LAKRA’s success. To further investigate this, we analyze the gen-erated triples for two datasets. Interestingly, we found that 932 and 198 of these generated triples for FB15K-237 (10833) and WN18RR (12526), respectively, already existed in their corresponding test sets. Then we conducted an experiment on FB15K-237 where we explicitly removed the 932 overlapping triples from the augmented set and re-trained our model. The results remained highly compelling, proving that the primary benefit comes from enriching the local neighborhoods of sparse entities with novel, plausible triples, not from memorizing test data. 
+
+5 CONCLUSION 
+
+In this paper, we addressed the persistent challenge of data sparsity in knowledge graph completion, a problem rooted in the long-tail distribution of entities. To overcome this, we introduced LAKRA, a novel framework that shifts the paradigm from implicit learning to explicit data augmentation. First, we proposed a schema-aware, LLM-based data augmentation strategy that directly targets and enriches the neighborhood of sparse, tail-end entities by generating high-fidelity triples. Second, we designed a powerful encoder-decoder architecture to effectively learn from this enriched graph. The encoder features a query-aware hybrid attention mechanism to capture a wide spectrum of relational patterns, while the 3D convolutional decoder excels at modeling deep, multi-level feature interactions for accurate link prediction. Table 4: Comparison of different attention mechanisms on various relation patterns of FB15K-237 dataset. The best results for each pattern are highlighted in bold.                                                              
+
+> Hybrid Attention Cross-Attention MLP-based Attention
+> MRR H@1 H@3 H@10 MRR H@1 H@3 H@10 MRR H@1 H@3 H@10 1-1 0.649 0.603 0.661 0.732 0.636 0.581 0.658 0.732 0.640 0.585 0.660 0.726 1-N 0.352 0.287 0.370 0.477 0.348 0.283 0.368 0.474 0.344 0.278 0.367 0.468 N-1 0.493 0.438 0.512 0.595 0.498 0.441 0.523 0.601 0.494 0.440 0.514 0.593 N-N 0.362 0.257 0.405 0.574 0.354 0.248 0.395 0.568 0.355 0.248 0.399 0.567
+
+Table 5: Ablation study of LAKRA on the FB15K-237 and WN18RR datasets. ‘w/o’ denotes the model with the corresponding component removed or replaced. llm-aug denotes the LLM-based data augmentation component. 
+
+Model FB15K-237 WN18RR 
+
+MRR H@1 H@3 H@10 MRR H@1 H@3 H@10 w/o llm aug 0.364 0.272 0.396 0.547 0.505 0.469 0.518 0.577 w/o conv3d 0.385 0.295 0.419 0.566 0.529 0.492 0.541 0.602 w/o mlp 0.393 0.302 0.428 0.576 0.537 0.505 0.545 0.605 w/o cross 0.391 0.301 0.426 0.574 0.535 0.503 0.547 0.604 w/o gauss 0.389 0.304 0.427 0.571 0.532 0.503 0.544 0.603 w/o llm test 0.375 0.281 0.407 0.559 - - - -
+
+LAKRA 0.396 0.307 0.431 0.577 0.539 0.507 0.547 0.606 
+
+6 ACKNOWLEDGMENTS 
+
+We thank ChatGPT-4o for its assistance in proofreading and editing the language of this paper. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+REFERENCES 
+
+Ivana Balazevic, Carl Allen, and Timothy Hospedales. Multi-relational poincar´ e graph embeddings. 
+
+Advances in neural information processing systems , 32, 2019. Antoine Bordes, Nicolas Usunier, Alberto Garcia-Duran, Jason Weston, and Oksana Yakhnenko. Translating embeddings for modeling multi-relational data. Advances in neural information pro-cessing systems , 26, 2013. Sanxing Chen, Hao Cheng, Xiaodong Liu, Jian Jiao, Yangfeng Ji, and Jianfeng Gao. Pre-training transformers for knowledge graph completion. arXiv preprint arXiv:2303.15682 , 2023. Wanyun Cui and Linqiu Zhang. Modeling knowledge graphs with composite reasoning. In Pro-ceedings of the AAAI Conference on Artificial Intelligence , volume 38, pp. 8338–8345, 2024. Zhen Hao, Jianzhong Chen, Wenjun Wen, et al. Motif-based memory networks for complex-factoid question answering. Neurocomputing , 485:12–21, 2022. Yankai Lin, Zhiyuan Liu, Maosong Sun, Yang Liu, and Xuan Zhu. Learning entity and relation embeddings for knowledge graph completion. In Proceedings of the AAAI conference on artificial intelligence , volume 29, 2015. Qi Liu, Maximilian Nickel, and Douwe Kiela. Hyperbolic graph neural networks. Advances in neural information processing systems , 32, 2019. Dai Quoc Nguyen, Tu Dinh Nguyen, Dat Quoc Nguyen, and Dinh Phung. A novel embedding model for knowledge base completion based on convolutional neural network. arXiv preprint arXiv:1712.02121 , 2017. Dai Quoc Nguyen, Thanh Vu, Tu Dinh Nguyen, and Dinh Phung. Quatre: Relation-aware quater-nions for knowledge graph embeddings. In Companion proceedings of the web conference 2022 ,pp. 189–192, 2022. Maximilian Nickel, Lorenzo Rosasco, and Tomaso Poggio. Holographic embeddings of knowledge graphs. In Proceedings of the AAAI conference on artificial intelligence , volume 30, 2016. Vardaan Pahuja, Boshi Wang, Hugo Latapie, Jayanth Srinivasa, and Yu Su. A retrieve-and-read framework for knowledge graph link prediction. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management , pp. 1992–2002, 2023. Yao Qin, Chen Gao, Sheng Wei, et al. Learning from hierarchical structure of knowledge graph for recommendation. ACM Transactions on Information Systems , 42(1):1–24, 2023. Apoorv Saxena, Adrian Kochsiek, and Rainer Gemulla. Sequence-to-sequence knowledge graph completion and question answering. arXiv preprint arXiv:2203.10321 , 2022. Michael Schlichtkrull, Thomas N Kipf, Peter Bloem, Rianne Van Den Berg, Ivan Titov, and Max Welling. Modeling relational data with graph convolutional networks. In European semantic web conference , pp. 593–607. Springer, 2018. Chao Shang, Yun Tang, Jing Huang, Jinbo Bi, Xiaodong He, and Bowen Zhou. End-to-end structure-aware convolutional networks for knowledge base completion. In Proceedings of the AAAI con-ference on artificial intelligence , volume 33, pp. 3060–3067, 2019. Zhiqing Sun, Zhi-Hong Deng, Jian-Yun Nie, and Jian Tang. Rotate: Knowledge graph embedding by relational rotation in complex space. arXiv preprint arXiv:1902.10197 , 2019. Th´ eo Trouillon, Johannes Welbl, Sebastian Riedel, ´ Eric Gaussier, and Guillaume Bouchard. Com-plex embeddings for simple link prediction. In International conference on machine learning , pp. 2071–2080. PMLR, 2016. Shikhar Vashishth, Soumya Sanyal, Vikram Nitin, and Partha Talukdar. Composition-based multi-relational graph convolutional networks. arXiv preprint arXiv:1911.03082 , 2019. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Shikhar Vashishth, Soumya Sanyal, Vikram Nitin, Nilesh Agrawal, and Partha Talukdar. Interacte: Improving convolution-based knowledge graph embeddings by increasing feature interactions. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , volume 34, pp. 3009–3016, 2020. Xiaozhi Wang, Tianyu Gao, Zhaocheng Zhu, Zhengyan Zhang, Zhiyuan Liu, Juanzi Li, and Jian Tang. Kepler: A unified model for knowledge embedding and pre-trained language representation. 
+
+Transactions of the Association for Computational Linguistics , 9:176–194, 2021. Xin Wang, Ruobing Zhang, Baogang Zhao, et al. Medical knowledge graph completion via fusion of entity description and type information. Artificial Intelligence in Medicine , 151:102848, 2024a. Yuzhuo Wang, Junwei He, and Hongzhi Wang. Rhkh: Relational hypergraph neural network for link prediction on n-ary knowledge hypergraph. In Proceedings of the 32nd ACM International Conference on Multimedia , pp. 8759–8767, 2024b. Zhen Wang, Jianwen Zhang, Jianlin Feng, and Zheng Chen. Knowledge graph embedding by trans-lating on hyperplanes. In Proceedings of the AAAI conference on artificial intelligence , vol-ume 28, 2014. Han Xiao, Minlie Huang, Lian Meng, and Xiaoyan Zhu. Ssp: semantic space projection for knowl-edge graph embedding with text descriptions. In Proceedings of the AAAI conference on artificial intelligence , volume 31, 2017. Ruobing Xie, Zhiyuan Liu, Maosong Sun, et al. Representation learning of knowledge graphs with hierarchical types. In IJCAI , volume 2016, pp. 2965–2971, 2016. Zhiwen Xie, Runjie Zhu, Jin Liu, Guangyou Zhou, and Jimmy Xiangji Huang. Hierarchical neigh-bor propagation with bidirectional graph attention network for relation prediction. IEEE/ACM Transactions on Audio, Speech, and Language Processing , 29:1762–1773, 2021. Yuan Xue, Jin Jin, Aijun Song, et al. Relation-based multi-type aware knowledge graph embedding. 
+
+Neurocomputing , 456:11–22, 2021. Liang Yao, Chengsheng Mao, and Yuan Luo. Kg-bert: Bert for knowledge graph completion. arXiv preprint arXiv:1909.03193 , 2019. Duanyang Yuan, Sihang Zhou, Xiaoshu Chen, Dong Wang, Ke Liang, Xinwang Liu, and Jian Huang. Knowledge graph completion with relation-aware anchor enhancement. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pp. 15239–15247, 2025. Fuyuan Zhang, Changkai You, Xinyang Lin, Cuichun Zheng, Yumeng Zhang, and Jingbin Wang. Knowledge graph completion with entity type-aware and deep feature extraction. In CCF Confer-ence on Computer Supported Cooperative Work and Social Computing , pp. 396–411. Springer, 2024. Zhanqiu Zhang, Jianyu Cai, Yongdong Zhang, and Jie Wang. Learning hierarchy-aware knowl-edge graph embeddings for link prediction. In Proceedings of the AAAI conference on artificial intelligence , volume 34, pp. 3065–3072, 2020. 
+
+A DETAILS ABOUT DATASETS 
+
+Figure 4 and Table 6 illustrate the long-tail distribution of entity degrees in the FB15k-237 and WN18RR datasets. As shown, most entities have low degrees while only a small fraction exhibit high degrees. Based on these statistics, we select the bottom 20% of entities by degree as represen-tatives of sparse entities and apply targeted data augmentation to these entities. According to our statistics, the bottom 20% of entities correspond to 2901 entities in FB15K-237 and 8,881 entities in WN18RR. Because both datasets contain a large number of entities and large language models are susceptible to hallucinations, we designed a strategy to minimize noisy generations. Concretely, we adopt high thresholds for candidate selection to reduce the risk of presenting noisy inputs to the LLM. We also analyze the KG’s topological patterns and restrict candidate entities to a small, high-confidence contextual subset. Details are reported in Table 7 and Table 8. Finally, we apply additional filtering 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 and validation to the generated triples: beyond removing triples that already appear in the training set, we enforce relation-specific heuristic rules to discard implausible triples (for example, for many-to-one relations we ensure generated tail entities are not duplicated). These measures improve the quality and reliability of the augmented data. We also present an illustrative example of the candidate set (see Figure 8). Table 6: Statistics of Long-Tail Distribution on Datasets. gini indicates the gini coefficient of entity degree distribution, and top80% indicates the percentage of entities whose degree is in the top 80% of all entities.       
+
+> Dataset gini top80% FB15k-237 0.702 97.4% WN18RR 0.674 94.5%
+
+Figure 4: The long-tail distribution of entity degrees on FB15k-237 and WN18RR datasets. The x-axis represents entities sorted by their degree in descending order, while the y-axis indicates the degree of each entity. Table 7: Distribution of shortest distance between head and tail entities in the training set of FB15k-237.           
+
+> Distance Percentage Cumulative% 00.58 0.58% 273.40 73.99% 325.84 99.82% 40.17 99.99%
+
+B DETAILS ABOUT GENERATED TRIPLETS 
+
+Table 9 presents statistics of the triples generated by the large language model. We further investigate the impact of the augmentation module on predictive performance for sparse entities. Table 10 reports a comparison of evaluation metrics for sparse entities in the FB15K-237 dataset before and after augmentation. The results indicate that augmentation yields substantial improvements across all reported metrics for sparse entities. Figure 5 illustrates the metric comparisons for sparse entities stratified by degree. We present several example triples generated by the large language model. Figures 9 and 10 show generated triples that can be verified as correct (i.e., they appear in the test set). Figures 11 and 12 show uncertain triples that do not appear in the test set but are semantically plausible. Figure 13 illustrates erroneous (noisy) triples. 
+
+C USAGE OF LLM S AND PROMPT FOR KNOWLEDGE GRAPH TRIPLE GENERATION 
+
+In our experiments, we utilized the DeepSeek-V3 large-scale model for data augmentation. DeepSeek-v3 is a powerful multimodal large language model that demonstrates strong capabili-ties in textual understanding and reasoning. This prompt get possible relations() shown in Figure 6 is used in the relation generation stage to identify plausible relations when an entity serves as a head entity. Prompt get possible tail entity() shown in Figure 7 is used in the entity generation stage to predict the correct tail entity given a head entity and a relation. 12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 1 2 3 4 5 6 7 8 9                        
+
+> Degree
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> MRR
+> MRR
+> Before
+> After
+> 123456789
+> Degree
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Hits@1
+> Hits@1
+> Before
+> After
+> 123456789
+> Degree
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Hits@3
+> Hits@3
+> Before
+> After
+> 123456789
+> Degree
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Hits@10
+> Hits@10
+> Before
+> After
+
+Figure 5: Metric comparisons for sparse entities stratified by degree in FB15K-237 before and after augmentation. 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 
+
+The following is information related to a knowledge graph: Entity: {entity name }
+
+Entity description: {entity desc }
+
+Known triplets related to entity {entity name }:({h}, {r}, {t})... Converting above known triplets into natural language: {nl }
+
+Candidate relations: 
+
+{relation1 },
+
+{relation2 },... Some known triplets corresponding to candidate relations: ({head }, {relation }, {tail })... Based on the above information, if the entity {entity name } is used as the head entity, what are the possible relationships that could form valid triplets? Please ensure that possible relationships are selected only from the candidate relations. Please return strictly JSON format where the key is possible relations and the value is number 1. If no possible relationships exist, strictly return an empty JSON format: {} .
+
+Figure 6: Prompt get possible relations() used in the relation generation stage. 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 
+
+The following is information related to a knowledge graph: Entity: {entity name }
+
+Entity description: {entity desc }
+
+Known context triplets related to entity {entity name }:({h}, {r}, {t})... Known triplets corresponding to relation {possible relation }:({h}, {r}, {t})... Candidate entities: 
+
+{candidate1 } entity type: {type1 }{candidate2 } entity type: {type2 }
+
+... Consider the triple ( {entity name }, {possible relation }, ?). Based on the information pro-vided for {entity name }, infer the appropriate tail entity or entities from the candidate list above. Ensure that each inferred triple is well justified by the available evidence. If one or more valid tail entities can be inferred, return strictly a JSON object that maps each newly inferred triple to the integer 1, using the format: 
+
+{”(head,relation,tail)”: 1 }
+
+If no valid tail entities can be inferred, return strictly an empty JSON object: {} 
+
+Do not include any additional text. Select tail entities only from the provided candidate set, and exclude any known triplets. 
+
+Figure 7: Prompt get possible tail entity() used in the entity generation stage. 13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053 
+
+{"/location/country/form_of_government": {"head_entity_types": [ "Historical State", "Historical Event", "Location", "National Team", "Country", "Territory", "Place", "Historical Figure", "Historical Period", "Historical Entity", "Island", "Geopolitical Entity" ], "tail_entity_types": [ "Government", "Concept", "Political System", "Government System" ], "head_entity_type_counts": { "Country": 212, "Location": 22, "Place": 30, "Historical Period": 3, "Geopolitical Entity": 3, "Historical Entity": 2, "Historical Figure": 2, "Territory": 4, "National Team": 1, "Historical State": 4, "Historical Event": 1, "Island": 1}, "tail_entity_type_counts": { "Concept": 67, "Government": 114, "Government System": 51, "Political System": 9 }}}
+
+1
+
+Figure 8: Example of the candidate set for relation ’/location/country/form of government’ in FB15k-237. 14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 Table 8: Distribution of shortest distance between head and tail entities in the training set of WN18RR. 
+
+Distance Percentage Cumulative% 1 48.02 48.02% 2 8.77 56.80% 3 19.37 76.16% 4 6.67 82.83% 5 8.10 90.94% 6 3.83 94.77% 7 2.62 97.38% 8 1.85 99.23% 
+
+Table 9: Statistics of triples generated by the LLM. “count” denotes the total number of generated triples; “count*” denotes the number of triples retained after filtering; “test-in” denotes the number of generated triples that also appear in the test set. 
+
+Dataset count count* test in 
+
+FB15k-237 10833 8956 932 WN18RR 12526 11789 198 
+
+D COMPUTATIONAL COST OF THE MODEL 
+
+Table 11 presents a comparison of the computational costs associated with baseline models. It is worth noting that we restrict our comparisons to PLM-based models, as they generally achieve superior task performance but incur substantial computational overhead. Table 12 reports the time overhead of performing data augmentation with large language models. FB15k-237 requires more time than WN18RR due to its larger number of relations and higher graph density. New 
+
+> Bedford
+> Berkshire
+> Hathaway
+> United
+> States
+> Dollar
+> Official
+> Website
+> Massachu
+> setts
+> /location/location/contains
+> /common/topic/webpage./common/webpage/category
+> /organization/organization/place_founded
+> /business/business_operation/operating_income./measurem
+> ent_unit/dated_money_value/currency
+> /business/business_operation/revenue./measurement_unit/d
+> ated_money_value/currency
+> /location/statistical_region/gdp_nominal./measurement_unit/
+> dated_money_value/currency
+> /location/hud_county_place/place
+> Kim
+> Ki-duk
+> Korean
+> people
+> South
+> Korea
+> Korean
+> Language
+> /people/ethnicity/geographic_distribution
+> /people/ethnicity/languages_spoken
+> /location/country/official_language
+> /people/ethnicity/people
+> /people/person/nationality
+
+Figure 9: Example 1 of generated triples that can be verified as correct. Red dashed lines indicate triples generated by the large language model. 15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 New 
+
+Bedford 
+
+Berkshire 
+
+Hathaway 
+
+United 
+
+States 
+
+Dollar 
+
+Official 
+
+Website 
+
+Massachu 
+
+setts 
+
+/location/location/contains 
+
+/common/topic/webpage./common/webpage/category 
+
+/organization/organization/place_founded 
+
+/business/business_operation/operating_income./measurem 
+
+ent_unit/dated_money_value/currency 
+
+/business/business_operation/revenue./measurement_unit/d 
+
+ated_money_value/currency 
+
+/location/statistical_region/gdp_nominal./measurement_unit/ 
+
+dated_money_value/currency 
+
+/location/hud_county_place/place 
+
+Kim 
+
+Ki-duk 
+
+Korean 
+
+people 
+
+South 
+
+Korea 
+
+Korean 
+
+Language 
+
+/people/ethnicity/geographic_distribution 
+
+/people/ethnicity/languages_spoken 
+
+/location/country/official_language 
+
+/people/ethnicity/people 
+
+/people/person/nationality 
+
+Figure 10: Example 2 of generated triples that can be verified as correct. Red dashed lines indicate triples generated by the large language model. valid wrong 
+
+Ian James 
+
+Corlett 
+
+Vancouver Burnaby 
+
+Canada 
+
+/people/person/places_lived./people/place_lived/location 
+
+/location/location/adjoin_s./location/adjoining_relationshi 
+
+p/adjoins 
+
+/location/location/contains 
+
+/people/person/nationality 
+
+/people/person/place_of_birth 
+
+New 
+
+Bedford 
+
+United States 
+
+Department 
+
+of Housing 
+
+and Urban 
+
+Development 
+
+Official 
+
+Website 
+
+Bristol 
+
+County 
+
+/location/hud_county_place/county 
+
+/common/topic/webpage./common/webpage/category 
+
+/location/hud_county_place/place 
+
+/location/hud_foreclosure_area/estimated_number_of_mortg 
+
+ages./measurement_unit/dated_integer/source 
+
+Figure 11: Example 1 of generated triples that are uncertain but semantically plausible. Red dashed lines indicate triples generated by the large language model. 16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 Frank 
+
+> Zappa
+> The
+> Mothers of
+> Invention
+> Musician-
+> GB
+
+valid 
+
+> Comedy
+> rock
+> Jack Black
+> /music/genre/artists
+> /people/ethnicity/geographic_distribution
+> /music/group_member/membership./music/group_members
+> hip/group
+
+Figure 12: Example 2 of generated triples that are uncertain but semantically plausible. Red dashed lines indicate triples generated by the large language model. va d wrong 
+
+Ian James 
+
+Corlett 
+
+Vancouver Burnaby 
+
+Canada 
+
+/people/person/places_lived./people/place_lived/location 
+
+/location/location/adjoin_s./location/adjoining_relationshi 
+
+p/adjoins 
+
+/location/location/contains 
+
+/people/person/nationality 
+
+/people/person/place_of_birth 
+
+New 
+
+Bedford 
+
+United States 
+
+Department 
+
+of Housing 
+
+and Urban 
+
+Development 
+
+Official 
+
+Website 
+
+Bristol 
+
+County 
+
+/location/hud_county_place/county 
+
+/common/topic/webpage./common/webpage/category 
+
+/location/hud_county_place/place 
+
+/location/hud_foreclosure_area/estimated_number_of_mortg 
+
+ages./measurement_unit/dated_integer/source 
+
+Figure 13: Example of generated triples that are erroneous (noisy). Red dashed lines denote ground-truth triples, while red crosses indicate erroneous triples produced by the large language model. 17 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 
+
+Under review as a conference paper at ICLR 2026 Table 10: Comparison of metrics for sparse entities in FB15K-237 before and after augmentation. ”Before” denotes metrics prior to augmentation; ”After” denotes metrics following augmentation. 
+
+MRR H@1 H@3 H@10 Before 0.427 0.337 0.465 0.606 After 0.695 0.624 0.735 0.810 
+
+Table 11: Computational cost comparison of different models. GPU indicates the type and number of GPUs used during training. Inference Time is measured on FB15K-237 test set. 
+
+Model GPU No. of parameters Training Time Epochs Inference Time iHT V100 / 16 110M >60h 5 -KG-BERT - 110M - - -RAA-KGC - >200M - - -KG-R3 A6000 / 2 17.3M 67h 300 -
+
+Ours 3060 / 1 19.3M (-gauss 15.1M) 37h 293 10.8s 
+
+E EXPERIMENTAL RESULTS ON ADDITIONAL DATASETS 
+
+To validate the generality of our method, we conducted experiments on two additional datasets: UMLS and FB15K. UMLS is a small-scale biomedical knowledge graph containing 135 entities and 46 relations, while FB15K is a widely-used benchmark dataset, comprising 14,951 entities and 1,345 relations. The experimental results are presented in Table 13 and Table 14. Figure 14 illustrates the long-tail distribution of entity degrees in the FB15k and UMLS datasets. Based on corresponding statistics, we selected less than 10% of entities for data augmentation exper-iments. The large language model generated 59 triples for UMLS and 3,026 triples for FB15K. Table 13 and Table 14 show that our model outperforms baseline methods on both datasets, demonstrating the effectiveness and generality of our approach. 0 2000 4000 6000 8000 10000 12000 14000        
+
+> Rank (by degree)
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> Degree (log scale)
+> FB15K Entity Degree (Long-Tail Distribution)
+> 020 40 60 80 100 120 140
+> Rank (by degree)
+> 10 1
+> 10 2
+> Degree (log scale)
+> UMLS Entity Degree (Long-Tail Distribution)
+
+Figure 14: The long-tail distribution of entity degrees on FB15k and UMLS datasets. 18 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 
+
+Under review as a conference paper at ICLR 2026 Table 12: Timing statistics for data augmentation using large language models. 
+
+Dataset time time per entity FB15K-237 14h 16s WN18RR 13h 7s 
+
+Table 13: Experimental results on UMLS dataset. 
+
+Model MRR H@1 H@3 H@10 RotatE 0.744 0.636 0.822 0.939 CompilE 0.868 0.802 0.924 0.973 KG-BERT - - - 0.990 
+
+Ours 0.899 0.826 0.969 0.990 
+
+Table 14: Experimental results on FB15K dataset. 
+
+Model MRR H@1 H@3 H@10 TransE 0.463 0.297 0.578 0.749 RotatE 0.699 0.585 0.788 0.872 QuatRE 0.786 0.725 0.830 0.881 ConvE 0.657 0.558 0.723 0.831 R-GCN 0.696 0.601 0.760 0.842 
+
+Ours 0.803 0.732 0.865 0.917 
+
+19

@@ -1,0 +1,573 @@
+Title: 9405_Decoupling_Shared_and_Mod.pdf
+
+URL Source: https://openreview.net/pdf?id=aiJtxcNbqB
+
+Number of Pages: 17
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# DECOUPLING SHARED AND MODALITY -S PECIFIC 
+
+# SUBSPACES IN MULTIMODAL LEARNING VIA LOW -RANK REPRESENTATION FINE -T UNING 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+# ABSTRACT 
+
+Multimodal data in machine learning promises to improve generalization and per-formance on complex tasks. However, training multimodal models requires exten-sive paired datasets, can be computationally expensive, and lacks transparency by entangling shared and modality-specific signals in ways that hinder interpretabil-ity and control. In this work, we introduce MultiLoReFT: a low-rank represen-tation fine-tuning framework for multimodal learning using pretrained unimodal models. Our approach extends low-rank representation finetuning to the multi-modal setting and learns interpretable projection subspaces that decouple shared and modality-specific information. MultiLoReFT adaptively learns the rank of each subspace to best capture complementary contributions of each modality with minimal trainable parameters. Our method offers an efficient and scalable so-lution to adapting pretrained representations for multimodal reasoning, enabling interpretable fine-tuning across both synthetic and real-world benchmarks. 
+
+# 1 INTRODUCTION 
+
+The growth of multimodal data, ranging from image-caption pairs to multimodal diagnostic data, has enabled a wide range of applications (Liang et al., 2024) in vision-and-language modeling (Chen et al., 2024; Sun et al., 2025), medical diagnostics (Steyaert et al., 2023; Zhou et al., 2023), and biology (Cui et al., 2025). These applications require learning effective joint representations that capture both the common semantics across modalities and the unique information each modality provides. However, training multimodal models from scratch typically demands large amounts of aligned, high-quality multimodal data, which are often scarce or expensive to obtain in real-world settings (Baltruˇ saitis et al., 2019). This has motivated recent approaches to reuse powerful unimodal encoders pretrained on large-scale corpora, and adapt them for multimodal tasks through fine-tuning (Kim & Kim, 2024; Miyazawa et al., 2022). While fine-tuning enables flexible reuse of pretrained models, it can be computationally intensive and parameter inefficient. Recent work has introduced parameter-efficient fine-tuning strategies such as low-rank adaptation (LoRA) (Hu et al., 2021) and low-rank representation fine-tuning (LoReFT) (Wu et al., 2024) that directly update internal representations in low-dimensional subspaces instead of fine-tuning the model parameters. These approaches achieve comparable performance to full fine-tuning with less computation. They are particularly attractive in data-limited regimes, like multimodal cohorts, as they reduce the risk of overfitting while preserving pretrained knowledge. In this work, we extend low-rank representation fine-tuning to multimodal representation learning. We propose MultiLoReFT, a framework that efficiently fuses information from multiple pretrained unimodal encoders while simultaneously disentangling shared and unique information from each modality. This decoupling increases interpretability by providing insights into the relative contribu-tions of each modality (Tsai et al., 2019), improves generalization across domains, and allows for better handling of missing modalities. MultiLoReFT offers a self-supervised solution to augment unimodal representations with cross-modal information that generalize to any downstream label. It learns structured low-rank projection matrices that define orthogonal shared and modality-specific subspaces to decouple the unique information contribution of each modality. Leveraging the struc-ture of each subspace, we incorporate a novel adaptive pruning strategy that enables the model to 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 dynamically reduce the rank of each projection matrix. This results in learning the amount of infor-mation each subspace contains while improving efficiency by avoiding over-parameterization. We evaluate our approach on synthetic and real-world multimodal datasets, demonstrating its ability to successfully fuse multimodal representations, learn shared and modality-specific subspaces that identify and decouple the unique and shared information, and allocate representational capacity ef-fectively for each subspace. By bridging multimodal representation disentanglement and efficient fine-tuning, our method offers a principled and lightweight approach to leveraging pretrained uni-modal models in multimodal scenarios. This lays the groundwork for interpretable and adaptable multimodal systems in data-scarce settings where training multimodal models can be challenging. 
+
+# 2 RELATED WORK 
+
+Multimodal Representation Learning. A central challenge in multimodal learning is how to in-tegrate heterogeneous signals into effective representations (Liang et al., 2021). Early approaches rely on simple early, intermediate or late fusion mechanisms (Boulahia et al., 2021). Coordinated representation approaches align unimodal encoders into a shared embedding space, often with con-trastive or retrieval-based objectives (Radford et al., 2021; Hager et al., 2023). Fusion-based models remain widely used, ranging from simple concatenation or pooling strategies (Baltruˇ saitis et al., 2019) to attention-based architectures that explicitly capture cross-modal interactions (Tsai et al., 2019; Jayakumar et al., 2020). Recent studies have taken a more analytical view, quantifying redun-dancy and complementarity information between modalities using Partial Information Decomposi-tion (PID) (Liang et al., 2023a; Zhang et al., 2025). These insights emphasize that naive fusion lack clarity on the structure of modality-specific and shared information, motivating the development of disentanglement frameworks. 
+
+Disentangled Multimodal Representations. A complementary line of work aims to explicitly separate shared and modality-specific information in multimodal settings. These methods often define information components with respect to downstream tasks; for instance, FactorCL (Liang et al., 2023b) aligns modality-invariant features with supervision signals while preserving unique factors using a factorized contrastive learning. Triple Disentanglement (Zhou et al., 2025) further decomposes representations into shared, relevant, and irrelevant modality-specific components us-ing a transformer-based encoder–fusion design. Other approaches offer self-supervised alternatives to information decomposition. DRIM-U (Robinet et al., 2024) enforces disentanglement through reconstruction and adversarial regularization, while APOLLO (Zhang et al., 2024b) leverages latent optimization to learn partially shared embeddings that generalize through trained encoders. These approaches move beyond fusion to provide a more structured account of modality interactions. 
+
+Multimodal Fine-tuning. The difficulty of collecting large-scale paired multimodal datasets has motivated research on leveraging unimodal models for multimodal learning (Zhang et al., 2024a). Existing approaches range from fusion of unimodal encoders (Miyazawa et al., 2022; Norelli et al., 2023) to direct fine-tuning for multimodal tasks (Zhai et al., 2022). Yet, fine-tuning large models remains challenging, particularly when available multimodal cohorts are small (Vieira et al., 2024). In language models, representation-level fine-tuning rather than full model adaptation has shown strong effectiveness for downstream tasks (Wu et al., 2024; Hu et al., 2021). Extensions to multi-modal learning (Liu et al., 2025) similarly demonstrate gains in both performance and flexibility. Building on this, our method introduces a multimodal fine-tuning approach that improves task per-formance and clarifies the division of information between shared and unique components. 
+
+# 3 MULTIMODAL REPRESENTATION FINETUNING (M ULTI LOREFT) 
+
+We introduce a low-rank representation fine-tuning framework for multimodal learning called Mul-tiLoReFT that decomposes pretrained unimodal representations into shared and modality-specific components. As shown in Figure 1, our method operates on top of frozen pretrained encoders, requiring only a small number of additional parameters. This design enables efficient multimodal fusion while adding interpretability by explicitly disentangling modality-specific contributions from shared information. 2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 Rs       
+
+> RT
+> s
+> Rs
+> Encoder 1
+> h1
+> fs1Rs
+> δ1Rsh1
+> RT
+> s
+> Φ1
+> Encoder 2
+> h2
+> Rsh2
+> Modality 2
+> unique space
+> fs2
+> Rm1Rm2fm1fm2
+> Φ2
+> RT
+> m1RT
+> m2
+> δ1
+> Vector
+> addi 4on
+> Vector
+> subtrac 4on
+> Shared
+> space
+> δ2
+> Rm2h2
+> δ2Rm1h1
+> Modality 1
+> unique space
+> Frozen
+> parameter
+> Fine tuned representa 4on
+> Φ1Φ2
+> RsRm1Rm2
+> zs
+> zm2zm1
+> Informa 4on unique
+> to modality 1
+> Informa 4on unique
+> to modality 2
+> Shared
+> informa 4on
+
+Figure 1: Overview of MultiLoReFT . Pretrained unimodal encoders (with frozen parameters) pro-duce representations h1 and h2, which are fine-tuned through low-rank projections into shared ( Rs)and modality-specific ( Rm1, R m2) subspaces. Nonlinear transforms ( fs, f m) learn the representa-tion edit ( δ) in the lower-rank space that needs to be subtracted from the projection of the repre-sentations. Once edited in the low-rank space, the representations are projected back to form the fine-tuned representations Φ1 and Φ2. The right panel illustrates the decoupling of information into shared ( zs) and modality-unique ( zm1, zm2) components. 3.1 REPRESENTATION FINE -TUNING WITH MULTI LOREFT We build on representation fine-tuning (Wu et al., 2024) to adapt pretrained unimodal encoders for multimodal learning. The key idea is to apply structured, low-rank interventions on pretrained representations, steering them toward disentangled multimodal subspaces that capture both shared and modality-specific factors. Consider two pretrained unimodal encoders E1 and E2 for modalities 1 and 2. Given inputs x1 and x2, the encoders produce representations h1, h2 ∈ Rd. We learn fine-tuned representations Φ1, Φ2 ∈ Rd that (i) preserve the expressive power of the representations, (ii) capture multimodal interactions, and (iii) disentangle shared and modality-specific information. We introduce three low-rank subspaces: one shared across modalities and two modality-specific. Projection matrices Rs, R m1, R m2 ∈ Rr×d map fine-tuned representations into these subspaces, yielding the components in Eq. 1. In this formulation, zs represents shared information, while zm1
+
+and zm2 capture information unique to each modality, providing interpretable building blocks for downstream multimodal tasks. 
+
+zs = RsΦ1 = RsΦ2, zm1 = Rm1Φ1, zm2 = Rm2Φ2. (1) Instead of finetuning encoders, MultiLoReFT learns lightweight transformations fsi , f mi in the low-rank subspaces. The fine-tuned representation of each modality i ∈ { 1, 2} is computed as: 
+
+Φ1 = h1 + R⊤
+
+> s
+
+ fs1(h1) − Rsh1
+
+ + R⊤
+
+> m1
+
+ fm1(h1) − Rm1h1
+
+, (2) 
+
+Φ2 = h2 + R⊤
+
+> s
+
+ fs2(h2) − Rsh2
+
+ + R⊤
+
+> m2
+
+ fm2(h2) − Rm2h2
+
+. (3) These edits operate only in the low-rank subspaces, making training efficient while ensuring inter-pretability. The shared subspace isolates common information, and the modality-specific subspaces capture unique signals. The transformations learn how to update the representations in each space. 3.2 OBJECTIVE 
+
+Unlike prior ReFT methods, fine-tuning in our framework is not guided by a supervised task ob-jective but instead by structural constraints imposed on the representation space. The goal is to adapt pretrained unimodal embeddings so that their projections into learned subspaces exhibit dis-entanglement while still enabling effective multimodal fusion. To this end, we optimize a composite objective that encourages (i) independence between shared and modality-specific components, (ii) orthogonality between subspaces, and (iii) preservation of information from the original unimodal embeddings. The overall loss is composed of 3 componenets: 
+
+L = λ1Lindep + λ2Lorth + λ3LMI . (4) 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 
+
+Independence loss. (Lindep ) To ensure that shared and modality-specific components capture complementary information, we minimize their statistical dependence using the Hilbert–Schmidt Independence Criterion (HSIC) (Gretton et al., 2007). HSIC is a nonparametric measure of statis-tical dependence between two random variables. Given random variables X and Y with kernels k
+
+and l, when the kernels are characteristic (e.g., Gaussian RBF or Laplace), HSIC (X, Y ) = 0 if and only if X and Y are statistically independent. Independence is enforced not only between the shared and private subspaces of each modality but also between the two modality-specific subspaces. This prevents leakage of redundant shared information into the private components: 
+
+Lindep = HSIC( zs1, zm1) + HSIC( zs2, zm2) + HSIC( zm1, zm2). (5) MultiLoReFT uses an empirical, unbiased estimator of H that can be minimized during training to enforces nonlinear independence between the representation components as HSIC( X, Y ) =  
+
+> 1(n−1) 2
+
+tr( KL ), where K, L ∈ Rn×n are centered kernel matrices. We use an RBF kernel in all experiments. 
+
+Orthogonality loss. ( Lorth ) While independence ensures statistical separation, we further enforce disjointness between the shared subspace Rs and modality-specific subspaces Rm1 and Rm2. This is done by minimizing the Frobenius norm of their pairwise inner products: 
+
+Lorth = ∥RsR⊤
+
+> m1
+
+∥F + ∥RsR⊤
+
+> m2
+
+∥F . (6) This constraint strengthens disentanglement by ensuring the subspaces are orthogonal. While HSIC guarantees that subspaces do not carry redundant information, orthogonality ensures that their basis vectors do not overlap in representation space. For instance, two statistically independent variables could still align geometrically (colinear bases), and two orthogonal directions could still exhibit nonlinear dependence. 
+
+Cross-modal mutual information loss. (LMI ) To ensure that the fine-tuned projections retain information from the original unimodal embeddings h, we adopt an InfoNCE-style contrastive loss as shown in Equation 7. InfoNCE provides a lower bound on the true mutual information, and maximizing this bound reserves high mutual information between the projections and their sources. Therefore, the disentangled shared and modality-specific projections remain sufficient summaries of their original embeddings. 
+
+LMI = − 12
+
+> 2
+
+X
+
+> i=1
+
+log exp  ⟨hi, z(i)⟩/τ PNj=1 exp  ⟨hi, z(j)⟩/τ  . (7) Where τ is the temperature parameter that controls the sharpness of the similarity distribution in-side the softmax, hi is the pretrained embedding of modality i, and N is the batch size. Here, z(i)
+
+is formed by concatenating the modality-specific projection from modality i with the shared pro-jection from the opposite modality. This design enforces consistency of shared components across modalities, ensuring that they encode modality-agnostic information. To avoid hand-tuning regularization weights λ, we adopt Gradient Normalization (Chen et al., 2018), which balances the contributions of each objective by equalizing their gradient magnitudes. We demonstrate the contribution of each loss component to successful representation learning through an ablation study presented in the Appendix A.2.2. 3.3 TRAINING 
+
+3.3.1 TRAINING PROCEDURE 
+
+We adopt a multi-stage training strategy that progressively learns different components of the model, as outlined in Algorithm 1 and described through the following steps. • Stage 1 (Shared). We first optimize only the shared subspace Rs and associated parameters to capture cross-modal information that is maximally aligned between the two modalities. At this stage, training is driven solely by the mutual information loss LMI .4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 • Stage 2 (Private). Next, we optimize the modality-specific subspaces Rm1 and Rm2 to extract private components that encode complementary information to the learned shared while remaining independent of the shared space. • Stage 3 (Joint). Finally, we fine-tune all parameters jointly and initiate the adaptive pruning process, allowing the model to refine both shared and modality-specific representations. Transitions between stages are determined adaptively using a validation-based convergence crite-rion. Specifically, we monitor the validation loss and trigger a stage switch when (i) its relative improvement falls below a minimum threshold, and (ii) this condition persists for a number of con-secutive epochs specified by the patience parameter. In all our experiments, we use a minimum relative improvement of 0.001 within a patience window of 40 epochs (increased to 100 epochs for the joint stage, to account for recovery after pruning). Appendix A.2.2 provides ablation results to show the importance of staged learning and the pruning procedure. 
+
+Algorithm 1: MultiLoReFT Training 
+
+Input: Multimodal datasets ( Dtrain , Dval ); pretrained encoders (E1, E 2); pruning threshold ϵ
+
+; Convergence criteria 
+
+Variables: Projection matrices Rs, R m1, R m2; transform functions fs1, f s2, f m1, f m2
+
+trainable stage ← “shared” 
+
+while not converged do foreach minibatch (x1, x2) in Dtrain do 
+
+(h1, h2) ← E1(x1), E 2(x2)Φ1 = h1 + R⊤ 
+
+> s
+
+(fs(h1) − Rsh1) + R⊤
+
+> m1
+
+(fm(h1) − Rm1h1)Φ2 = h2 + R⊤ 
+
+> s
+
+(fs(h2) − Rsh2) + R⊤
+
+> m2
+
+(fm(h2) − Rm2h2)
+
+zs1 ← RsΦ1; zm1 ← Rm1Φ1;
+
+zs2 ← RsΦ2; zm2 ← Rm2Φ2;
+
+if trainable stage = shared then 
+
+L ← GradNorm ([ Lmi ]) 
+
+Train: Rs, fs1, fs2
+
+else if trainable stage = private then 
+
+L ← GradNorm ([ Lorth , L ind , L mi ]) 
+
+Train: Rm1, Rm2, fm1, fm2
+
+else joint 
+
+L ← GradNorm ([ Lorth , L ind , L mi ]) 
+
+Train: Rs, fs1, fs2, Rm1, Rm2, fm1, fm2
+
+// Validation, pruning, and stage control 
+
+Evaluate validation losses Lval on Dval 
+
+if stage is joint and MI within 10% of best MI then 
+
+Adaptive Rank pruning( ϵ) (Alg. 2) 
+
+if Convergence criteria is met w.r.t Lval then 
+
+advance stage: shared → private → joint 3.4 RANK ADAPTATION VIA PRUNING 
+
+A key challenge in disentangled representation learning is determining the dimensionality of shared and modality-specific subspaces: fixing ranks a priori risks underfitting when too small, or redun-dancy and leakage when too large. To address this, we adopt a dynamic rank adaptation mecha-nism that prunes low-energy directions. During training, we compute the singular value decom-position (SVD) of each projection matrix Rs, R m1, R m2 as R = U SV ⊤, with singular values 
+
+S = diag( σ1, . . . , σ r ). Dimensions with σi below a threshold ϵ are pruned, and the matrices are up-dated with a rotated, compressed basis ˜R = diag( S1: k)V ⊤
+
+> 1: k
+
+, ensuring orthogonality and alignment with dominant directions (Algorithm 2). This rank adaptation improves robustness and eliminates the need for manual rank tuning, as further shown in Appendix A.2.2. 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 
+
+Algorithm 2: Adaptive Rank Pruning 
+
+Input: Matrices Rs, R m1, R m2; threshold ϵ
+
+foreach R ∈ { Rs, R m1, R m2} do 
+
+R = U diag( S) V ⊤
+
+Find projected ranks k based on Si < ϵ 
+
+Select k by pruning singular values below ϵ (clip to keep at least one) Form ˜R ← diag( S1: k) V ⊤
+
+> 1: k
+
+;For each associated f , replace last Linear layer to output k and rotate weights by U ⊤
+
+> :,1: k
+
+R ← ˜R
+
+Refresh optimizer param groups 
+
+# 4 EXPERIMENTS 
+
+We evaluate MultiLoReFT on both simulated and real-world datasets. Our experiments are designed to answer two key questions: (1) Does the model effectively decouple shared and modality-specific information, and how is modality-relevant information distributed across these components? (2) Does fine-tuning improve multimodal representations for downstream tasks by capturing joint infor-mation more effectively? 4.1 DATASETS AND BASELINES 
+
+We first conduct controlled evaluations on simulated datasets, where the ground-truth generative structure is known. Each dataset includes conditional, joint, and unique labels, enabling targeted validation of different aspects of multimodal representation learning. We then scale to large, real-world datasets to assess the applicability of our method with pretrained encoders. • Simulation I & II. Two synthetic multimodal datasets with controlled generative processes. Sim-ulation I is constructed from independent latent factors drawn from diverse distributions, while Simulation II introduces dependencies across some factors, creating correlated shared and unique components. Both datasets provide labels that are modality-specific, shared, and conditional, en-abling systematic evaluation of disentanglement. Full details in Appendix A.1. • Flickr30K-Multi (Elliott et al., 2016). A multilingual extension of the Flickr30K dataset contain-ing image–caption pairs in five languages. Each image is paired with one caption per language, making language a modality-specific factor while semantic content remains shared across modal-ities. We use English and French captions for our experiments. • Crema-D (Cao et al., 2014). An audio–visual dataset of multimodal emotion expression and per-ception, comprising 7,442 clips from 91 actors across diverse demographics. Each clip contains both facial and vocal expressions of fixed sentences. The dataset provides both shared emotional signals and modality-specific cues, along with contextual metadata (e.g., age, ethnicity). We use established pretrained models for each modality: DINO Vision Transformer for images (Caron et al., 2021), BERT-base for English text (Devlin et al., 2019), LaBSE for multilingual text (Feng et al., 2022), Wav2Vec 2.0 base pretrained on Librispeech-960h for audio (Baevski et al., 2020), and a 3D ResNet-18 video encoder pretrained on Kinetics-400 (He et al., 2016; Kay et al., 2017). We compare our method against a broad set of multimodal representation learning frame-works, grouped into two categories: • General fusion approaches. These methods integrate multimodal signals through concatenation, attention, or interaction mechanisms. As baselines, we use late fusion (Baltruˇ saitis et al., 2019), which simply concatenates modality representations, and an attention-based fusion model, which projects each modality into a common space and applies a lightweight self-attention layer to let the two embeddings interact before pooling into a fused representation. We also evaluate mul-tiplicative interactions ( MI ) (Jayakumar et al., 2020), which extend tensor product fusion with learnable parameters to capture higher-order dependencies, and contrastive learning , which en-courage aligned representations by pulling paired modalities closer and unpaired samples further. 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 • Decoupling approaches. These methods explicitly separate shared and modality-specific informa-tion. We consider APOLLO (Zhang et al., 2024b), an autoencoder-based model that decouples shared and unique components through latent optimization, directly learning embeddings for train-ing samples before training encoders to generalize. We also benchmark DRIM-U (Robinet et al., 2024), which disentangles multimodal representations using three complementary objectives: en-forcing similarity across shared embeddings, ensuring reconstruction fidelity, and adversarially regularizing unique modality-specific components. Since the original DRIM-U relies on task la-bels, we adopt its self-supervised variant presented in the paper, making it more comparable to our setting. For fairness, all baselines are trained on the same pretrained unimodal embeddings as input. The only architectural differences lie in the method-specific adapters—for example, DRIM-U uses a discriminator-based decoupling module, whereas APOLLO learns latent parameters directly. 
+
+# 5 RESULTS 
+
+In this section, we present two sets of evaluations: (i) demonstrating that MultiLoReFT learns de-coupled representations that correctly encode shared and modality-specific information, and (ii) showing that these decoupled representations also serve as strong multimodal features that improve downstream prediction tasks by leveraging cross-modal learning during fine-tuning. 5.1 DECOUPLING SHARED AND MODALITY -S PECIFIC INFORMATION 
+
+The objective of disentangling shared and modality-specific signals is to assess the unique and com-mon information that each modality contributes in a multimodal setting. We compare MultiLoReFT against benchmark methods designed for disentanglement, and evaluate how the extracted compo-nents predict labels tied either to modality-specific or shared generative factors. On the simulated datasets, we have labels corresponding to one of the underlying generative factors (Shared, M1, and M2). We measure the predictability of each representation component ( zs, zm1,
+
+zm2) for these labels to test whether 1) the information is embedded in the right component, and 2) how well it is removed from the other components. Table 1 summarizes these results, measured as the performance of a logistic regression model trained on different representation components to predict the corresponding label. For continuous labels we measure the Mean Squared Error (MSE) and for categorical variables we use Accuracy. The underlined entries indicate the component that should perform best in predicting each label, and the ∆ entries show the performance gap between the representation components. The larger this gap, the better the decoupling. All benchmarks except for M1 label with APOLLO learn the most relevant information for each label in the right representation component. However, in many instances, especially with Simulation II, we see a low 
+
+∆ value, showing that information is replicated in the other components as well. MultiLoReFT produces a larger performance gap between correct and incorrect components compared to base-lines for the majority of labels, indicating that information has been more cleanly separated and removed from the wrong subspaces. In some cases, like the M2 label for Simulation I, APOLLO achieves a larger gap, but this is mainly due to a generally lower performance for all components. Figure 2 visualizes the subspaces learned by MultiLoReFT, demonstrating that the shared label is clearly separable in the shared space, while each modality-specific label is best separated in its own subspace. The real data further validate the performance of MultiLoReFT (Table 2) and demonstrate its utility on complex data. In Flickr (M1:Image, M2:Caption), where the label indicates whether captions are in English or French, the modality-specific representation of text is the only component that reliably encodes this information. This is also visible from the well-separated clusters of Caption Language in Figure 3. MultiLoReFT not only captures this information in the right subspace, but also has the largest ∆ among all tested methods. The shared representation performance is random, mean-ing the language information is completely removed from this subspace. In Crema-D (M1:Video, M2:Audio), which pairs video and audio, we consider three labels: (i) Sentence ID, best captured by the audio modality; (ii) Ethnicity; and (iii) Sex, both conveyed primarily through video. Mul-tiLoReFT aligns each label with the correct component, but also achieves larger performance gaps 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Shared Label  Modality I Label  Modality II Label  Matrix correla 4ons 
+
+## Simula 4on I plots: 
+
+Figure 2: Visualization of subspaces learned by MultiLoReFT on Simulation I. Each panel shows a 2D PCA projection of the shared or modality-specific representations, colored by the underlying generative label. For the shared label (left block), clear clustering emerges in the shared subspace while modality-specific subspaces remain unstructured, indicating successful disentanglement. For the modality I and II labels (middle and right blocks), the corresponding modality-specific subspace captures the structure, whereas the shared subspaces remain agnostic. between relevant and irrelevant components for Sentence ID and Ethnicity labels. Figure 3 scatter plots also demonstrate this separation. Table 1: Measuring the decoupling of shared and modality-specific information on simulated data. We report the predictability of different representation components ( zs, zm1, zm2) for the under-lying generative variables, using accuracy (Acc) for categorical and mean squared error (MSE) for continuous variables. Large performance gap ∆ indicates better decoupling. 
+
+Simulation I Simulation II Model Rep. Shared (Acc) ↑ M1 (MSE) ↓ M2 (MSE) ↓ Shared (Acc) ↑ M1 (Acc) ↑
+
+MultiLoReFT zs 1.000 ±0.000 0.048 ±0.014 0.059 ±0.010 1.000 ±0.000 0.537 ±0.075 
+
+zm1 0.798 ±0.144 0.009 ±0.003 0.081 ±0.006 0.500 ±0.000 1.000 ±0.000 
+
+zm2 0.756 ±0.115 0.075 ±0.007 0.005 ±0.002 0.598 ±0.196 0.500 ±0.000 
+
+∆ 0.223 ±0.130 0.038 ±0.014 0.054 ±0.010 0.451 ±0.098 0.463 ±0.075 
+
+DRIM-U zs 1.000 ±0.000 0.063 ±0.008 0.061 ±0.007 1.000 ±0.000 0.757 ±0.008 
+
+zm1 0.997 ±0.004 0.001 ±0.000 0.083 ±0.003 1.000 ±0.000 1.000 ±0.000 
+
+zm2 1.000 ±0.000 0.081 ±0.009 0.007 ±0.001 0.967 ±0.006 0.500 ±0.000 
+
+∆ 0.001 ±0.002 0.062 ±0.008 0.054 ±0.007 0.033 ±0.006 0.243 ±0.008 APOLLO zs 1.000 ±0.000 0.027 ±0.004 0.076 ±0.009 1.000 ±0.000 1.000 ±0.000 
+
+zm1 0.998 ±0.003 0.043 ±0.005 0.086 ±0.007 1.000 ±0.000 1.000 ±0.000 
+
+zm2 1.000 ±0.000 0.087 ±0.018 0.019 ±0.002 1.000 ±0.000 0.500 ±0.000 
+
+∆ 0.001 ±0.001 0.016 ±0.006 0.057 ±0.009 0.000 ±0.000 0.000 ±0.000 
+
+A key strength of MultiLoReFT lies in its adaptive rank learning. While benchmark methods re-quire fixing the size of shared and modality-specific representations, we set their dimensionalities equal to the final rank learned by MultiLoReFT. This provides the benchmarks with an advantage to leverage the learned ranks. Because as shown in Table 4 in the Appendix, benchmark performance degrades substantially when dimensionalities are varied, as they tend to redundantly encode infor-mation across all components. By contrast, MultiLoReFT automatically prunes the dimensionality of each subspace during training, directly discovering the appropriate structure from the data. Ta-ble 7 in the Appendix shows the inital and converged ranks for all experiments and demonstrates consistency across random seeds, yielding compact, stable representations. 5.2 LEARNING CROSS -MODAL INFORMATION 
+
+Multimodal training enables representations to capture information from complementary modali-ties, thereby improving downstream predictive performance. We demonstrate that fine-tuning with 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 Table 2: Measuring the decoupling of shared and modality-specific information on Crema-D and Flickr30. We report classification accuracy for each representation component ( zs1, zs2, zm1, zm2)across Sentence identity, Ethnicity, Sex, and Language tasks. High performance concentrated in the corresponding component, with others near chance, reflects effective separation of shared and modality-specific information. CremaD Flickr30 Model Rep. Sentence ID (Acc.) ↑ Ethnicity (Acc.) ↑ Sex (Acc.) ↑ Language (Acc.) ↑
+
+MultiLoReFT zs 0.303 ±0.041 0.500 ±0.000 0.788 ±0.033 0.500 ±0.000 
+
+zm1 0.244 ±0.021 0.981 ±0.031 1.000 ±0.000 0.500 ±0.000 
+
+zm2 0.975 ±0.010 0.500 ±0.000 0.500 ±0.000 1.000 ±0.001 
+
+∆ 0.672 ±0.042 0.481 ±0.031 0.212 ±0.033 0.500 ±0.001 
+
+DRIM-U zs 0.540 ±0.032 0.500 ±0.000 0.500 ±0.000 0.699 ±0.071 
+
+zm1 0.201 ±0.017 0.968 ±0.006 0.992 ±0.003 0.500 ±0.000 
+
+zm2 0.980 ±0.012 0.500 ±0.000 0.535 ±0.046 1.000 ±0.000 
+
+∆ 0.440 ±0.034 0.468 ±0.006 0.492 ±0.003 0.301 ±0.071 APOLLO zs 0.717 ±0.014 0.500 ±0.000 0.911 ±0.021 1.000 ±0.000 
+
+zm1 0.181 ±0.012 0.954 ±0.006 0.992 ±0.007 0.500 ±0.000 
+
+zm2 0.738 ±0.018 0.500 ±0.000 0.500 ±0.000 1.000 ±0.000 
+
+∆ 0.021 ±0.023 0.454 ±0.006 0.008 ±0.022 0.000 ±0.000 Sentence ID  Caption Language Sex 
+
+Figure 3: PCA visualizations of learned representations on Crema-D and Flickr30. Task-relevant information (Sentence ID, Sex, Caption Language) is concentrated in the corresponding modality-specific components, while other components remain closer to random structure, illustrating effec-tive disentanglement. MultiLoReFT yields representations that, when fused, outperform a range of benchmarks (Table 3a). These include both disentanglement-based methods and classical fusion strategies, all applied on top of pretrained embeddings. We also examine the impact of stronger pretrained unimodal encoders on multimodal performance in Appendix the A.5. As expected, more powerful encoders capture richer structure in the data and consequently yield higher-quality multimodal representations. Beyond fused representations, we show that fine-tuning also improves each individual modality by allowing it to incorporate information from the other. Figure 3b illustrates this effect by compar-ing the predictive performance of the fine-tuned embeddings Φ1 and Φ2 against their pretrained counterparts h1 and h2, as well as against contrastive fine-tuning baselines. Across both modali-ties, fine-tuning consistently enhances predictive accuracy, with MultiLoReFT achieving the largest gains. Notably, the weaker modality in each pair benefits the most, reflecting its ability to leverage cross-modal information provided by the stronger modality. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 
+
+(a) Method Simulation I Crema-D joint label emotion MultiLoReFT 0.009 ±0.002 0.460 ±0.031 
+
+APOLLO 0.009 ±0.001 0.313 ±0.012 DRIM-U 0.012 ±0.001 0.443 ±0.018 Late fusion 0.054 ±0.005 0.452 ±0.039 Cross attention 0.009 ±0.003 0.304 ±0.032 Contrastive 0.056 ±0.006 0.419 ±0.025 MI 0.016 ±0.002 0.296 ±0.022 (b) Modality 1 
+
+> Modality 2
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> Score
+> Joint label (Simulation I)
+> h
+> c
+> Modality 1
+> Modality 2
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Score
+> Emotion label (Crema-D)
+> h
+> c
+
+Table 3: Comparison of fusion methods for multimodal prediction on Simulation I (joint label pre-diction) and Crema-D (emotion prediction). (a) Table reports mean ± std of each baseline predicting the label using the fused representations. (b) Figure shows predictive performance of all modality representations, comparing pretrained representations h with representations fine-tuned with con-trastive learning c and using MultiLoReFT Φ, showing how finetuning enhances each representa-tions’ predictive power. 
+
+# 6 DISCUSSION 
+
+This work introduces M ULTI LOREFT, a low-rank representation fine-tuning framework for mul-timodal representation learning that disentangles shared and modality-specific information for im-proved interpretability. Our approach is model-agnostic, only requires learning a small number of parameters, and enables efficient multimodal fusion without sacrificing interpretability. M UL -
+
+> TI
+
+LOREFT uses an adaptive rank pruning that allows the model to learn the proper size of each subspace, improving both performance and insight into information. The broader importance of this contribution lies in its ability to leverage pretrained unimodal encoders for multimodal down-stream tasks. By decoupling shared from modality-specific information, MultiLoReFT provides interpretable insights into what each modality contributes, while adaptive rank learning offers a practical solution in settings where the dimensionality of shared and private subspaces is unknown. These properties make the method particularly valuable for scientific discovery domains such as healthcare, where interpretability and data efficiency are critical. In this work we focus on 2 modalities. While in theory, MultiLoReFT can be extended to multiple modalities by defining a set of projection subspaces for each combination of shared information and expanding the independence constraints across all relevant component pairs, this added granu-larity could also reduce interpretability as it becomes unclear what constitutes “shared information between two modalities but not a third”, or how such partial factors would be utilized in down-stream tasks. We therefore focus on the bimodal case for consistency with prior work and lack of ground truth labels for validation, but future work can investigate such extension. Also, Multi-LoReFT builds on top of frozen pretrained embeddings, its performance is inherently constrained by the quality and coverage of those unimodal encoders. If the pretrained representations fail to capture modality-relevant information, the gains from fine-tuning will be limited. Future work could explore coupling MultiLoReFT with joint pretraining, scaling to larger multimodal corpora, and extending the framework to more than two modalities. 
+
+# REFERENCES 
+
+Alexei Baevski, Yuhao Zhou, Abdelrahman Mohamed, and Michael Auli. wav2vec 2.0: A frame-work for self-supervised learning of speech representations. Advances in neural information processing systems , 33:12449–12460, 2020. Tadas Baltruˇ saitis, Chaitanya Ahuja, and Louis-Philippe Morency. Multimodal machine learning: A survey and taxonomy. IEEE Transactions on Pattern Analysis and Machine Intelligence , 41(2): 423–443, 2019. 10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 Said Yacine Boulahia, Abdenour Amamra, Mohamed Ridha Madi, and Said Daikh. Early, inter-mediate and late fusion strategies for robust deep learning-based multimodal action recognition. 
+
+Machine Vision and Applications , 32(6):121, 2021. Houwei Cao, David G Cooper, Michael K Keutmann, Ruben C Gur, Ani Nenkova, and Ragini Verma. Crema-d: Crowd-sourced emotional multimodal actors dataset. IEEE transactions on affective computing , 5(4):377–390, 2014. Mathilde Caron, Hugo Touvron, Ishan Misra, Herv´ e J´ egou, Julien Mairal, Piotr Bojanowski, and Armand Joulin. Emerging properties in self-supervised vision transformers. In Proceedings of the IEEE/CVF international conference on computer vision , pp. 9650–9660, 2021. Lin Chen, Jinsong Li, Xiaoyi Dong, Pan Zhang, Conghui He, Jiaqi Wang, Feng Zhao, and Dahua Lin. Sharegpt4v: Improving large multi-modal models with better captions. In European Confer-ence on Computer Vision , pp. 370–387. Springer, 2024. Sanyuan Chen, Chengyi Wang, Zhengyang Chen, Yu Wu, Shujie Chen, Ziqiang Liu, Jinyu Chen, Jian Li, Takuya Yoshioka, Xiangang Zhao, and Jia Deng. Wavlm: Large-scale self-supervised pre-training for full-stack speech processing. IEEE Journal of Selected Topics in Signal Processing ,16(6):1505–1518, 2022. Zhao Chen, Vijay Badrinarayanan, Chen-Yu Lee, and Andrew Rabinovich. Gradnorm: Gradient normalization for adaptive loss balancing in deep multitask networks. In International conference on machine learning , pp. 794–803. PMLR, 2018. Haotian Cui, Alejandro Tejada-Lapuerta, Maria Brbi´ c, Julio Saez-Rodriguez, Simona Cristea, Hani Goodarzi, Mohammad Lotfollahi, Fabian J Theis, and Bo Wang. Towards multimodal foundation models in molecular cell biology. Nature , 640(8059):623–633, 2025. Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT) , pp. 4171–4186, 2019. Desmond Elliott, Stella Frank, Khalil Sima’an, and Lucia Specia. Multi30k: Multilingual english-german image descriptions. In Proceedings of the 5th Workshop on Vision and Language , pp. 70–74. Association for Computational Linguistics, 2016. doi: 10.18653/v1/W16-3210. URL 
+
+http://www.aclweb.org/anthology/W16-3210 .F. Feng, Y. Yang, D. Cer, N. Arivazhagan, and W. Wang. Language-agnostic bert sentence embed-ding. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL) , pp. 878–891, 2022. Arthur Gretton, Kenji Fukumizu, Choon Teo, Le Song, Bernhard Sch¨ olkopf, and Alex Smola. A kernel statistical test of independence. Advances in neural information processing systems , 20, 2007. Paul Hager, Martin J Menten, and Daniel Rueckert. Best of both worlds: Multimodal contrastive learning with tabular and imaging data. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 23924–23935, 2023. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recog-nition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 770–778, 2016. Edward Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models. arXiv preprint arXiv:2106.09685 ,2021. Siddhant M Jayakumar, Wojciech M Czarnecki, Jacob Menick, Jonathan Schwarz, Jack Rae, Simon Osindero, Yee Whye Teh, Tim Harley, and Razvan Pascanu. Multiplicative interactions and where to find them. In International conference on learning representations , 2020. 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Will Kay, Joao Carreira, Karen Simonyan, Brian Zhang, Chloe Hillier, Sudheendra Vijaya-narasimhan, Fabio Viola, Tim Green, Trevor Back, Paul Natsev, Mustafa Suleyman, and Andrew Zisserman. The kinetics human action video dataset. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , pp. 4724–4733, 2017. Donggeun Kim and Taesup Kim. Missing modality prediction for unpaired multimodal learning via joint embedding of unimodal models. In European Conference on Computer Vision , pp. 171–187. Springer, 2024. Yanghao Li, Chao-Yuan Wu, Haoqi Fan, Karttikeya Mangalam, Bo Xiong, and Christoph Feicht-enhofer. Mvitv2: Improved multiscale vision transformers for classification and detection. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,pp. 4804–4814, 2022. Paul Pu Liang, Yiwei Lyu, Xiang Fan, Zetian Wu, Yun Cheng, Jason Wu, Leslie Chen, Peter Wu, Michelle A Lee, Yuke Zhu, et al. Multibench: Multiscale benchmarks for multimodal represen-tation learning. Advances in neural information processing systems , 2021(DB1):1, 2021. Paul Pu Liang, Yun Cheng, Xiang Fan, Chun Kai Ling, Suzanne Nie, Richard Chen, Zihao Deng, Nicholas Allen, Randy Auerbach, Faisal Mahmood, et al. Quantifying & modeling multimodal interactions: An information decomposition framework. Advances in Neural Information Pro-cessing Systems , 36:27351–27393, 2023a. Paul Pu Liang, Ziyin Liu, Louis-Philippe Morency, and Ruslan Salakhutdinov. Factorized con-trastive learning for multimodal representation. In International Conference on Machine Learning (ICML) , 2023b. Paul Pu Liang, Amir Zadeh, and Louis-Philippe Morency. Foundations & trends in multimodal machine learning: Principles, challenges, and open questions. ACM Computing Surveys , 56(10): 1–42, 2024. Yiyang Liu, James Chenhao Liang, Ruixiang Tang, Yugyung Lee, Majid Rabbani, Sohail A Di-anat, Raghuveer Rao, Lifu Huang, Dongfang Liu, Qifan Wang, et al. Re-imagining multimodal instruction tuning: A representation view. CoRR , 2025. Kazuki Miyazawa, Yuta Kyuragi, and Takayuki Nagai. Simple and effective multimodal learning based on pre-trained transformer models. IEEE Access , 10:29821–29833, 2022. Antonio Norelli, Marco Fumero, Valentino Maiorca, Luca Moschella, Emanuele Rodola, and Francesco Locatello. Asif: Coupled data turns unimodal models to multimodal without train-ing. Advances in Neural Information Processing Systems , 36:15303–15319, 2023. Alec Radford, Jong Wook Kim, Jack Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pam Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In Proceedings of the International Conference on Machine Learning (ICML) , 2021. Lucas Robinet, Ahmad Berjaoui, Ziad Kheil, and Elizabeth Cohen-Jonathan Moyal. Drim: Learn-ing disentangled representations from incomplete multimodal healthcare data. In International Conference on Medical Image Computing and Computer-Assisted Intervention , pp. 163–173. Springer, 2024. Sandra Steyaert, Marija Pizurica, Divya Nagaraj, Priya Khandelwal, Tina Hernandez-Boussard, An-drew J Gentles, and Olivier Gevaert. Multimodal data fusion for cancer biomarker discovery with deep learning. Nature machine intelligence , 5(4):351–362, 2023. Li Sun, Chaitanya Ahuja, Peng Chen, Matt D’Zmura, Kayhan Batmanghelich, and Philip Bontrager. Multi-modal large language models are effective vision learners. In 2025 IEEE/CVF Winter Con-ference on Applications of Computer Vision (WACV) , pp. 8617–8626. IEEE, 2025. Yao-Hung Hubert Tsai, Shaojie Bai, Makoto Yamada, Louis-Philippe Morency, and Ruslan Salakhutdinov. Multimodal transformer for unaligned multimodal language sequences. In Pro-ceedings of the Annual Meeting of the Association for Computational Linguistics (ACL) , 2019. 12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 Inacio Vieira, Will Allred, S´ eamus Lankford, Sheila Castilho, and Andy Way. How much data is enough data? fine-tuning large language models for in-house translation: Performance evalua-tion across multiple dataset sizes. In Proceedings of the 16th Conference of the Association for Machine Translation in the Americas (Volume 1: Research Track) , pp. 236–249, 2024. Zhengxuan Wu, Aryaman Arora, Zheng Wang, Atticus Geiger, Dan Jurafsky, Christopher D Man-ning, and Christopher Potts. Reft: Representation finetuning for language models. Advances in Neural Information Processing Systems , 37:63908–63962, 2024. Xiaohua Zhai, Xiao Wang, Basil Mustafa, Andreas Steiner, Daniel Keysers, Alexander Kolesnikov, and Lucas Beyer. Lit: Zero-shot transfer with locked-image text tuning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 18123–18133, 2022. Tengyue Zhang, Ruiwen Ding, Kha-Dinh Luong, and William Hsu. Evaluating an information theo-retic approach for selecting multimodal data fusion methods. Journal of Biomedical Informatics ,pp. 104833, 2025. Xiaohui Zhang, Jaehong Yoon, Mohit Bansal, and Huaxiu Yao. Multimodal representation learning by alternating unimodal adaptation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 27456–27466, 2024a. Xinyi Zhang, GV Shivashankar, and Caroline Uhler. Partially shared multi-modal embedding learns holistic representation of cell state. bioRxiv , pp. 2024–10, 2024b. Hong-Yu Zhou, Yizhou Yu, Chengdi Wang, Shu Zhang, Yuanxu Gao, Jia Pan, Jun Shao, Guangming Lu, Kang Zhang, and Weimin Li. A transformer-based representation-learning model with unified processing of multimodal input for clinical diagnostics. Nature biomedical engineering , 7(6): 743–755, 2023. Ying Zhou, Xuefeng Liang, Han Chen, Yin Zhao, Xin Chen, and Lida Yu. Triple disentangled representation learning for multimodal affective analysis. Information Fusion , 114:102663, 2025. 
+
+# A APPENDIX 
+
+A.1 SIMULATED DATASETS 
+
+To systematically evaluate the functionality of our approach, we constructed two simulated datasets in which the underlying generative factors are explicitly controlled and well understood. These datasets enable us to verify whether each component of MultiLoReFT captures the intended signal. We provide a brief description of each below. A.1.1 SIMULATION ISimulation I generates two modalities from a combination of shared and modality-specific latent variables, sampled from non-Gaussian distributions. In total, nhidden = 2 + 2 + 2 = 6 hidden variables are defined: two shared, two private to modality 1, and two private to modality 2. 
+
+Shared latent factors. The shared variables zs ∈ R2 are sampled from a binomial distribution and slightly perturbed with Gaussian noise to introduce variability: 
+
+zs ∼ Binomial (1 , 0.5) + N (0 , 0.01 I).
+
+Modality-specific latent factors. Each modality has its own private factors drawn from distinct non-Gaussian distributions: 
+
+zm1 ∼ Weibull (1 .5) × 0.3, zm2 ∼ Beta (3 , 2) .
+
+Labels. Each data point is annotated with four labels to probe shared and modality-specific infor-mation: 
+
+ys ∈ { 0, 1, 2, 3}, ym1 = X
+
+> j
+
+(zm1)j , ym2 = X
+
+> j
+
+(zm2)j , ycond =
+
+(P 
+
+> j
+
+(zm1)j if ys = 1 ,
+
+P 
+
+> j
+
+(zm2)j if ys = 0 ,
+
+13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 where ys is a multi-class label (0–3) derived from the unique binomial combinations of zs, ym1
+
+and ym2 are continuous regression targets based on private modality factors, and ycond conditionally selects between the two modalities. 
+
+Representations. Observed features are constructed by concatenating shared and modality-specific variables and projecting them into higher-dimensional spaces via learned linear encoders: 
+
+h1 = [ zm1, z s]W1, h2 = [ zm2, z s]W2,
+
+where W1, W 2 are projection matrices sampled from a uniform distribution. The output dimension-ality is set to 10 per modality. This design produces paired representations (h1, h 2) with explicitly defined non-Gaussian structure and labels that probe shared, private, and conditional information, enabling controlled evaluation of disentanglement and multimodal fusion. A.1.2 SIMULATION II Simulation II generates two modalities from five latent variables with structured dependencies that introduce both shared and modality-specific components, as well as partial overlap. 
+
+Shared latent factors. Two variables define the shared information: 
+
+z1 ∼ Ber (0 .5) , z2 = z1 + √0.0045 Γ(5 , 1) ,
+
+where z1 is a binary Bernoulli variable and z2 is a continuous variable correlated with z1 through an additive Gamma perturbation. 
+
+Modality-specific latent factors. Modality 1 has two private factors: 
+
+z3 ∼ Ber (0 .5) , z4 = 2 z2 + z3 + √0.00125 Γ(2 , 2) ,
+
+while Modality 2 has one private factor: 
+
+z5 = z2 + √0.0075 Γ(3 , 2) .
+
+This setup ensures overlap, as z2 influences both z4 and z5, creating cross-modal dependencies while maintaining modality-specific variation. 
+
+Labels. Labels are directly tied to the latent variables, enabling controlled evaluation of shared versus modality-specific representations. Binary classification tasks can be derived from z1 (shared) or z3 (modality 1 specific), while regression targets can be defined from z2 (shared), z4 (modality 1 specific), or z5 (modality 2 specific). 
+
+Representations. As in Simulation I, observed features for each modality are constructed by concatenating the corresponding shared and private variables and projecting them into higher-dimensional feature spaces via random linear transformations: 
+
+h1 = [ zm1, z s]W1, h2 = [ zm2, z s]W2,
+
+where W1, W 2 are sampled from uniform distributions. The output dimensionality is set to 40 and 80 for each modality. This design complements Simulation I by introducing structured overlap and dependence between modalities, testing whether models can disentangle shared information from modality-specific sig-nals in the presence of cross-modal dependencies. A.2 SUPPLEMENTARY RESULTS 
+
+A.2.1 THE EFFECT OF LEARNING THE RIGHT RANK IN THE PERFORMANCE OF BENCHMARKS 
+
+As discussed in the results section, we size benchmark representations to match the ranks learned by MultiLoReFT. This choice is critical, since the appropriate subspace dimensionality is rarely known in advance and strongly affects performance. Table 4 reports benchmark results on simulated settings when their representation size is instead fixed to the initial input dimensionality used by MultiLoReFT. In this case, performance degrades noticeably, with substantial leakage of informa-tion across components, underscoring the importance of adaptive rank selection. 14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 Table 4: Benchmark performance on simulated datasets when representation size is fixed to the initial input dimensionality used by MultiLoReFT. Performance degrades compared to using the learned ranks, with clear leakage of information across components, highlighting the importance of learning rank. 
+
+Simulation I Simulation II Model Rep. Shared (Acc.) Shared (Sill.) M1 (MSE) M2 (MSE) Shared (Acc.) M1 (Acc.) APOLLO zs1 1.00 ±0.00 0.838 ± 0.006 0.006 ± 0.001 0.083 ± 0.012 1.000 ±0.000 1.000 ±0.000 
+
+zs2 1.00 ±0.00 0.801 ± 0.007 0.080 ± 0.005 0.001 ± 0.000 1.000 ±0.000 0.500 ±0.000 
+
+zm1 1.00 ±0.00 0.446 ± 0.021 0.005 ± 0.002 0.089 ± 0.004 1.000 ±0.000 1.000 ±0.000 
+
+zm2 1.00 ±0.00 0.487 ± 0.049 0.081 ± 0.012 0.001 ± 0.000 1.000 ±0.000 0.500 ±0.000 DRIM-U zs1 1.00 ±0.00 0.753 ±0.005 0.037 ±0.004 0.089 ±0.012 0.686 ±0.021 0.500 ±0.000 
+
+zs2 1.00 ±0.00 0.760 ±0.006 0.080 ±0.013 0.032 ±0.006 0.706 ±0.018 0.500 ±0.000 
+
+zm1 1.00 ±0.00 0.293 ±0.015 0.000 ±0.000 0.084 ±0.006 1.000 ±0.000 1.000 ±0.000 
+
+zm2 1.00 ±0.00 0.381 ±0.007 0.082 ±0.010 0.002 ±0.000 1.000 ±0.000 0.500 ±0.000 
+
+A.2.2 ABLATION STUDY FOR PRUNING AND STAGING 
+
+To assess the contribution of individual design choices in MultiLoReFT, we conduct ablation experi-ments removing either the pruning mechanism or the staged training procedure. Results are summa-rized in Table 5. Both components are critical: eliminating pruning leads to inflated subspace sizes and information leakage across components, while skipping staged training reduces stability and weakens decoupling. The full model, which combines both pruning and staged optimization, con-sistently achieves the highest predictive accuracy across simulated and real datasets, underscoring their complementary benefits. Table 5: Ablation study of MultiLoReFT on simulated and real datasets. Removing either the pruning mechanism or the staged training procedure reduces performance, while the full model combining both achieves the best results. 
+
+Simulation I Simulation II Model Rep. Shared (Acc.) M1 (MSE) M2 (MSE) Shared (Acc.) M1 (Acc.) MultiLoReFT zs 1.000 ±0.000 0.048 ±0.014 0.059 ±0.010 1.000 ±0.000 0.537 ±0.075 
+
+zm1 0.798 ±0.144 0.009 ±0.003 0.081 ±0.006 0.500 ±0.000 1.000 ±0.000 
+
+zm2 0.756 ±0.115 0.075 ±0.007 0.005 ±0.002 0.598 ±0.196 0.500 ±0.000 MultiLoReFT zs 1.000 ±0.000 0.002 ±0.001 0.018 ±0.007 1.000 ±0.000 0.500 ±0.000 (No pruning) zm1 0.994 ±0.006 0.000 ±0.000 0.083 ±0.007 0.500 ±0.000 1.000 ±0.000 
+
+zm2 0.961 ±0.034 0.078 ±0.008 0.004 ±0.00 0.664 ±0.099 0.500 ±0.000 MultiLoReFT zs 1.000 ±0.000 0.066 ±0.013 0.075 ±0.008 1.000 ±0.000 0.705 ±0.165 (No staging) zm1 0.817 ±0.138 0.008 ±0.003 0.082 ±0.007 0.500 ±0.000 1.000 ±0.000 
+
+zm2 0.642 ±0.269 0.076 ±0.005 0.016 ±0.016 0.774 ±0.229 0.500 ±0.000 
+
+Furthermore, Table 6 shows the effect of different components of the loss term in the overall per-formance of MultiLoReFT. Each row presents the results with one component removed. We see that for modality-specific labels, the orthogonality loss alone is sufficient to encourage decoupling, since these targets depend mainly on unimodal geometry—each modality’s signal lies on its own manifold, so ensuring linear disjointness prevents interference without needing additional statistical constraints. In contrast, the shared categorical label relies on both orthogonality and independence, because it emerges from the joint statistical structure across modalities; orthogonality separates the spaces geometrically, while independence removes nonlinear correlations and redundancy, allowing the shared subspace to capture only the truly cross-modal information rather than correlated modality-specific noise. Mutual-information (MI) retention loss preserves unimodal content. Without MI, linear-probe and few-shot performance drop across all subspaces (shared and private). 15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 Table 6: Ablation of the MultiLoReFT objective. The first row is the full model. The next three rows remove the indicated loss term (one at a time). The final row trains with fixed loss weights instead of automatic weighting via GradNorm. 
+
+Simulation I Simulation II Model Rep. Shared (Acc) ↑ M1 (MSE) ↓ M2 (MSE) ↓ Shared (Acc) ↑ M1 (Acc) ↑
+
+MultiLoReFT zs 1.000 ±0.000 0.048 ±0.014 0.059 ±0.010 1.000 ±0.000 0.537 ±0.075 
+
+zm1 0.798 ±0.144 0.009 ±0.003 0.081 ±0.006 0.500 ±0.000 1.000 ±0.000 
+
+zm2 0.756 ±0.115 0.075 ±0.007 0.005 ±0.002 0.598 ±0.196 0.500 ±0.000 
+
+∆ 0.223 ±0.130 0.038 ±0.014 0.054 ±0.010 0.451 ±0.098 0.463 ±0.075 MultiLoReFT zs 1.000 ±0.000 0.029 ±0.034 0.021 ±0.009 1.000 ±0.000 0.500 ±0.000 - orthogonality zm1 1.000 ±0.000 0.003 ±0.000 0.081 ±0.006 0.748 ±0.204 1.000 ±0.000 
+
+zm2 0.998 ±0.004 0.072 ±0.007 0.005 ±0.002 1.000 ±0.000 0.500 ±0.000 
+
+∆ 0.001 ±0.002 0.026 ±0.034 0.016 ±0.009 0.126 ±0.102 0.500 ±0.000 MultiLoReFT zs 1.000 ±0.000 0.064 ±0.006 0.069 ±0.012 1.000 ±0.000 0.599 ±0.140 - independence zm1 0.999 ±0.002 0.006 ±0.001 0.080 ±0.006 0.735 ±0.051 1.000 ±0.000 
+
+zm2 0.993 ±0.007 0.073 ±0.007 0.005 ±0.003 1.000 ±0.001 0.500 ±0.000 
+
+∆ 0.004 ±0.005 0.058 ±0.006 0.064 ±0.012 0.133 ±0.026 0.401 ±0.140 MultiLoReFT zs 0.931 ±0.098 0.062 ±0.018 0.063 ±0.013 0.987 ±0.019 0.629 ±0.095 - MI zm1 0.835 ±0.066 0.006 ±0.001 0.081 ±0.007 0.599 ±0.071 0.746 ±0.180 
+
+zm2 0.850 ±0.139 0.073 ±0.008 0.008 ±0.004 0.570 ±0.100 0.500 ±0.000 
+
+∆ 0.089 ±0.103 0.056 ±0.018 0.055 ±0.013 0.403 ±0.064 0.117 ±0.204 MultiLoReFT zs 1.000 ±0.000 0.067 ±0.013 0.063 ±0.021 1.000 ±0.000 0.597 ±0.069 - GradNorm zm1 1.000 ±0.000 0.005 ±0.001 0.079 ±0.005 0.997 ±0.004 1.000 ±0.000 
+
+zm2 0.983 ±0.025 0.079 ±0.009 0.020 ±0.011 1.000 ±0.000 0.500 ±0.000 
+
+∆ 0.009 ±0.013 0.062 ±0.013 0.043 ±0.021 0.002 ±0.002 0.403 ±0.069 
+
+A.3 RANK -ADAPTATION 
+
+Table 7 reports the initial and converged dimensionalities of the shared ( zs) and modality-specific (zm1, zm2) subspaces across different datasets. These results are averaged over multiple random seeds, with standard deviations shown to reflect variability. We observe that M ULTI LOREFT con-sistently prunes high-dimensional initializations down to compact and stable subspaces, with only minor variation across runs. This consistency highlights that the model is able to reliably identify the rank of shared versus modality-specific information. The results presented in the main paper are achieved with these compact representations, demon-strating that strong disentanglement and predictive performance do not require large subspace sizes. Instead, the rank adaptation procedure ensures both efficiency and interpretability, by automatically converging to low-dimensional but informative representations across datasets. Table 7: Shared and modality-specific subspace dimensionalities learned by MultiLoReFT. Entries show the initial rank → converged rank mean and standard deviation on 4 different random seeds 
+
+Simulation I Simulation II Crema-D Flickr 
+
+zs 10 → 5.2 ± 0.38 40 → 4.0 ± 0.70 700 → 29 .75 ± 7.22 700 → 310 ± 3.0
+
+zm1 10 → 4.6 ± 0.48 40 → 2.0 ± 0.00 700 → 113 .5 ± 4.36 700 → 142 ± 5.0
+
+zm2 10 → 4.6 ± 0.48 40 → 2.2 ± 0.42 700 → 196 .75 ± 10 .68 700 → 105 ± 2.0
+
+A.4 PARAMETER SIZE COMPARISON 
+
+A central motivation behind PEFT methods is to achieve parameter-efficient fine-tuning . Rather than updating all weights of large pretrained encoders, recent methods introduce lightweight modules whose size scales with the input representation dimension d and the learned subspace size d∗. This allows fair comparison across benchmarks in terms of their parameter overhead. For MultiLoReFT , the number of trainable parameters is on the order of: 
+
+#params ≈ 770 d d ∗,
+
+16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 corresponding to the projection matrices and small transformation functions. Importantly, we begin with a large parameter space but prune down subspaces dynamically during training, which further reduces the effective size. For APOLLO (Zhang et al., 2024b), the parameter cost includes adaptor layers and explicit sample-wise representations, yielding: 
+
+#params ≈ 2048 d d ∗ + 3 d∗ntrain ,
+
+where the second term scales linearly with the number of training samples ntrain , making the method less efficient for large datasets. For DRIM-U (Robinet et al., 2024), adaptor heads, decoders, and discriminators introduce higher overhead: 
+
+#params ≈ 1536 d d ∗ + 65 .5d∗.
+
+These expressions approximate d∗ as the average subspace size across shared and modality-specific components. While exact sizes may vary, the relative scaling highlights the efficiency of Multi-LoReFT, enabling scalable fine-tuning in multimodal settings and making training feasible under limited computational budgets. A.5 EFFECT OF UNIMODAL ENCODER STRENGTH ON MULTIMODAL PERFORMANCE 
+
+Table 8 compares multimodal performance on different pre-trained encoders on the CREMA-D emotion recognition task. In the first configuration (Encoders I) , we use simpler unimodal en-coders, Wav2Vec 2.0 Base pretrained on Librispeech-960h (Baevski et al., 2020) for audio and 3D ResNet-18 pretrained on Kinetics-400 (He et al., 2016; Kay et al., 2017) for video. In the second configuration (Encoders II) , we replace these with stronger encoders, MViT-V2-S pretrained on Kinetics-400 (Li et al., 2022) for video and WavLM-Base+ for audio (Chen et al., 2022). As shown, all multimodal baselines improve with higher-capacity unimodal encoders, but the gains are more pronounced for MultiLoReFT. Importantly, the relative ordering of methods remains sta-ble, indicating that MultiLoReFT’s advantage is complementary to the underlying encoder strength. This property is an advantage of methods that leverage unimodal encoders, as unimodal models con-tinue to advance, their improved representational quality can be benefited from to construct higher-performing multimodal representations, even under limited multimodal supervision. Table 8: The effect of Unimodal Encoder Strength on Multimodal Performance on Crema-D dataset for emotion detection. Encoders I setup uses relatively simpler video and audio encoders while Encoders II setup uses more advanced pretrained models. Method Crema-D emotion Crema-D emotion Encoders I Encoders II MultiLoReFT 0.460 ±0.031 0.810 ±0.017 
+
+APOLLO 0.313 ±0.012 0.534 ±0.017 DRIM-U 0.443 ±0.018 0.733 ±0.008 Late fusion 0.452 ±0.039 0.792 ±0.017 Cross attention 0.304 ±0.032 0.795 ±0.022 Contrastive 0.419 ±0.025 0.764 ±0.009 MI 0.296 ±0.022 0.791 ±0.022 17

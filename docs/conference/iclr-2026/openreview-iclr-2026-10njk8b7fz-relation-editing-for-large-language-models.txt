@@ -1,0 +1,1599 @@
+Title: 148_Relation_Editing_for_Large.pdf
+
+URL Source: https://openreview.net/pdf?id=10nJk8B7FZ
+
+Number of Pages: 36
+
+Markdown Content:
+> 000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053
+
+Under review as a conference paper at ICLR 2026 
+
+# RELATION EDITING FOR LARGE LANGUAGE MODELS 
+
+Anonymous authors 
+
+Paper under double-blind review 
+
+## ABSTRACT 
+
+Knowledge editing is a critical technique for the routine updating and mainte-nance of LLMs. Existing research predominantly assumes changes only to the object within subject-relation-object triples, with minimal exploration into tech-niques for editing the relation. We term this task Relation Editing (distinct from the established “Object Editing” paradigm). We first construct a dedicated rela-tion editing dataset and benchmark existing algorithms, revealing a critical flaw: even with successful edits, prominent methods suffer from the persistent retention of outdated information, with rates reaching as high as 98.20%. Editing failures stem primarily from two sources: the persistent retention of outdated relationships and the presence of challenging editing samples. To address the first issue, we propose a novel relation editing framework called Forgetting-and-Editing ( FE ). We theoretically show that existing forgetting methods (i.e., model unlearning) are unsuitable for this purpose and, to this end, introduce a new target assign-ment strategy within our framework. To mitigate the second challenge, we intro-duce a self-paced learning strategy, instantiated in a new algorithm named self-paced AlphaEdit ( SPaEdit ). We conduct extensive experiments on our com-piled relation-editing dataset and established object-editing benchmarks. Results demonstrate that our proposed relation editing strategy achieves satisfactory per-formance on the relation editing task. In addition, SPaEdit outperforms existing SOTA methods on object-editing benchmarks. Our research also suggests further study is warranted in relation editing, particularly on forgetting existing relations. 
+
+## 1 INTRODUCTION 
+
+Knowledge editing has emerged as a critical technique for precisely modifying factual associations within LLMs without costly full retraining (Cao et al., 2021). This capability addresses the fun-damental challenge posed by the static nature of LLMs, providing an efficient mechanism to up-date their knowledge base with new facts or correct existing inaccuracies. The field has converged on two distinct architectural strategies: weight-space editors that surgically alter transformer pa-rameters (e.g., MEMIT’s layer-wise scaling (Meng et al., 2023)), versus non-invasive approaches employing external memory or prompt-based adaptation (e.g., MELO’s dynamic LoRA (Yu et al., 2024)). While effective in isolation, these methods face inherent trade-offs between edit precision and knowledge retention stability. The recent breakthrough AlphaEdit (Fang et al., 2025) introduces a novel null-space constrained approach that theoretically guarantees knowledge preservation while enabling precise edits. A knowledge triple takes the form (s, r, o ), for subject s, relation r, and object o. Most current research on knowledge editing focuses on changing the object ( (s, r, o ) → (s, r, o ∗)) (Wang et al., 2024b), but pays little attention to changing the relation ( (s, r, o ) → (s, r ∗, o )), even though such updates are common in practice. For instance, changing “Zinedine Zidane is a player for Real Madrid” to “Zinedine Zidane is a coach of Real Madrid” means updating the relation while keeping the subject and object the same. This is a frequent type of change that existing methods overlook. We call editing that targets relation changes “Relation Editing”. In contrast, standard knowledge editing is called “Object Editing”. The easiest way to handle relation editing is to simply give the new triple (s, r ∗, o ) to current object-editing methods. If successful, separate research would be unnecessary. To test this idea, we created a relation-editing dataset named ReEditBench from available object-editing benchmarks. We then evaluated popular object-editing techniques including 1054 055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 
+
+Under review as a conference paper at ICLR 2026 ROME (Meng et al., 2022), MEMIT (Meng et al., 2023), and AlphaEdit (Fang et al., 2025). All methods performed poorly: first, although models learn the new triple (s, r ∗, o ), they still strongly recall the old one (e.g., models edited with AlphaEdit keep 98.20% of the original knowledge). Second, these methods perform especially poorly on hard-to-edit relations. Our initial analysis shows that the editing success rate decreases as the difference grows between the model’s knowledge of (s, r ∗) and the object o.To bridge the gap, we propose a Forgeting-and-Editing ( FE ) strategy that enables models to learn new relations while forgetting old ones, thereby allowing existing object-editing algorithms to be adapted for relation-editing tasks. However, our theoretical analysis shows that current model un-learning strategies are inapplicable for direct use. Therefore, we propose a new target assignment scheme for old relation forgetting. For the hard relation editing problem, we draw inspiration from the classical self-paced learning concept (Kumar et al., 2010) and propose a self-paced knowledge editing algorithm called Self-paced AlphaEdit ( SPaEdit ). This method first learns easier samples based on the difficulty levels of knowledge tuples, then progressively incorporates more challenging ones for iterative optimization, ultimately selecting the optimal solution through validation. Tests on our constructed relation-editing dataset demonstrate that our FE strategy significantly en-hances the performance of object-editing methods beyond their standalone application. Specifically, on the Success metric, the FE strategy led to an average performance improvement of 10.07%, with a peak improvement of 34.49%. Notably, combining the FE strategy with the proposed SPaEdit yielded the best relation-editing performance. We also directly applied SPaEdit to existing object-editing benchmark datasets (Levy et al., 2017; Meng et al., 2022) and found that it outperformed the representative SOTA methods, including AlphaEdit. Additionally, a series of ablation experiments and sensitivity analyses consistently demonstrated the superiority of the proposed FE strategy and SPaEdit method. 
+
+## 2 PROBLEM DESCRIPTION AND ANALYSIS 
+
+2.1 PROBLEM DESCRIPTION 
+
+Knowledge editing aims to update factual triples stored in LLMs through single or sequential ed-its (Wang et al., 2024b). Unlike existing knowledge editing which modifies the object o in a fact tuple (s, r, o ) (referred to object editing in this study), relation editing alters the relation r rather than object o, resulting in a new tuple (s, r ∗, o )1. In the locate-then-edit paradigm (Zhang et al., 2025; Pan et al., 2025), each edit applies a perturbation ∆ to the model parameters W ∈ Rd1×d0 , where d0
+
+and d1 denotes the dimensions of the FFN’s intermediate and output layers. Specifically, for updat-ing h relation facts, let K1 = [ k1 | k2 | · · · | kh] ∈ Rd0×h and K′ 
+
+> 1
+
+= [ k′ 
+
+> 1
+
+| k′ 
+
+> 2
+
+| · · · | k′
+
+> h
+
+] ∈ Rd0×h
+
+be the keys for the raw and the updated subject-relation pairs, respectively. The value matrix 
+
+V1 = [ v1 | v2 | · · · | vh] ∈ Rd1×h remains unchanged. To our knowledge, there is currently no dedicated research work focusing on relation editing. While RaKE (Wei et al., 2023) briefly touches upon it, the task itself remains largely overlooked by the research community. Directly applying the solution approach of object editing, the following optimization objective min-imizing the error for updated relations while preserving existing knowledge is obtained: 
+
+∆ = arg min 
+
+> ˜∆
+
+∥(W + ˜∆)K′ 
+
+> 1
+
+− V1∥2 
+
+> F
+
+. (1) Table 1: Statistics of ReEditBench.   
+
+> Data Source New Relation Conditional Relation Total
+
+ZsRE 2,000 2,000 4,000 
+
+Wikidata 1,700 2,218 3,918 
+
+Total 3,700 4,218 7,918 
+
+At first glance, existing object editing meth-ods such as MEMIT and AlphaEdit can be di-rectly applied in principle, essentially solving the problem based on variations of Eqn. 1. To verify whether object editing methods can be directly applied to relations, we constructed ReEditBench, a new benchmark for relation editing. It was built through a rigorous four-stage pipeline, with full details provided in Appendix A.1. First, we curate initial high-quality facts 
+
+> 1It should be noted that this study does not consider the scenario in which the user specifies a new object for the original subject and object; instead, we assume that no relevant information is provided by the user.
+
+2108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 
+
+Under review as a conference paper at ICLR 2026 100% 50% 0% 50% 100% 
+
+> Rate
+> PRUNE on LLaMA3-8B
+> NSE on LLaMA3-8B
+> MEMIT on LLaMA3-8B
+> FT on LLaMA3-8B
+> ROME on LLaMA3-8B
+> PRUNE on GPT2-XL
+> NSE on GPT2-XL
+> ROME on GPT2-XL
+> NSE on GPT-J-6B
+> ROME on GPT-J-6B
+> FT on GPT2-XL
+> FT on GPT-J-6B
+> RECT on LLaMA3-8B
+> PRUNE on GPT-J-6B
+> AlphaEdit on LLaMA3-8B
+> RECT on GPT2-XL
+> MEMIT on GPT2-XL
+> RECT on GPT-J-6B
+> MEMIT on GPT-J-6B
+> AlphaEdit on GPT2-XL
+> AlphaEdit on GPT-J-6B
+> 32%
+> 45%
+> 48%
+> 49%
+> 50%
+> 54%
+> 59%
+> 61%
+> 62%
+> 63%
+> 69%
+> 70%
+> 76%
+> 77%
+> 79%
+> 82%
+> 85%
+> 97%
+> 97%
+> 98%
+> 99%
+> 55%
+> 53%
+> 51%
+> 64%
+> 50%
+> 52%
+> 58%
+> 61%
+> 62%
+> 63%
+> 71%
+> 66%
+> 72%
+> 79%
+> 68%
+> 78%
+> 80%
+> 91%
+> 92%
+> 91%
+> 98%
+> Efficacy
+> Retention
+
+(a) Efficacy vs. Retention across methods 0 5 10 15 20 25 30  
+
+> Sample Difficulty
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> Editing Success Rate
+> Sample Type
+> Hard Samples
+> Easy Samples
+
+(b) Difficulty vs. Efficacy rate 
+
+Figure 1: Analysis of key challenges in relation editing. (a) The bar chart compares editing efficacy (blue) with Retention of the original fact (pink), showing that old knowledge persists. (b) The scatter plot shows a strong negative correlation between sample difficulty and Efficacy rate, indicating performance decay on challenging samples. from established knowledge-intensive benchmarks, primarily ZsRE (Levy et al., 2017) and Wiki-data (Vrandeˇ ci´ c & Kr¨ otzsch, 2014). Second, a generator LLM (DeepSeekV3 (Liu et al., 2024a)) automatically reframes these facts into relation-editing tasks, guided by two distinct patterns: new relation and conditional relation. Third, all candidates are filtered automatically for structural in-tegrity and semantic plausibility using scripts and a verifier LLM (DeepseekR1 (Guo et al., 2025)). Finally, to quantify the dataset’s quality, we manually validated a 30% random sample and found that 98.5% of the instances were valid, confirming the high quality of our generation pipeline. This process yields 7,918 high-quality editing instances, with a detailed breakdown provided in Table 1. 2.2 RESULTS DIRECTLY WITH OBJECT EDITING 
+
+To investigate the direct applicability of existing object editing methods to the relation editing task, we conducted a series of empirical evaluations. Our analysis of the results reveals two distinct patterns. First, as shown in Fig. 1(a), while most editing methods achieve high success rates in acquiring the new knowledge (blue bars), they concurrently retain the original, conflicting knowl-edge at exceptionally high rates (pink bars). This creates a near-symmetrical visual pattern; for instance, AlphaEdit on GPT-J (Wang & Komatsuzaki, 2021) pairs a success rate of approximately 99% with a retention rate of 98%. Second, Fig. 1(b) demonstrates a strong negative correlation between the editing success rate and sample difficulty (measured as the magnitude of the initial residual, ∥vi − Wk′
+
+> i
+
+∥22). The data clearly forms two distinct clusters, with “easy samples” (blue) concentrated in a high-success region and “hard samples” (pink) occupying a low-success region. To delve deeper into the intrinsic nature of these “hard samples”, we further investigated the role of semantic similarity between the original relation r and the target r∗. Our analysis (detailed in Appendix C.5) uncovers an intriguing trade-off: relations with high semantic proximity are easier to learn but significantly harder to forget, whereas semantically divergent ones show the opposite trend. However, while semantic analysis offers valuable explanatory insights, we find that the com-putational residual remains the superior metric for quantifying difficulty in practice. This is because semantic similarity captures only the linguistic dimension of difficulty. In contrast, the compu-tational residual acts as a holistic proxy that aggregates all latent influencing factors—including semantics, knowledge frequency, and structural complexity. It provides a direct, quantifiable sig-nal of the actual optimization barrier the model faces, making it a more robust and computationally efficient standard for our curriculum learning than semantic metrics alone. These observations point to two fundamental and distinct limitations of current approaches in rela-tion editing. First, the near-symmetrical pattern of success and retention indicates that these methods perform an additive operation rather than a corrective overwrite, resulting in the problematic coex-istence of both new and old knowledge. Second, they consistently fail on high-difficulty editing 3162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 
+
+Under review as a conference paper at ICLR 2026 samples. We therefore conclude that existing methods are ill-suited for this task, as they fail to properly erase outdated information and lack the efficacy required for challenging edits. 
+
+## 3 METHODOLOGY O1 
+
+> O2
+> O3
+> O4
+> O5
+> O6
+> O7
+> O8
+> O9
+> O10
+> O11
+> O12
+> O13
+> O14
+> O15
+> O16
+> O17
+> O18
+> O19
+> O20
+> O21
+> O22
+> O23
+> O24
+> O25
+> O26
+> O27
+> O28
+> O29
+> O30
+> O31
+> O32
+> Original (O1 O32)
+> N1
+> N2
+> N3
+> N4
+> N5
+> N6
+> N7
+> N8
+> N9
+> N10
+> N11
+> N12
+> N13
+> N14
+> N15
+> N16
+> N17
+> N18
+> N19
+> N20
+> N21
+> N22
+> N23
+> N24
+> N25
+> N26
+> N27
+> N28
+> N29
+> N30
+> N31
+> N32
+> New (N1 N32)
+> Similarity between Original (O) and New (N) Knowledge
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Cosine similarity
+
+Figure 2: Similarity heatmap between original and new relation keys. SPaEdit         
+
+> Forget
+> Diff
+> Step
+> Diff
+> Step
+> Update λ
+> Edit
+> Forgeting Data
+> Editing Data
+> Data
+> Select
+> (Forgeting Data)
+> (Editing Data)
+> Data
+> Select ˆNew object vector ( ) ( ) [ ( )( )] ooIDK o
+
+= + −υ υ υυ1 ˆ( ( )) ok , υ1( ( )) ok , υRelation 
+
+Editing 
+
+ 
+
+ 
+
+ ( , , )s r o ( , *, )s r o1( , ( )) ok υ
+
+Figure 3: Overview of our proposed framework for relation editing, combining a novel forgetting-and-editing (FE) strat-egy with a Self-paced AlphaEdit (SPaEdit) algorithm. The empirical findings from the previous section indicate that the retention of the old tuple (s, r, o )
+
+constitutes the primary failure point when existing object editing methods are directly applied to relation editing. Hence, a highly intuitive approach involves first forgetting the old tuple and then incorporating new knowledge. This strategy has in fact been mentioned in several studies on object editing (Ni et al., 2024; Jung et al., 2025). The present study also adopts this general strategy; however, we will begin by introducing our theoretical analysis, which demonstrates that existing model unlearning strategies are largely ineffective when directly applied to old relation forgetting. Based on this analysis, we further propose a novel unlearning method. To mitigate degradation on difficult cases, we further develop Self-Paced AlphaEdit (SPaEdit), which performs editing under an easy-to-hard curriculum inspired by self-paced learning. 3.1 THEORETICAL INVESTIGATION 
+
+Conventionally, LLM unlearning methods (Yao et al., 2024; Wang et al., 2025) set the prediction target for data to be forgotten either to “I don’t know” (IDK) or to a random response. However, as will be explained mathematically, both strategies are ill-suited for old relation forgetting under linear regression-based editing methods such as AlphaEdit and MEMIT. Following prior studies (Meng et al., 2022; Fang et al., 2025) that formulate knowledge editing as a linear regression task, we model the forgetting of old relations within this framework to facilitate understanding. We consider a linear homogeneous regression problem ( y = w⊤x) with a training set D = {(xi, y i)} for i = 1 , . . . , N , assuming yi ∈ [0 , 1] . The set D is split evenly into Dg (normal data) and Db (forgetting data), for which we examine two cases: (1) fixing each yi in Db to a constant 
+
+ˆy (simulating all objects changed to IDK), and (2) setting each yi in Db to a random value (simulating random object assignments). By minimizing MSE, we obtain: 
+
+w∗ = ( X⊤X)−1(X⊤ 
+
+> g
+
+yg + X⊤ 
+
+> b
+
+yb), (2) where X ∈ RN ×d is the feature matrix and y ∈ RN is the label vector, X⊤ 
+
+> g
+
+yg represents the signal from the normal data, and X⊤ 
+
+> b
+
+yb represents the term from the forgetting data. The subsequent anal-ysis will focus on how this term distorts the optimal solution w∗. Let w∗ 
+
+> g
+
+be the solution achieved by only applying the normal data Dg . In the first case, with mathematical deduction, Eqn. 2 yields: 
+
+w∗ 
+
+> const
+
+= ( X⊤X)−1(X⊤ 
+
+> g
+
+yg + ˆyN 
+
+2 u) = w∗ 
+
+> g
+
++ ˆyN 
+
+2 (X⊤X)−1u, (3) where u = 1
+
+> |Db|
+
+P 
+
+> i∈Db
+
+xi. This implies that all predictions will be systematically distorted to-ward ˆy (our theoretical conclusion closely aligns with a recent empirical observation in LLM un-learning (Yuan et al., 2025): when the target token is identical, the output probability of the target 4216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 
+
+Under review as a conference paper at ICLR 2026 token (i.e., IDK in the case) increases for both unlearning and normal inputs), and the degree of distortion depends on the correlation between the new input and (X⊤X)−1u.In the second case, with mathematical deduction, we can obtain the expected solution as follows: 
+
+E[w∗
+
+> rand
+
+] = ( X⊤X)−1(X⊤ 
+
+> g
+
+yg + E[X⊤ 
+
+> b
+
+yb]) = w∗ 
+
+> g
+
++ ( X⊤X)−1(0 .5|Db|E[x]) . (4) Similar to the first case, the random noise introduces a systematic bias in expectation in both normal and unlearning samples, pulling the solution toward a direction determined by the irrelevant feature mean, which forces the predicted values to skew toward 0.5 (average response in LLMs). Our theoretical analysis shows that when using current model editing methods to forget old relations, standard unlearning strategies cause normal knowledge to become systematically distorted. 3.2 KNOWLEDGE FORGETTING VIA TARGET SMOOTHING 
+
+Theoretical analysis shows conventional target assignment strategies for LLM unlearning are in-effective for knowledge forgetting. Thus, the key to our approach is determining a suitable object, denoted as ˆo, for the triplet (s, r, o ) to be unlearned. This ˆo should neither be uniform across all sam-ples nor randomly assigned. Furthermore, statistical analysis of the vector representations of (s, r )
+
+and (s, r ∗) reveals very high similarity across the dataset, as shown in Fig. 2. Given the properties of linear regression, an additional guideline for selecting ˆo is that the difference between v(ˆ o) and 
+
+v(o) is not large; otherwise, a significant disparity between these values, combined with the high similarity of (s, r ) and (s, r ∗), would make the optimization problem significantly harder to solve. Based on these three considerations, we directly generate the vector for ˆo in the following manner: 
+
+v(ˆ o) = v(o) + γ[v(IDK ) − v(o)] , γ ∈ (0 , 1) . (5) Our assignment strategy, controlled by the hyperparameter γ, is designed to satisfy three criteria: nonconstant assignment, nonrandom assignment, and target vector proximity. As our analysis shows (Appendix B.1), compared with fixed constant targets (e.g., “I don’t know”) or random responses, it suppresses systematic bias, improves edit success, and reduces retention, while inducing smaller perturbations to normal knowledge and yielding more stable optimization. Nevertheless, our exper-iments reveal residual retention on some models, indicating that relation editing poses substantive new challenges and merits dedicated investigation. 3.3 THE PROPOSED FORGETTING -AND -E DITING STRATEGY 
+
+Building upon the target smoothing derived in Section 3.2, we propose the Forgetting-and-Editing (FE) strategy. This strategy serves as a comprehensive framework that integrates the “unlearning” of outdated relations with the injection of new knowledge. Fig. 3 provides an illustrative overview of this pipeline. To achieve this dual objective, we construct a composite editing task. For a given batch of N relation editing samples, where the i-th sample involves changing the relation from (si, r i, o i) to (si, r ∗ 
+
+> i
+
+, o i),the procedure operates in two stages combined into a single optimization step: • Stage 1: Constructing the Forgetting Pairs. We first compute the interpolated target v(ˆ oi) using Eqn. 5. We then form the forgetting pair (ki, v(ˆ oi)) , where ki is the key vector corresponding to the original subject-relation (si, r i). This pair instructs the model to shift the representation of the old relation toward a neutral state, effectively suppressing the activation of the outdated knowledge. • Stage 2: Constructing the Editing Pairs. Simultaneously, we construct the standard editing pair 
+
+(k′
+
+> i
+
+, v(oi)) , where k′ 
+
+> i
+
+is the key vector for the new subject-relation (si, r ∗ 
+
+> i
+
+), and v(oi) is the target value of the object. This pair ensures the model accurately captures the new relational association. 
+
+Joint Optimization. Finally, both the forgetting pairs and the editing pairs are concatenated to form the full training set for the current batch: 
+
+Dtotal =
+
+> N
+
+[
+
+> i=1
+
+{(ki, v(ˆ oi)) , (k′
+
+> i
+
+, v(oi)) }. (6) 5270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 
+
+Under review as a conference paper at ICLR 2026 
+
+Algorithm 1: SPaEdit 
+
+Input: K1 ∈ Rd×n, V1 ∈ Rd×n, W ∈ Rd×d, P ∈ Rd×d, Kp ∈ Rd×m, α, β, μ , λ0, T
+
+Output: sequence of edited matrices {W(t)}Tt=1 
+
+λ ← λ0;
+
+for t = 1 to T do for i = 1 to n do 
+
+ℓi ← (W + ∆P ) ki − vi
+
+> 22
+
+;
+
+zi ← 1(ℓi ≤ λ)
+
+Z ← diag( z1, . . . , z n), R ← V1 − WK 1;
+
+∆P ← RZK ⊤ 
+
+> 1
+
+P  K1ZK ⊤ 
+
+> 1
+
+P + βKpK⊤ 
+
+> p
+
+P + αI−1 ;
+
+W(t) ← W + ∆P ,W ← W(t),λ ← μλ ;
+
+return {W(t)}Tt=1 ;
+
+This combined dataset Dtotal is then fed into the base editor (e.g., AlphaEdit or our SPaEdit). By jointly optimizing for both objectives, the algorithm updates the weights to simultaneously unlearn the old relation and acquire the new one, resolving the conflict inherent in relation editing. 3.4 IMPROVEMENT VIA SELF -PACED LEARNING 
+
+As demonstrated in our experimental analysis (Section 2.2), some knowledge edits are significantly more challenging than others. This motivates us to incorporate self-paced learning (SPL), an easy-to-hard curriculum, into the knowledge editing process. We integrate this strategy with SOTA Al-phaEdit (Fang et al., 2025). To formulate our approach, we re-examine the original objective of AlphaEdit, which seeks an optimal perturbation ∆:
+
+arg min 
+
+> ∆
+
+∥(W + ∆P )K1 − V1∥2 
+
+> F
+
++ α∥∆P ∥2 
+
+> F
+
++ β ∥∆PK p∥2 
+
+> F
+
+. (7) Here, K1 and V1 are the keys and values of the facts to be edited. The objective incorporates two regularizers: α-term constrains the update within the null space of AlphaEdit via the projector P,and β-term penalizes interference with previously edited knowledge Kp. The baseline objective uses uniform instance weighting and ignores difficulty. We therefore recast editing as SPL, introducing binary selectors zi ∈ { 0, 1} to build an adaptive curriculum, leading to the following objective: 
+
+min  
+
+> ∆,z
+
+J (∆, z; λ) = 
+
+> n
+
+X
+
+> i=1
+
+ziℓi(∆) + α∥∆P ∥2 
+
+> F
+
++ β ∥∆PK p∥2 
+
+> F
+
+− λ
+
+> n
+
+X
+
+> i=1
+
+zi. (8) Here, zi = 1 indicates that the i-th sample is included in the editing approach. λ > 0 is the pace parameter that controls the curriculum’s difficulty. The sample-wise loss is the squared error for the 
+
+i-th edit: ℓi(∆) = ∥(W + ∆P )ki − vi∥22 = ∥∆P ki − ri∥22, where ri = vi − Wki is the residual for the i-th sample. We optimize Eqn. 8 via alternating minimization between ∆ and z.With z fixed, the problem reduces to a regularized least-squares objective over the subset of “easy” samples. Let Z = Z1/2 = diag( z). We solve for ∆:
+
+min  
+
+> ∆
+
+(∆PK 1 − (V1 − WK 1)) Z1/2 2
+
+> F
+
++ α∥∆P ∥2 
+
+> F
+
++ β ∥∆PK p∥2 
+
+> F
+
+. (9) This is a convex problem whose closed-form solution for the update ∆SPaEdit = ∆P is: 
+
+∆SPaEdit = ( V1 − WK 1)ZK 1P⊤  K1ZK ⊤ 
+
+> 1
+
+P + βKpK⊤ 
+
+> p
+
+P + αI−1 . (10) With ∆ fixed, we determine the optimal sample selection z∗ for each sample for the next iteration. This step realizes an easy-to-hard curriculum by adjusting the difficulty threshold λ to progressively incorporate more challenging samples: 
+
+z∗ 
+
+> i
+
+(λ) = 
+
+1, if ℓi(∆) < λ 
+
+0, otherwise . (11) 6324 325 326 327 328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 
+
+Under review as a conference paper at ICLR 2026 This two-step process is iterated, with λ gradually increasing to incorporate more difficult samples over time. Once these optimization iterations conclude, we obtain a series of W(t). We use a validation set for model selection, stopping the iterative process when the validation loss plateaus. Details on the validation set’s construction are provided in the Appendix A.1.2. The entire algorithm is called SPaEdit as shown in Algorithm 1. Notably, compared to AlphaEdit, our approach incurs minimal structural overhead, requiring only the introduction of the diagonal matrix Z to dynamically control the optimization order of the samples. 
+
+## 4 EXPERIMENTS AND ANALYSIS 
+
+4.1 EXPERIMENTAL SETUP 
+
+Base LLMs & Baseline Methods. We evaluate knowledge editing across three representative LLMs: LLaMA3 (8B) (Meta, 2024), GPT-J (6B), and GPT2-XL (1.5B) (Radford et al., 2019). Seven parametric editing methods are compared: MEMIT (Meng et al., 2023), RECT (Gu et al., 2024), NSE (Jiang et al., 2024), ROME (Meng et al., 2022), Fine-Tuning (FT) (Zhu et al., 2020), 
+
+PRUNE (Ma et al., 2025), and AlphaEdit (Fang et al., 2025). Detailed descriptions of these baseline methods are provided in Appendix A.2. We have ensured the accessibility of our work; all experi-ments can be replicated from start to finish on a single, commonly available NVIDIA L40S(48G). 
+
+Metrics. Our evaluation metrics are chosen based on the specific task. For Relation Editing, we focus on Success (holistic replacement) and Retention (forgetting), alongside Efficacy and Gener-alization . For the standard Object Editing task, we use the canonical set of Efficacy , Generaliza-tion , and Specificity for ZsRE, and expand this set with Fluency and Consistency for the generative CounterFact benchmark. Detailed definitions are available in Appendix A.3. 
+
+Datasets. We evaluate our methods on ReEditBench , our novel benchmark constructed for the Re-lation Editing task. To select the optimal model from our iterative algorithm, we use a validation set to minimize a weighted loss that balances three key objectives: forgetting the old fact, learning the new one, and generalization, with respective weights of 0.4, 0.4, and 0.2. The detailed construction of this validation set is described in Appendix A.1.2. To further assess the universality and gener-alization capabilities of our proposed SPaEdit algorithm, we also evaluate its performance on the two object editing benchmarks: ZsRE (Levy et al., 2017) and CounterFact (Meng et al., 2022). ReEditBench will be available once acceptance and codes are in the attachment. 4.2 EFFICACY OF THE FORGETTING -AND -E DITING STRATEGY ON RELATION EDITING 
+
+Setup. The results are shown under the standard sequential editing setting, where a total of 2000 samples were randomly drawn from the dataset for updates, with each edit consisting of 100 sam-ples. For the relevant experimental runs, the forgetting parameter λ was set to 0.6, and the update regularization coefficients α and β were set to 10 and 1, respectively. 
+
+Results. In our evaluation framework, we prioritize Success and Retention, since relation editing must ensure that new knowledge reliably replaces old. Table 2 shows that our Forgetting-and-Editing (FE) strategy consistently improves performance across methods and models: by markedly lowering Retention (up to 40.85 % reduction), it raises Success by up to 34.49 %, while typically improving Efficacy and Generalization. The seemingly high retention of some baselines is misleading, stem-ming from low editing success that fails to challenge original knowledge and thus yields deceptively low interference. In contrast, our strategy genuinely alters the knowledge relationship by pairing high editing success with effective forgetting of outdated facts. We further show that replacing fixed targets with our interpolation-based assignment yields substantially better unlearning than assigning “I don’t Know” or random answers (see Appendix C.1), confirming the effectiveness of our design. Nevertheless, Retention remains nontrivial in absolute terms, often around 50% in difficult settings, indicating that fully clean forgetting is still unsolved and merits further study. 
+
+Analysis of the Forgetting Strategy. We present an empirical comparison of four unlearning strate-gies in Fig. 4, with results that clearly validate our theoretical analysis from Section 3.1. The ex-periments show that conventional unlearning strategies, which set the prediction target for outdated knowledge to either a generic “I don’t know” response or a random value, are ineffective at reducing the model’s knowledge retention. On the GPT-J model, for instance, these approaches yield retention 7378 379 380 381 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 
+
+Under review as a conference paper at ICLR 2026 Table 2: Main Results on the Relational Editing Task 
+
+LLMs Method Success ↑ Retention ↓ Efficacy ↑ Generalization ↑
+
+Original +FE Original +FE Original +FE Original +FE 
+
+LLaMA3 
+
+MEMIT 33.77 68.26 (+34.49) 51.70 58.82 (-7.12) 48.43 70.93 (+22.50) 49.09 67.00 (+17.91) RECT 59.41 66.83 (+7.42) 72.78 59.45 (+13.33) 66.78 69.70 (+2.92) 54.63 58.96 (+4.33) NSE 43.20 54.30 (+11.10) 53.73 52.24 (+1.49) 45.00 58.53 (+13.53) 59.26 58.55 (-0.71) ROME 31.39 44.91 (+13.52) 60.47 56.36 (+4.11) 50.91 56.64 (+5.73) 50.93 56.80 (+5.87) FT 48.88 63.45 (+14.57) 64.49 63.57 (+0.92) 49.96 71.01 (+21.05) 69.16 67.31 (-1.85) PRUNE 29.40 29.81 (+0.41) 44.68 30.46 (+14.22) 44.04 34.25 (-9.79) 43.86 42.97 (-0.89) AlphaEdit 52.18 78.46 (+26.28) 78.34 67.12 (+11.22) 79.17 83.24 (+4.07) 76.62 80.03 (+3.41) 
+
+SPaEdit(Ours) 54.45 81.71 (+27.26) 68.56 62.77 (+5.79) 83.23 87.37 (+4.14) 75.88 81.14 (+5.26) 
+
+GPT2-XL 
+
+MEMIT 56.31 57.79 (+1.48) 80.26 57.21 (+23.05) 85.23 84.67 (-0.56) 80.68 85.21 (+4.51) RECT 54.60 54.72 (+0.12) 78.10 61.62 (+16.48) 82.35 84.08 (+1.73) 78.37 77.12 (-1.25) NSE 45.00 45.45 (+0.45) 58.53 58.24 (+0.29) 59.26 59.99 (+0.73) 58.55 59.43 (+0.88) ROME 45.74 45.82 (+0.08) 61.71 61.49 (+0.22) 61.70 61.39 (-0.31) 61.19 61.78 (+0.59) FT 49.96 51.32 (+1.36) 71.01 67.25 (+3.76) 69.16 69.93 (+0.77) 67.31 67.58 (+0.27) PRUNE 37.88 38.04 (+0.16) 52.62 39.14 (+13.48) 54.49 55.71 (+1.22) 52.99 52.60 (-0.39) AlphaEdit 65.31 75.93 (+10.62) 91.31 50.46 (+40.85) 86.83 87.36 (+0.53) 84.51 85.50 (+0.99) 
+
+SPaEdit(Ours) 62.00 83.93 (+21.93) 68.55 48.78 (+19.77) 85.93 88.46 (+2.53) 87.36 87.50 (+0.14) 
+
+GPT-J 
+
+MEMIT 72.55 82.36 (+9.81) 92.98 71.94 (+21.04) 87.14 87.80 (-0.76) 84.69 84.89 (+0.20) RECT 72.54 77.63 (+5.09) 91.67 74.54 (+17.13) 82.12 82.42 (+0.30) 81.90 82.10 (+0.20) NSE 45.65 45.95 (+0.30) 62.13 61.12 (+1.01) 62.03 60.94 (-1.09) 61.52 61.63 (+0.11) ROME 46.38 47.79 (+1.41) 63.34 29.27 (+34.07) 63.32 61.49 (-1.83) 63.24 63.78 (+0.54) FT 51.19 61.10 (+9.91) 66.24 43.50 (+22.74) 70.79 78.72 (+7.97) 67.31 68.67 (+1.34) PRUNE 55.71 63.05 (+7.34) 79.12 59.87 (+19.25) 77.25 77.00 (-0.25) 75.41 76.62 (-1.21) AlphaEdit 65.99 89.98 (+23.99) 98.20 63.84 (+34.36) 85.53 85.64 (+0.11) 86.87 87.80 (+0.93) 
+
+SPaEdit(Ours) 78.46 91.02 (+12.56) 88.24 59.84 (+28.40) 75.93 88.08 (+12.15) 87.36 88.58 (+1.22) rates as high as 77.2 % and 77.9 % respectively, which confirms that their inherent systematic biases impede effective forgetting. In contrast, our proposed strategy, which works by interpolating the value vector of the outdated fact towards a neutral state, performs exceptionally well and achieves the best trade-off between the success and retention rates across all tested models (LLaMA3, GPT2-XL, and GPT-J). Specifically, not only does our method rank among the highest in Success rate, but more critically, it consistently achieves the lowest Retention rate in all cases. Suc Ret      
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Score (%)
+> 52.2
+> 78.5 80.6 81.6 78.3 74.8 76.9
+> 67.1
+
+LLaMA3      
+
+> Suc Ret
+> 65.3 70.5 70.6 75.9
+> 91.3
+> 54.8 56.9
+> 50.1
+
+GPT2-XL      
+
+> Suc Ret
+> 66.0
+> 88.0 83.5 90.0 98.2
+> 77.2 77.9
+> 63.8
+
+GPT-J                             
+
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> 50
+> 60
+> 70
+> 80
+> 90
+> Suc (%)
+> best =0.4
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> best =0.6
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> best =0.6
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Ret (%)
+> No-Forget
+> Forget-IDK
+> Forget-RND
+> Ours
+> Suc
+> Ret
+> Stable range
+
+Figure 4: Ablation and Sensitivity Analysis of the Forgetting-and-Editing Strategy. 
+
+Sensitivity Analysis on Hyperparameter λ. Our sensitivity analysis for the interpolation factor λ,shown in Fig. 4, reveals a clear trade-off between forgetting and learning. While a larger λ leads to more effective forgetting (a monotonic decrease in the Retention rate), it also produces a concave trajectory for the Success rate, which first increases and then decreases. We identify a broad optimal window, λ ∈ [0 .3, 0.7] , where the Success rate is maximized without a significant compromise in forgetting. The existence of such a wide effective range underscores the robustness of our FE strategy and its low sensitivity to hyperparameter tuning, which is vital for practical deployment. 4.3 GENERALIZATION AND PERFORMANCE ON OBJECT EDITING BENCHMARKS 
+
+To assess generality, we use 100-example hard subsets from ZsRE and CounterFact. This section focuses on the ZsRE results, which demonstrate state-of-the-art performance. The complete results for CounterFact and an analysis of the sample difficulty distributions are available in Appendix C.2. 8432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 
+
+Under review as a conference paper at ICLR 2026 
+
+Results on ZsRE. As demonstrated in Table 3, SPaEdit consistently establishes a new state-of-the-art on the ZsRE benchmark across all tested models. Its commanding lead in Efficacy is particularly Table 3: Object Editing Performance on ZsRE                                         
+
+> LLM Method Efficacy ↑Generalization ↑Specificity ↑
+> LLaMA3
+> ROME 31.87 32.4 32.26 MEMIT 86.07 82.39 33.33 AlphaEdit 81.87 78.11 33.03 SPaEdit 92.32 82.6 32.11
+> GPT2-XL
+> ROME 15.87 16.98 7.74 MEMIT 71.47 63.14 7.37 AlphaEdit 92.17 82.68 7.72 SPaEdit 98.96 89.89 7.23
+> GPT-J
+> ROME 23.69 27.9 24.12 MEMIT 94.86 90.02 28.22 AlphaEdit 96.26 90.46 28.15 SPaEdit 99.97 91.3 28.61
+
+notable: achieving 92.32 % on LLaMA3 (a significant improvement over AlphaEdit’s 81.87%) and a near-perfect 99.97 % on GPT-J. This superiority extends to Generaliza-tion, where SPaEdit achieves the top score of 89.89% on GPT2-XL, and also leads in Speci-ficity on GPT-J with 28.61%. The experimen-tal findings reveal that the hard sample sub-set poses a considerable challenge, causing no-table performance degradation even for strong methods like AlphaEdit that rely on single-pass optimization. In stark contrast, SPaEdit not only withstands this challenge but excels by maintaining superior performance where other methods falter. This highlights the advantage of SPaEdit’s strategic, staged learning process: it first builds a robust foundation on easier edits before progressively incorporating more chal-lenging ones, thereby avoiding optimization pitfalls that arise when attempting to resolve high-residual errors simultaneously. Consequently, this approach not only provides an effective solution for relation editing but also establishes a new state-of-the-art on traditional object editing tasks. Furthermore, we report results on more comprehensive datasets in the Appendix C.3; despite the near-saturation of performance metrics on these benchmarks, our method still maintains a slight but consistent advantage over current field methods. 4.4 MECHANISTIC INSIGHT INTO SP AEDIT 
+
+To elucidate the mechanisms driving SPaEdit’s advantage, we visualize its internal curriculum dy-namics and resulting cost-benefit profile in Fig. 5. 
+
+(a) Curriculum dynamics. This figure traces how the sample-difficulty distribution evolves under our self-paced learning framework as parameters are updated. At the start (e.g., (t = 1) ), the distri-bution is right-skewed toward high difficulty, indicating many hard samples. As training proceeds and parameters are optimized, proficiency increases and the mass shifts from the hard (right) to the easy (left) region. By later iterations (e.g., (t = 13) ), the distribution is left-skewed, meaning most samples are easy. This progression demonstrates the effectiveness of the parameter updates. 
+
+(b) Cost-benefit analysis. The adaptive nature of SPaEdit is validated by its cost-benefit trade-off. On tasks with a low proportion of hard samples, SPaEdit incurs negligible overhead, matching the execution time of baselines while achieving superior efficacy. As task difficulty increases, it strategically invests modest additional computation time, which yields a substantial gain in editing success, in stark contrast to baselines whose performance degrades sharply. This favorable trade-off demonstrates that SPaEdit efficiently allocates resources, ensuring both robustness and high performance across a wide spectrum of difficulties. 
+
+## 5 RELATED WORK 
+
+Parameter-Based Knowledge Editing. Methods split into two families: meta-learning (KE (Cao et al., 2021), MEND (Mitchell et al., 2022)) and locate-then-edit, which identifies fact-related weights and applies a closed-form update (ROME (Meng et al., 2022), MEMIT (Meng et al., 2023)). Subsequent work increases granularity to neurons or heads (LoFiT (Yin et al., 2024), FiNE (Pan et al., 2025)), while AlphaEdit (Fang et al., 2025) improves safety and efficacy by projecting up-dates into a knowledge-preserving null space. Despite implementation differences, prior art largely defines editing as modifying the object o in (s, r, o ); the relation r has been systematically over-looked. We present the first systematic study of relation editing to fill this gap. 9486 487 488 489 490 491 492 493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 
+
+Under review as a conference paper at ICLR 2026 T=13       
+
+> T=11
+> T=9
+> T=7
+> T=5
+> T=3
+> 0510 15 20 25 30
+> Difficulty
+> T=1
+
+(a) Curriculum dynamics 0 20 40 60 80 100  
+
+> Proportion of Hard Samples (%)
+> 0
+> 1000
+> 2000
+> 3000
+> 4000
+> 5000
+> Total Execution Time (s)
+> Concave Curve:
+> Initial investment is high,
+> but marginal cost decreases
+> AlphaEdit:
+> Faster, but unreliable
+> on challenging tasks
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Edit Success Rate (%)
+> Performance Collapse
+> SPaEdit:
+> Higher total cost is the
+> price for guaranteed robustness
+
+(b) Cost-benefit analysis 
+
+Figure 5: (a) shows easy-to-hard self-paced curriculum dynamics. (b) shows the cost–benefit trade-off: modest extra time yields large efficacy gains on hard samples. 
+
+Temporal Adaptation and Unlearning. Machine unlearning seeks reliable removal of obso-lete or private knowledge from LLMs. Gradient based approaches include forgetting losses (Yao et al., 2024), orthogonal projection updates (Hoang et al., 2024), and Fisher weighted mask-ing (Cha et al., 2024). Memory centric methods externalize edits to ensure isolation after editing (GRACE (Hartvigsen et al., 2023), T-Patcher (Huang et al., 2023), KV scrubbing (Wang et al., 2024a)). These methods assign fixed forget-set targets (e.g., “I don’t know” or random answers). Because locate-then-edit is fundamentally a linear-regression update, such targets can induce sys-tematic bias. We therefore propose an interpolation-based unlearning strategy tailored to this setting. 
+
+Curriculum and Self-Paced Learning. The principle of ordering samples from easy to hard is cen-tral to Curriculum Learning (CL), which uses heuristics (Bengio et al., 2009), and Self-Paced Learn-ing (SPL), which automates selection with regularized weights (Kumar et al., 2010). These concepts have since been extended to modern deep learning, from being automated by RL controllers (Graves et al., 2017) to being adapted for LLM instruction-tuning and continual learning (Ke et al., 2022; Liu et al., 2024b; Ge et al., 2025). Despite this broad applicability, these principles have not yet been systematically applied to knowledge editing. Our work bridges this gap by introducing a self-paced learning framework tailored for this task, which yields substantial improvements on difficult edits. 
+
+## 6 CONCLUSIONS 
+
+In this work, we formalize Relation Editing and expose a key weakness of existing methods: they retain outdated information and fail on difficult edits. We address this with two contributions: the Forgetting-and-Editing (FE) framework, which introduces a targeted unlearning strategy to resolve knowledge conflicts, and SPaEdit, a self paced algorithm for edits of varying difficulty. Our exper-iments validate both: FE is effective on our new relation editing benchmark, and SPaEdit achieves state of the art on this task and on standard object editing benchmarks. Despite these gains, fully and permanently erasing obsolete relations remains challenging, so future work will develop more effective unlearning mechanisms for relation editing. 
+
+## ETHICS STATEMENT 
+
+Our research aims to enhance the capability of updating and maintaining knowledge within Large Language Models (LLMs), which is crucial for ensuring their accuracy and timeliness in real-world applications. Our proposed method for Relation Editing, particularly SPaEdit, significantly im-proves the precision and reliability of knowledge correction in these models. However, we recognize that any technology capable of directly modifying a model’s internal knowl-edge carries potential risks. For instance, such techniques could be misused to introduce erroneous, harmful, or biased information. We therefore strongly urge researchers in both academia and indus-10 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 
+
+Under review as a conference paper at ICLR 2026 try to establish rigorous validation, oversight, and review mechanisms to ensure the ethical deploy-ment and use of these techniques. Despite these challenges, the original intent of model editing technology is positive, with the core objective of facilitating efficient and effective updates for large models in the future. We encourage researchers to leverage this technology responsibly and with care, collectively guiding its develop-ment in a socially beneficial direction. 
+
+## REPRODUCIBILITY STATEMENT 
+
+To ensure reproducibility, Appendix A details our experimental setup, baselines, dataset construc-tion, and evaluation metrics. All source code and data used in this study, including the SPaEdit implementation and the ReEditBench dataset, are available at https://anonymous.4open. science/r/RelEdit-7677 . These resources enable independent verification and replication of our results and encourage further research. 
+
+## REFERENCES 
+
+Yoshua Bengio, J´ erˆ ome Louradour, Ronan Collobert, and Jason Weston. Curriculum learning. In 
+
+Proceedings of the 26th annual international conference on machine learning, ICML , pp. 41–48, 2009. Luisa Bentivogli, Peter Clark, Ido Dagan, and Danilo Giampiccolo. The fifth pascal recognizing textual entailment challenge. TAC , 7(8):1, 2009. Nicola Cao, Wilker Aziz, and Ivan Titov. Editing factual knowledge in language models. In Proceed-ings of the 2021 Conference on Empirical Methods in Natural Language Processing, EMNLP , pp. 6491–6506, 2021. Sungmin Cha, Sungjun Cho, Dasol Hwang, and Moontae Lee. Towards robust and parameter-efficient knowledge unlearning for llms. arXiv preprint arXiv:2408.06621 , 2024. Bill Dolan and Chris Brockett. Automatically constructing a corpus of sentential paraphrases. In 
+
+Third international workshop on paraphrasing (IWP2005) , 2005. Junfeng Fang, Houcheng Jiang, Kun Wang, Yunshan Ma, Jie Shi, Xiang Wang, Xiangnan He, and Tat-Seng Chua. Alphaedit: Null-space constrained model editing for language models. In The Thirteenth International Conference on Learning Representations, ICLR , 2025. URL https: //openreview.net/forum?id=HvSytvg3Jh .Chendi Ge, Xin Wang, Zeyang Zhang, Hong Chen, Jiapei Fan, Longtao Huang, Hui Xue, and Wenwu Zhu. Dynamic mixture of curriculum lora experts for continual multimodal instruction tuning. In Forty-second International Conference on Machine Learning, ICML , 2025. URL 
+
+https://openreview.net/forum?id=zpGK1bOlHt .Alex Graves, Marc G Bellemare, Jacob Menick, R´ emi Munos, and Koray Kavukcuoglu. Automated curriculum learning for neural networks. In Proceedings of the 34th International Conference on Machine Learning-Volume 70, ICML , pp. 1311–1320, 2017. Jia-Chen Gu, Hao-Xiang Xu, Jun-Yu Ma, Pan Lu, Zhen-Hua Ling, Kai-Wei Chang, and Nanyun Peng. Model editing harms general abilities of large language models: Regularization to the rescue. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Pro-cessing, EMNLP , pp. 16801–16819, 2024. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Tom Hartvigsen, Swami Sankaranarayanan, Hamid Palangi, Yoon Kim, and Marzyeh Ghassemi. Aging with grace: Lifelong model editing with discrete key-value adaptors. Advances in Neural Information Processing Systems, NeurIPS , 36:47934–47959, 2023. 11 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 
+
+Under review as a conference paper at ICLR 2026 Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. In International Conference on Learning Representations, ICLR , 2021. URL https://openreview.net/forum?id= d7KBjmI3GmQ .Tuan Hoang, Santu Rana, Sunil Gupta, and Svetha Venkatesh. Learn to unlearn for deep neural networks: Minimizing unlearning interference with gradient projection. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , pp. 4819–4828, 2024. Zeyu Huang, Yikang Shen, Xiaofeng Zhang, Jie Zhou, Wenge Rong, and Zhang Xiong. Transformer-patcher: One mistake worth one neuron. In The Eleventh International Conference on Learning Representations, ICLR , 2023. URL https://openreview.net/forum?id= 4oYUGeGBPm .Houcheng Jiang, Junfeng Fang, Tianyu Zhang, An Zhang, Ruipeng Wang, Tao Liang, and Xiang Wang. Neuron-level sequential editing for large language models. arXiv preprint arXiv:2410.04045 , 2024. Dahyun Jung, Jaehyung Seo, Jaewook Lee, Chanjun Park, and Heui-Seok Lim. Come: An unlearning-based approach to conflict-free model editing. In Proceedings of the 2025 Confer-ence of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers), NAACL , pp. 6410–6422, 2025. Zixuan Ke, Haowei Lin, Yijia Shao, Hu Xu, Lei Shu, and Bing Liu. Continual training of language models for few-shot learning. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing, EMNLP , pp. 10205–10216, 2022. M Kumar, Benjamin Packer, and Daphne Koller. Self-paced learning for latent variable models. 
+
+Advances in neural information processing systems, NeurIPS , 23, 2010. Omer Levy, Minjoon Seo, Eunsol Choi, and Luke Zettlemoyer. Zero-shot relation extraction via reading comprehension. arXiv preprint arXiv:1706.04115 , 2017. Aixin Liu, Bei Feng, Bing Xue, Bingxuan Wang, Bochao Wu, Chengda Lu, Chenggang Zhao, Chengqi Deng, Chenyu Zhang, Chong Ruan, et al. Deepseek-v3 technical report. arXiv preprint arXiv:2412.19437 , 2024a. Liangxin Liu, Xuebo Liu, Derek F Wong, Dongfang Li, Ziyi Wang, Baotian Hu, and Min Zhang. Selectit: Selective instruction tuning for llms via uncertainty-aware self-reflection. Advances in Neural Information Processing Systems, NeruIPS , 37:97800–97825, 2024b. Jun-Yu Ma, Hong Wang, Hao-Xiang Xu, Zhen-Hua Ling, and Jia-Chen Gu. Perturbation-restrained sequential model editing. In The Thirteenth International Conference on Learning Representa-tions, ICLR , 2025. URL https://openreview.net/forum?id=bfI8cp8qmk .Kevin Meng, David Bau, Alex J Andonian, and Yonatan Belinkov. Locating and editing factual associations in GPT. In Alice H. Oh, Alekh Agarwal, Danielle Belgrave, and Kyunghyun Cho (eds.), Advances in Neural Information Processing Systems, NeurIPS , 2022. URL https:// openreview.net/forum?id=-h6WAS6eE4 .Kevin Meng, Arnab Sen Sharma, Alex J Andonian, Yonatan Belinkov, and David Bau. Mass-editing memory in a transformer. In The Eleventh International Conference on Learning Representations, ICLR , 2023. URL https://openreview.net/forum?id=MkbcAHIYgyS .Meta. Llama 3, 2024. URL https://llama.meta.com/llama3/ . Large language model release. Eric Mitchell, Charles Lin, Antoine Bosselut, Chelsea Finn, and Christopher D. Manning. Fast model editing at scale. In International Conference on Learning Representations, ICLR , 2022. URL https://openreview.net/pdf?id=0DcZxeWfOPt .12 648 649 650 651 652 653 654 655 656 657 658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 
+
+Under review as a conference paper at ICLR 2026 Shiwen Ni, Dingwei Chen, Chengming Li, Xiping Hu, Ruifeng Xu, and Min Yang. Forgetting before learning: Utilizing parametric arithmetic for knowledge updating in large language models. In 
+
+Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics, ACL ,pp. 5716–5731, 2024. Haowen Pan, Xiaozhi Wang, Yixin Cao, Zenglin Shi, Xun Yang, Juanzi Li, and Meng Wang. Precise localization of memories: A fine-grained neuron-level knowledge editing technique for LLMs. In The Thirteenth International Conference on Learning Representations, ICLR , 2025. URL 
+
+https://openreview.net/forum?id=5xP1HDvpXI .Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. Richard Socher, Alex Perelygin, Jean Wu, Jason Chuang, Christopher D Manning, Andrew Y Ng, and Christopher Potts. Recursive deep models for semantic compositionality over a sentiment treebank. In Proceedings of the 2013 conference on empirical methods in natural language pro-cessing, EMNLP , pp. 1631–1642, 2013. Denny Vrandeˇ ci´ c and Markus Kr¨ otzsch. Wikidata: a free collaborative knowledgebase. Communi-cations of the ACM , 57(10):78–85, 2014. Ben Wang and Aran Komatsuzaki. Gpt-j-6b: A 6 billion parameter autoregressive language model, 2021. Peng Wang, Zexi Li, Ningyu Zhang, Ziwen Xu, Yunzhi Yao, Yong Jiang, Pengjun Xie, Fei Huang, and Huajun Chen. Wise: Rethinking the knowledge memory for lifelong model editing of large language models. Advances in Neural Information Processing Systems, NeurIPS , 37:53764– 53797, 2024a. Song Wang, Yaochen Zhu, Haochen Liu, Zaiyi Zheng, Chen Chen, and Jundong Li. Knowledge editing for large language models: A survey. ACM Computing Surveys , 57(3):1–37, 2024b. Yaxuan Wang, Jiaheng Wei, Chris Yuhao Liu, Jinlong Pang, Quan Liu, Ankit Shah, Yujia Bao, Yang Liu, and Wei Wei. LLM unlearning via loss adjustment with only forget data. In The Thirteenth International Conference on Learning Representations, ICLR , 2025. URL https: //openreview.net/forum?id=6ESRicalFE .Alex Warstadt, Amanpreet Singh, and Samuel R Bowman. Neural network acceptability judgments. 
+
+Transactions of the Association for Computational Linguistics, TACL , 7:625–641, 2019. Yifan Wei, Xiaoyan Yu, Huanhuan Ma, Fangyu Lei, Yixuan Weng, Ran Song, and Kang Liu. Assessing knowledge editing in language models via relation perspective. arXiv preprint arXiv:2311.09053 , 2023. Adina Williams, Nikita Nangia, and Samuel R Bowman. A broad-coverage challenge corpus for sentence understanding through inference. arXiv preprint arXiv:1704.05426 , 2017. Jiakuan Xie, Pengfei Cao, Yubo Chen, Kang Liu, and Jun Zhao. Revealing the deceptive-ness of knowledge editing: A mechanistic analysis of superficial editing. arXiv preprint arXiv:2505.12636 , 2025. Yuanshun Yao, Xiaojun Xu, and Yang Liu. Large language model unlearning. Advances in Neural Information Processing Systems, NeurIPS , 37:105425–105475, 2024. Fangcong Yin, Xi Ye, and Greg Durrett. Lofit: Localized fine-tuning on llm representations. Ad-vances in Neural Information Processing Systems, NeurIPS , 37:9474–9506, 2024. Lang Yu, Qin Chen, Jie Zhou, and Liang He. Melo: Enhancing model editing with neuron-indexed dynamic lora. In Proceedings of the AAAI Conference on Artificial Intelligence, AAAI , volume 38, pp. 19449–19457, 2024. Xiaojian Yuan, Tianyu Pang, Chao Du, Kejiang Chen, Weiming Zhang, and Min Lin. A closer look at machine unlearning for large language models. In The Thirteenth International Conference on Learning Representations, ICLR , 2025. URL https://openreview.net/forum?id= Q1MHvGmhyT .13 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 
+
+Under review as a conference paper at ICLR 2026 Zhuoran Zhang, Yongxiang Li, Zijian Kan, Keyuan Cheng, Lijie Hu, and Di Wang. Locate-then-edit for multi-hop factual recall under knowledge editing. In Forty-second International Confer-ence on Machine Learning, ICML , 2025. URL https://openreview.net/forum?id= kAWtGZIHzm .Chen Zhu, Ankit Singh Rawat, Manzil Zaheer, Srinadh Bhojanapalli, Daliang Li, Felix Yu, and Sanjiv Kumar. Modifying memories in transformer models. arXiv preprint arXiv:2012.00363 ,2020. 14 756 757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 
+
+Under review as a conference paper at ICLR 2026 
+
+## USE OF LARGE LANGUAGE MODELS 
+
+Per ICLR policy, we report that Large Language Models (LLMs) were used to assist with grammar correction and language polishing for this paper. The human authors conceived all core ideas and analysis, and take full responsibility for the final content. 
+
+## A EXPERIMENTAL SETUP 
+
+A.1 DATASET CONSTRUCTION DETAILS 
+
+A.1.1 CONSTRUCTION OF TRAINING DATASET .This section provides a detailed breakdown of the four-stage pipeline used to construct our ReEd-itBench benchmark. The overall construction process is illustrated in Fig. 6. Our pipeline, which yields 7,918 high-quality relation editing instances, is detailed below. 
+
+Figure 6: The construction process of our dataset. 
+
+Stage 1: Knowledge Collection. We began by sourcing our initial knowledge pool from established, high-quality, knowledge-intensive benchmarks, primarily ZsRE and a curated subset of Wikidata. These sources were chosen because they provide structured, fact-checked subject-relation-object triplets (s, r, o ), ensuring a factually grounded foundation for our benchmark. This step avoids the noise and ambiguity often associated with sourcing facts directly from raw web text. 
+
+Stage 2: LLM-based Relation Generation. With the curated facts, we employed a powerful gen-erator LLM, DeepSeekV3, to automatically reframe each fact into a plausible relation-editing task. The generation was guided by a structured prompt that instructed the model to produce a new, re-lated fact by modifying the relation r to r∗ while keeping the subject s and object o fixed. The prompt encouraged the generation of two distinct types of relation edits to ensure diversity: • New Relation: This involves a direct modification of the core relationship. For example, the fact 
+
+〈Parag Agrawal, CEO of, Twitter 〉 could be reframed into a new target edit of 〈Parag Agrawal, CTO of, Twitter 〉.• Conditional Relation: This involves adding a new contextual or temporal constraint to the origi-nal relation. For instance, 〈Joe Biden, President of, USA 〉 could be reframed to target 〈Joe Biden, 46th President of, USA 〉.The output of this stage was a large pool of candidate relation edits, each consisting of an original triplet (s, r, o ) and a target edited triplet (s, r ∗, o ).
+
+Stage 3: Automated Filtering Pipeline. To ensure the structural and semantic quality of the gener-ated candidates, we implemented a rigorous two-phase automated filtering process. 1. Script-based Filtering: An initial pass was conducted using scripts to validate the structural integrity of all generated instances. This phase automatically discarded any malformed outputs, such as those with empty fields, incorrect formatting, or structural deviations from the required triplet format. 15 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 
+
+Under review as a conference paper at ICLR 2026 2. LLM-based Verification: To mitigate the risk of the generator model favorably evaluating its own outputs, we used a separate, independent verifier LLM, DeepseekR1. This verifier was prompted to assess the factual and semantic plausibility of each candidate edit. It was tasked with flagging and removing any instances that contained logical contradictions, factual hallucinations, or were semantically incoherent, ensuring that only high-quality, believable edits proceeded. 
+
+Stage 4: Human Validation. As the final and most critical quality assurance step, we performed a manual validation on a randomly sampled subset of the data. We sampled 30% of the automatically filtered instances and presented them to human annotators. The annotators were tasked with verify-ing the factual accuracy, logical consistency, and semantic coherence of each relation edit. The high agreement rate among annotators and the low error rate observed during this process certified the overall high quality and reliability of our automated generation and filtering pipeline. A.1.2 CONSTRUCTION AND USAGE OF THE VALIDATION SET FOR MODEL SELECTION 
+
+Since our SPaEdit algorithm is an iterative process, a principled method is required to select the optimal model checkpoint. We achieve this by constructing a dedicated validation set and evaluating a composite loss function at each iteration. 
+
+1. Validation Set Construction. The validation set is created by randomly holding out 20% of the editing instances from the full training dataset before the main editing process begins. For each instance in this validation set, which consists of an original fact (s, r, o ) and a target fact (s, r ∗, o ),we define the following key-value pairs for evaluation: • Original Key-Value Pair : (korg , vorg ), where korg is the key vector corresponding to the original subject-relation pair (s, r ), and vorg is the value vector for the object o.• New Key-Value Pair : (knew , vorg ), where knew is the key for the new relation (s, r ∗). Note that the target value vector vorg remains the same. • Paraphrased Key : kre , which is a semantic rephrasing of the new key knew . This is generated using an external LLM to test for generalization. • Forget Target : vforget , which is the target value for the unlearning process, computed via interpo-lation as defined in Eq. (5): vforget = vorg + γ(vIDK − vorg ).
+
+2. Iterative Evaluation with a Weighted Loss Function. At each iteration t of the SPaEdit algorithm, we compute the perturbation ∆t and obtain the intermediate edited model weights Wt =
+
+W + ∆tP. We then evaluate this model on the validation set by calculating three distinct loss components based on the squared L2-norm loss function ℓ(k, v) = Wt k − v 22:1. Forgetting Loss ( Lforget ): This loss measures how successfully the model unlearns the original, outdated fact. It is calculated by ensuring the output for the original key korg moves towards the forget target vforget . This addresses two of your requirements: that the model learns to associate 
+
+korg with vforget , and consequently, that its association with vorg is suppressed. 
+
+Lforget (t) = E(korg ,vforget )
+
+h
+
+Wt korg − vforget 
+
+> 22
+
+i
+
+(12) 2. Efficacy Loss ( Lefficacy ): This loss assesses the direct acquisition of the new knowledge. It is the error between the model’s output for the new key knew and the correct value vorg .
+
+Lefficacy (t) = E(knew ,vorg )
+
+h
+
+Wt knew − vorg 
+
+> 22
+
+i
+
+(13) 3. Generalization Loss ( Lgen ): This loss evaluates whether the model can apply the new knowledge to paraphrased prompts, ensuring semantic understanding rather than superficial memorization. 
+
+Lgen (t) = E(kre ,vorg )
+
+h
+
+Wt kre − vorg 
+
+> 22
+
+i
+
+(14) where E[·] denotes the average loss over all samples in the validation set. 16 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 
+
+Under review as a conference paper at ICLR 2026 
+
+3. Final Model Selection. The total validation loss at iteration T , denoted Lval (t), is a weighted sum of these three components. 
+
+Lval (t) = wforget · L forget (t) + wefficacy · L efficacy (t) + wgen · L gen (t) (15) We use an early stopping strategy with a patience of 3 iterations to select the final model. We track the minimum validation loss, L∗
+
+> val
+
+, observed so far. Training is terminated at the first iteration 
+
+T where the validation loss has not improved (i.e., decreased by more than a threshold ϵ) for 3 consecutive iterations. The final model is the checkpoint that corresponds to the best observed validation loss L∗ 
+
+> val
+
+up to iteration T . In our experiments, the weights are set as hyperparameters to balance the trade-offs between these objectives. For instance, we might use wforget = 0 .4, wefficacy =0.4, and wgen = 0 .2.A.2 BASELINE METHOD 
+
+ROME (Meng et al., 2022) Introduces a one-shot, locate-then-edit causal framework that rewrites factual knowledge in large language models without disturbing unrelated parameters. The method first pinpoints the single feed-forward key–value subspace storing the target fact, then derives the optimal rank-one perturbation ∆W via gradients, embedding the new key–value mapping while preserving the overall distribution. A subsequent KL-divergence minimization enforces that the edited model behaves identically to the original on general text, yielding “local rewrite, global preservation.” Experiments on GPT and BART show that ROME persistently and reliably updates knowledge in a single edit, outperforming prior global fine-tuning or explicit memory approaches with negligible side effects on unrelated facts and downstream tasks. 
+
+Fine-Tuning (FT) (Zhu et al., 2020) Formalizes knowledge editing as constrained fine-tuning of a minimal parameter subset within the transformer. It freezes all weights except the up- and down-projection matrices of a single MLP layer that gradient analysis identifies as causally critical for the target fact. A small, fact-only dataset is constructed by cloze-style prompts, and standard cross-entropy fine-tuning is performed with an additional L2 proximity term that penalizes deviation from the original parameters. A trust-region optimizer keeps parameter drift within a preset radius, ensur-ing that the update remains locally confined while the new association is encoded. This lightweight fine-tuning paradigm yields reliable edits without the need for custom architectural modules. 
+
+MEMIT (Meng et al., 2023) Scales causal model editing from single facts to thousands by exploit-ing the linear key–value associative memory implicit in feed-forward layers. It jointly identifies a small set of critical layers and simultaneously applies rank-one updates to their MLP up-projection matrices, rewriting all target associations in one forward pass. An under-determined least-squares objective with ℓ2 and locality-of-edit regularizers ensures that the new memories satisfy output con-straints while minimizing disturbance to unrelated knowledge, and a closed-form solution avoids expensive iterative optimization. 
+
+RECT (Gu et al., 2024) Reformulates model editing as a low-rank, layer-wise correction problem that explicitly accounts for causal traces of factual recall. Instead of a single update, RECT identifies a minimal set of k contiguous MLP layers whose hidden representations are causally most respon-sible for a given fact, and applies rank-r (r ≤ 4) updates only to their down-projection matrices. A consistency loss that penalizes both output drift and internal representation shift is minimized, ensuring that edited knowledge is both effective and faithful to the original distribution. Traceabil-ity is enforced by an additional regularizer that collapses the updated subspace onto the principal component of the fact’s context, enabling post-hoc verification. 
+
+NSE (Jiang et al., 2024) Reframes knowledge editing as neuron-level intervention within the feed-forward layers of transformer LMs. The algorithm first detects a sparse subset of neurons whose activations are maximally predictive of the target fact via integrated-gradients attribution. It then introduces fact-specific scaling vectors that multiplicatively modulate the output of these neurons, while additive bias terms shift their activation baselines to encode the new association. A two-stage optimization alternates between (i) closed-form least-squares fitting of the scaling/bias parameters to satisfy the editing objective and (ii) a distribution-preserving regularizer that minimizes KL diver-gence on held-out corpora. By confining changes to a handful of neuron-specific parameters, NSE achieves fine-grained edits without altering global layer weights. 
+
+PRUNE (Ma et al., 2025) Treats model editing as parameter-efficient subspace pruning within the MLP blocks of transformer LMs. For each fact to be updated, it first identifies a task-specific sparse 17 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 
+
+Under review as a conference paper at ICLR 2026 mask over the rows of the up-projection matrix by gradient-based saliency scoring; the unmasked weights are frozen. A subsequent low-rank adapter is then trained only on the pruned subspace to encode the new key–value association, while a KL-divergence regularizer penalizes any deviation in the model’s distribution on unrelated contexts. This pruning-plus-adaptation pipeline yields local-ized, modular edits that can be independently stored, swapped, or revoked without re-touching the original parameters. 
+
+AlphaEdit (Fang et al., 2025) Augments the locate-then-edit pipeline with a null-space projec-tion that prevents any parameter perturbation from disturbing previously stored knowledge. Af-ter obtaining the standard update ∆ via least-squares on the target key-value pairs, AlphaEdit multiplies ∆ by the projection matrix P = U0U⊤ 
+
+> 0
+
+, where U0 spans the left null space of the covariance matrix built from keys of the preserved knowledge. The projected perturbation ∆P 
+
+satisfies ∆PK 0 = 0, ensuring the edited model still outputs the original values for all pre-served associations while focusing capacity on the new fact. The resulting closed-form update 
+
+∆P = ( V1 − WK 1)K⊤ 
+
+> 1
+
+P K1K⊤ 
+
+> 1
+
+P + KpK⊤ 
+
+> p
+
+P + I−1 plugs into existing editors with one line of code and negligible runtime overhead. A.3 METRICS 
+
+A.3.1 ZSRE METRICS Following the previous work, this section defines each ZsRE metric given a LLM fθ , a knowledge fact prompt (si, r i), an edited target output oi, and the model’s original output oic:• Efficacy: Efficacy is calculated as the average top-1 accuracy on the edit samples: 
+
+Ei
+
+n
+
+oi = arg max  
+
+> o
+
+Pfθ (o|(si, r i)) 
+
+o
+
+(16) • Generalization: Generalization measures the model’s performance on equivalent prompt of 
+
+(si, r i), such as rephrased statements N (( si, r i)) . This is evaluated by the average top-1 accu-racy on these N (( si, r i)) :
+
+Ei
+
+n
+
+oi = arg max  
+
+> o
+
+Pfθ (o|N (( si, r i))) 
+
+o
+
+(17) • Specificity: Specificity ensures that the editing does not affect samples unrelated to the edit cases 
+
+O(si, r i). This is evaluated by the top-1 accuracy of predictions that remain unchanged: 
+
+Ei
+
+n
+
+oci = arg max  
+
+> o
+
+Pfθ (o|O(( si, r i))) 
+
+o
+
+(18) A.3.2 COUNTERFACT METRICS Following previous work, this section defines the evaluation metrics for the Counterfact dataset. To ensure a consistent and fair comparison with the ZsRE benchmark, we adopt its top-1 accuracy-based evaluation methodology for the Efficacy, Generalization, and Specificity metrics. Therefore, we only present the definitions for the remaining metrics unique to this generative task evaluation: • Fluency (generation entropy): Measure for excessive repetition in model outputs. It uses the entropy of n-gram distributions: 
+
+− 23
+
+X
+
+> k
+
+g2(k) log 2 g2(k) + 43
+
+X
+
+> k
+
+g3(k) log 2 g3(k) (19) • Consistency (reference score): The consistency of the model’s outputs is evaluated by computing the cosine similarity between the TF-IDF vectors of the model-generated text and a reference Wikipedia text. A.3.3 RELE DIT BENCH METRICS This section defines each ReLEditBench metric given an original fact (s, r, o ) and a new fact 
+
+(s, r ∗, o ):18 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 
+
+Under review as a conference paper at ICLR 2026 • Success: The Success score is a joint metric that holistically verifies if a knowledge edit was successful. As formulated in Eqn. 20, it requires two conditions to be met simultaneously: (i) the model must no longer predict the original object o for the original query (s, r ) and (ii) it must correctly predict the new object o for the updated query (s, r ∗).
+
+Ex∼D 
+
+h
+
+1
+
+n
+
+oi = arg max  
+
+> ¬o
+
+Pfθ (o | (s, r )) 
+
+o
+
+, 1
+
+n
+
+oi = arg max  
+
+> o
+
+Pfθ (o | (s, r ∗)) 
+
+o i 
+
+(20) • Retention: The Retain metric evaluates whether the model successfully retains the newly intro-duced knowledge after the edit. As defined in Eqn. 21, it measures the probability that the new object oi is the top prediction for the new prompt. 
+
+Ei
+
+n
+
+oi = arg max  
+
+> o
+
+Pfθ (o|(s, r )) 
+
+o
+
+(21) • Efficient: The Efficacy score measures the model’s direct acquisition of the new fact. It is defined in Eqn. 22 as the probability that the new object oi is the top prediction for the new prompt (s, r ∗).A high score signifies that the new knowledge has been successfully instilled. 
+
+Ei
+
+n
+
+oi = arg max  
+
+> o
+
+Pfθ (o|(s, r ∗)) 
+
+o
+
+(22) • Generalization: This metric evaluates if the model can apply the new knowledge beyond the specific prompt it was edited on. As shown in Eqn. 23, it measures the model’s ability to predict the correct object o′ when presented with a set of paraphrased or semantically equivalent prompts 
+
+N (( s, r ∗)) :
+
+Ei
+
+n
+
+o = arg max  
+
+> o′
+
+Pfθ (o′|N (( s, r ∗))) 
+
+o
+
+(23) A.4 EXPERIMENTAL DETAILS 
+
+This appendix details the hyperparameters used in our experiments. It is divided into two parts: the first outlines the base configuration parameters for the Large Language Models (LLMs), and the second elaborates on the key hyperparameters for our proposed SPaEdit and Forgetting-and-Editing (FE) strategies. A.4.1 MODEL CONFIGURATION PARAMETERS 
+
+The following table summarizes the main configuration parameters used for each of the three base models. These are primarily defined within their respective JSON configuration files. Table 4: Base configuration parameters for the LLMs used in the experiments.                      
+
+> Parameter Value Description model name EleutherAI gpt-j-6B ,Specifies the pretrained language model.
+> gpt2-xl ,Llama3-8B
+> layers [3-8], [13-17], [4-8] The target Transformer layers for editing.
+> v num grad steps 25 or 20 Number of gradient steps for value vector computation.
+> v lr 5e-1 or 1e-1 Learning rate used during value vector computation.
+> v loss layer 27, 47, 31 The specific model layer used to compute the edit loss.
+> kl factor 0.0625 Weight of the KL-divergence regularization term.
+> mom2 dataset wikipedia Dataset for computing second-moment statistics.
+> rewrite module tmp Varies by model Template for the path to the module being rewritten.
+
+Key Hyperparameters for the SPaEdit and FE Strategies In addition to the base configurations, our proposed algorithms are governed by several key hyperparameters that control the editing and forgetting behavior. • Forgetting Interpolation Factor ( γ): This is the core hyperparameter of our FE strategy, as defined in Eqn. 5. It controls the degree of interpolation from the original fact’s value vector, 
+
+v(o), towards a neutral “I don’t know” state, v(IDK ). A higher γ value enforces a more thorough forgetting of the outdated information. In our experiments, this was set to 0.4 for GPT-J-6B and 0.6 for both LLaMA3-8B and GPT2-XL to achieve an optimal balance between forgetting and learning. 19 1026 1027 1028 1029 1030 1031 1032 1033 1034 1035 1036 1037 1038 1039 1040 1041 1042 1043 1044 1045 1046 1047 1048 1049 1050 1051 1052 1053 1054 1055 1056 1057 1058 1059 1060 1061 1062 1063 1064 1065 1066 1067 1068 1069 1070 1071 1072 1073 1074 1075 1076 1077 1078 1079 
+
+Under review as a conference paper at ICLR 2026 • Update Regularization Coefficients ( α and β): These coefficients in the SPaEdit objective func-tion (Eqn. 7) regularize the update perturbation ∆ to maintain model stability. 
+
+– α constrains the overall magnitude of the update, preventing large, potentially disruptive changes to the model’s parameters. 
+
+– β minimizes the edit’s impact on a set of preserved knowledge keys Kp, ensuring that unre-lated information is not corrupted. Throughout our experiments, we set α = 10 and β = 1 to apply strong general regularization while precisely preserving prior knowledge. • Self-Paced Learning Curriculum Parameters ( λ0, μ, and T ): These parameters define the “easy-to-hard” curriculum for the SPaEdit algorithm, as outlined in Algorithm 1. 
+
+– λ0 (Initial Pace Parameter): The initial difficulty threshold, which determines the set of the “easiest” samples to be edited at the beginning of the process. 
+
+– μ (Pace Growth Factor): The multiplicative factor by which the difficulty threshold λ is increased in each iteration ( λ ← μλ ). This controls the pace at which more challenging samples are introduced into the training set. 
+
+– T (Max Iterations): The Max number of iterations in the curriculum, defining the overall length of the optimization process. For our experiments, we set the initial pace to λ0 = 10 , the growth factor to μ = 1 .1, and the total number of iterations to T = 20 . This configuration allows the model to first converge on easy edits before gradually incorporating more difficult ones, enhancing overall robustness and success rate. 
+
+## B IMPLEMENTATION DETAILS AND RELATED PROOFS 
+
+B.1 THEORETICAL ANALYSIS OF THE FORGETTING -AND -E DITING STRATEGY 
+
+We analyze the proposed Forgetting-and-Editing (FE) strategy within the linear regression frame-work. The core of our strategy is to generate a modified representation for the target object through interpolation: 
+
+v(ˆ o) = v(o) + γ[v(IDK ) − v(o)] , γ ∈ (0 , 1) . (24) This operation is performed for each sample in the forgetting set Db. To analyze its effect within the regression framework, we translate this representation-level operation into label-space formulation. For any sample i in Db, the modified target label becomes: 
+
+v(ˆ oi) = (1 − γ)v(oi) + γv(IDK ). (25) Extending this operation to the entire forgetting set of M samples, we define: • The original label vector: yb = [ v(o1), v(o2), ..., v(oM )] ⊤
+
+• The IDK label vector: yIDK = [ v(IDK ), v(IDK ), ..., v(IDK )] ⊤
+
+The FE strategy effectively applies the same linear interpolation to each corresponding element of these vectors, yielding the modified label vector: 
+
+yFE  
+
+> b
+
+= [ v(ˆ o1), v(ˆ o2), ..., v(ˆ oM )] ⊤
+
+= yb + γ(yIDK − yb). (26) Substituting this into the closed-form solution of the linear regression problem yields: 
+
+w∗ 
+
+> FE
+
+= ( X⊤X)−1(X⊤ 
+
+> g
+
+yg + X⊤ 
+
+> b
+
+yFE  
+
+> b
+
+)= ( X⊤X)−1  X⊤ 
+
+> g
+
+yg + X⊤ 
+
+> b
+
+[yb + γ(yIDK − yb)] 
+
+= w∗ 
+
+> g
+
++ γ(X⊤X)−1X⊤ 
+
+> b
+
+(yIDK − yb),
+
+(27) 20 1080 1081 1082 1083 1084 1085 1086 1087 1088 1089 1090 1091 1092 1093 1094 1095 1096 1097 1098 1099 1100 1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114 1115 1116 1117 1118 1119 1120 1121 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 
+
+Under review as a conference paper at ICLR 2026 where w∗ 
+
+> g
+
+= ( X⊤X)−1X⊤ 
+
+> g
+
+yg is the solution trained solely on normal data. 
+
+Comparative Advantages. The proposed Feature Editing (FE) strategy offers distinct advantages over methods that employ a fixed value (e.g., I don’t know) or random answers for forgetting. Unlike the constant bias introduced by a fixed label or the uncontrolled bias from random assignment, our approach generates a non-constant, data-dependent bias term γ(X⊤X)−1X⊤ 
+
+> b
+
+(yIDK − yb). This key difference prevents systematic bias and preserves prediction diversity. Furthermore, the hyperpa-rameter γ provides precise and continuous control over the forgetting strength, a feature unavailable in conventional methods. The optimization process remains stable due to the proximity between the original and target features, avoiding large gradients. Finally, the adjustment is highly targeted, effectively removing specific information while minimizing distortion to the model’s normal knowl-edge. B.2 FORMULATION OF THE MULTI -O BJECTIVE OPTIMIZATION PROBLEM 
+
+The fundamental goal of parameter-modifying knowledge editing is to find a minimal perturbation 
+
+∆, to a model’s weight matrix, W, such that the edited model W′ = W+∆ reflects new knowledge without catastrophically forgetting existing information. This can be framed as a multi-objective optimization problem. Let us define the key components: • New Knowledge (Update Set): A set of new facts to be incorporated, represented by key-value pairs {(ki, vi)}. We can stack these into matrices K1 (keys) and V1 (values). The objective is to make the model output V1 when given K1. The error for this is captured by the term 
+
+Lupdate = ∥(W + ∆)K1 − V1∥2 
+
+> F
+
+.• Preserved Knowledge (Preservation Set): The vast set of existing knowledge that must remain unchanged. This is represented by key-value pairs {(kj , vj )} stacked into matrices K0 and V0.Since the pre-trained model W is assumed to already store this knowledge, we have WK 0 ≈ V0.The objective is to minimize the change in output for these keys, giving an error term Lpreserve =
+
+∥(W + ∆)K0 − V0∥2 
+
+> F
+
+.• Regularization: To prevent the perturbation ∆ from becoming excessively large and harming the model’s general abilities, a regularization term on the perturbation itself is included, Lreg =
+
+∥∆∥2 
+
+> F
+
+.Combining these objectives, we arrive at the standard optimization problem for knowledge editing: 
+
+min  
+
+> ∆
+
+L(∆) = ∥(W + ∆)K1 − V1∥2
+
+> F
+
+| {z }
+
+> Update Error
+
++α ∥(W + ∆)K0 − V0∥2
+
+> F
+
+| {z }
+
+> Preservation Error
+
++β ∥∆∥2
+
+> F
+
+| {z } 
+
+> Regularization
+
+(28) where α and β are hyperparameters that balance the trade-off between the objectives. We can simplify this expression. Since WK 0 = V0, the preservation term becomes ∥(W+∆)K0−
+
+WK 0∥2 
+
+> F
+
+= ∥∆K 0∥2 
+
+> F
+
+. For the update term, we can define the residual matrix R = V1 − WK 1,which represents the error that the edit must correct. The term thus becomes ∥∆K 1 − R∥2 
+
+> F
+
+. The simplified objective is: 
+
+min  
+
+> ∆
+
+L(∆) = ∥∆K 1 − R∥2 
+
+> F
+
++ α∥∆K 0∥2 
+
+> F
+
++ β∥∆∥2 
+
+> F
+
+(29) 
+
+Incorporating the Null-Space Projection. A key innovation from methods like AlphaEdit is to constrain the update ∆ to the null-space of the preserved knowledge. This theoretically guarantees that the edit does not interfere with this knowledge. This is achieved using a projection matrix P.• Let Kp be the matrix of keys for the knowledge we wish to explicitly preserve. Kp is the concrete realization of the abstract K0 used to build the projector. • The null-space projection matrix P is constructed such that for any matrix A, the update AP 
+
+satisfies (AP )Kp = 0. P is symmetric ( P = P⊤) and idempotent ( P2 = P). By replacing the raw perturbation ∆ with the projected perturbation ∆P , we enforce this non-interference constraint. The optimization objective is adapted to solve for an optimal update within 21 1134 1135 1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152 1153 1154 1155 1156 1157 1158 1159 1160 1161 1162 1163 1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177 1178 1179 1180 1181 1182 1183 1184 1185 1186 1187 
+
+Under review as a conference paper at ICLR 2026 this safe subspace. The preservation term is now implicitly handled by the projection, but can be kept as a soft constraint, while the regularization term is applied to the projected update. This leads to an objective of the form: 
+
+min  
+
+> ∆
+
+L(∆) = ∥∆PK 1 − R∥2 
+
+> F
+
++ α′∥∆P ∥2 
+
+> F
+
++ β′∥∆PK p∥2 
+
+> F
+
+(30) Here, the hyperparameters α′ and β′ now regularize the magnitude of the projected update and explicitly penalize any residual interference with the preserved set Kp.
+
+Introducing Self-Paced Learning (SPL). The final step in the paper’s methodology (SPaEdit) is the introduction of a self-paced learning curriculum. This acknowledges that not all edits are equally difficult. The model should first learn from “easy” samples and gradually incorporate “harder” ones. This is implemented via a binary selection matrix Z.• Z is a diagonal matrix where each diagonal entry zi ∈ { 0, 1}.• At each iteration, zi = 1 if the i-th sample is deemed “easy” (i.e., its loss is below a certain threshold λ); otherwise, zi = 0 .• This selection matrix is applied only to the update error term , effectively masking out the hard samples for the current iteration. To keep the objective quadratic, we use its square root, Z1/2
+
+(which is equal to Z since its elements are 0 or 1). By integrating the selection matrix Z into Eqn. 30, we arrive at the final optimization problem as formulated in the paper: 
+
+min  
+
+> ∆
+
+L(∆) = ∥(∆PK 1 − R)Z1/2∥2 
+
+> F
+
++ α∥∆P ∥2 
+
+> F
+
++ β∥∆PK p∥2 
+
+> F
+
+(31) This final form is what the paper uses to derive a closed-form solution for the projected update 
+
+∆SPaEdit = ∆P . The key terms are: • ∆: The raw perturbation matrix we are solving for. • P: The null-space projection matrix, which is symmetric ( P = P⊤) and idempotent ( P2 = P). • Z: The diagonal selection matrix ( Z = Z⊤, Z2 = Z, Z1/2 = Z). • K1, R, Kp, α, β : As defined previously. B.3 DERIVATION OF THE CLOSED -F ORM SOLUTION 
+
+The objective function L(∆) is convex with respect to ∆. We can find the minimum by taking the gradient with respect to ∆ and setting it to zero. First, we expand the objective using the trace operator, as ∥X∥2 
+
+> F
+
+= Tr( X⊤X).
+
+L(∆) = Tr  (( ∆PK 1 − R)Z)⊤(( ∆PK 1 − R)Z)
+
++ αTr  (∆P )⊤(∆P ) + βTr  (∆PK p)⊤(∆PK p) (32) 
+
+= Tr  Z(K⊤ 
+
+> 1
+
+P⊤∆⊤ − R⊤)( ∆PK 1Z − RZ )
+
++ αTr  P⊤∆⊤∆P  + βTr  K⊤ 
+
+> p
+
+P⊤∆⊤∆PK p
+
+ (33) Using the properties P = P⊤ and the cyclic property of the trace, we can rewrite each term: 
+
+L(∆) =Tr( ∆PK 1ZK ⊤ 
+
+> 1
+
+P∆ ⊤) − 2Tr( ∆PK 1ZR ⊤) + Tr( RZR ⊤)+ αTr( ∆PP∆ ⊤) + βTr( ∆PK pK⊤ 
+
+> p
+
+P∆ ⊤) (34) Now, we compute the gradient ∇∆L(∆). Using the matrix calculus identities ∇XTr( BX ⊤) = B
+
+and ∇XTr( XBX ⊤C) = CXB + C⊤XB ⊤:
+
+∇∆L(∆) =2( ∆PK 1ZK ⊤ 
+
+> 1
+
+P) − 2( RZK ⊤ 
+
+> 1
+
+P)+ 2 α(∆PP ) + 2 β(∆PK pK⊤ 
+
+> p
+
+P) (35) 22 1188 1189 1190 1191 1192 1193 1194 1195 1196 1197 1198 1199 1200 1201 1202 1203 1204 1205 1206 1207 1208 1209 1210 1211 1212 1213 1214 1215 1216 1217 1218 1219 1220 1221 1222 1223 1224 1225 1226 1227 1228 1229 1230 1231 1232 1233 1234 1235 1236 1237 1238 1239 1240 1241 
+
+Under review as a conference paper at ICLR 2026 Since P = P2, we can simplify ∆PP = ∆P . Setting the gradient to zero to find the minimum: 
+
+2( ∆PK 1ZK ⊤ 
+
+> 1
+
+P) − 2( RZK ⊤ 
+
+> 1
+
+P) + 2 α(∆P ) + 2 β(∆PK pK⊤ 
+
+> p
+
+P) = 0 (36) Dividing by 2 and rearranging to isolate terms with ∆:
+
+(∆PK 1ZK ⊤ 
+
+> 1
+
+P) + α(∆P ) + β(∆PK pK⊤ 
+
+> p
+
+P) = RZK ⊤ 
+
+> 1
+
+P (37) Let ∆SPaEdit = ∆P represent the final projected update. We can factor ASPaEdit out from the left-hand side: 
+
+∆SPaEdit (K1ZK ⊤ 
+
+> 1
+
+P + αI + βKpK⊤ 
+
+> p
+
+P) = RZK ⊤ 
+
+> 1
+
+P (38) Finally, by right-multiplying by the inverse of the term in the parenthesis, we obtain the closed-form solution for the effective update ∆SPaEdit :
+
+∆SPaEdit = ( RZK ⊤ 
+
+> 1
+
+P)( K1ZK ⊤ 
+
+> 1
+
+P + βKpK⊤ 
+
+> p
+
+P + αI)−1 (39) This is the rigorous derivation for the update rule. The matrix (K1ZK ⊤ 
+
+> 1
+
+P + βKpK⊤ 
+
+> p
+
+P + αI)
+
+is guaranteed to be invertible because K1ZK ⊤ 
+
+> 1
+
+P and βKpK⊤ 
+
+> p
+
+P are positive semi-definite, and the addition of the regularizer αI (for α > 0) makes the entire matrix positive definite and thus invertible. 
+
+Note: Some papers may present a slightly simplified version of this formula. The version derived here is the one that follows directly and rigorously from the stated optimization objective. For instance, the final P in the term RZK ⊤ 
+
+> 1
+
+P might be omitted in some implementations, but including it is mathematically consistent as the entire equation operates within the projected subspace. 
+
+## C MORE EXPERIMENTAL RESULTS 
+
+C.1 COMPREHENSIVE ABLATION STUDY ON FORGETTING STRATEGIES 
+
+To provide a comprehensive validation of our Forgetting-and-Editing (FE) design, we conducted an extensive ablation study. We compare the performance of several editing methods under four distinct conditions: 1) the Baseline method without any forgetting component; 2) using a naive IDK forgetting target; 3) using a Random forgetting target; and 4) using Our proposed interpolation-based FE strategy. The results are detailed in Table 5. We present the core metrics of Retention ( ↓) and Efficacy ( ↑) to facilitate a direct comparison of the trade-offs involved in each strategy across all models and key methods. Table 5: Side-by-side comparison of forgetting strategies across all models and key methods. For each strategy, we report Retention (lower is better) and Efficacy ( higher is better). Our proposed strategy consistently achieves the best balance, delivering the lowest retention while simultaneously maximizing efficacy.                                                                  
+
+> LLM Method No-Forgetting + FE (IDK) + FE (Random) + FE (Ours)
+> Retention ↓Efficacy ↑Retention ↓Efficacy ↑Retention ↓Efficacy ↑Retention ↓Efficacy ↑
+> LLaMA3 AlphaEdit 88.34 89.17 76.11 75.23 76.90 78.19 74.50 83.24
+> SPaEdit 88.56 83.23 75.92 83.48 70.41 82.17 68.56 87.37 GPT2-XL AlphaEdit 91.31 88.83 60.25 83.45 65.81 84.90 50.46 87.36
+> SPaEdit 68.55 85.93 55.18 80.15 61.33 81.82 48.78 88.46 GPT-J AlphaEdit 98.20 99.53 81.67 89.12 85.43 81.30 77.84 85.64
+> SPaEdit 88.24 85.93 65.40 88.31 72.88 89.04 59.84 88.08
+
+Analysis of Results. The side-by-side comparison in Table 5 provides a clear and consistent picture across all experimental settings, revealing the critical impact of the chosen forgetting strategy: • Naive Strategies Lead to an Unfavorable Trade-off: While applying naive forgetting targets like IDK and Random generally succeeds in lowering Retention compared to the No-Forgetting baseline, this benefit comes at a significant and often unacceptable cost. In most cases, particularly 23 1242 1243 1244 1245 1246 1247 1248 1249 1250 1251 1252 1253 1254 1255 1256 1257 1258 1259 1260 1261 1262 1263 1264 1265 1266 1267 1268 1269 1270 1271 1272 1273 1274 1275 1276 1277 1278 1279 1280 1281 1282 1283 1284 1285 1286 1287 1288 1289 1290 1291 1292 1293 1294 1295 
+
+Under review as a conference paper at ICLR 2026 on GPT2-XL, these strategies lead to a noticeable degradation in Efficacy. For instance, SPaEdit’s Efficacy on GPT2-XL drops from 85.93% to 80.15% with IDK. Even in scenarios where Effi-cacy does not drop (e.g., SPaEdit on LLaMA3), the improvement is marginal and the Retention rate remains substantially higher than what our method achieves. This demonstrates that naive approaches force a difficult trade-off: one must sacrifice the model’s ability to learn new facts in order to forget old ones. • Our FE Strategy is the Most Effective at Unlearning: A key, unambiguous finding is that our proposed strategy is the most powerful tool for unlearning. Across every model and for both AlphaEdit and SPaEdit, our method consistently achieves the lowest Retention rate. On GPT2-XL, it reduces SPaEdit’s Retention to just 48.78%, a figure far superior to any other strategy, proving its state-of-the-art capability in erasing outdated knowledge. • Synergistic Effect: A Superior Balance of Forgetting and Learning: Most critically, our strat-egy is the only one that resolves the trade-off, creating a synergistic synergistic effect. It not only achieves the best unlearning (lowest Retention) but does so while consistently maintaining or significantly improving Efficacy. For our SPaEdit method, applying the “Ours” strategy boosted Efficacy from 83.23% to 87.37% on LLaMA3 and from 85.93% to 88.46% on GPT2-XL, all while achieving the lowest Retention scores. This stands in stark contrast to the compromised performance of naive approaches and confirms that our carefully designed forgetting targets do not disrupt learning but actually facilitate a cleaner, more effective integration of new knowledge. In conclusion, this comprehensive ablation confirms that how a model is instructed to “forget” is as important as the instruction to “learn.” Our interpolation-based target assignment provides a robust, effective, and non-destructive mechanism for unlearning, establishing a new SOTA for clean and efficient relational editing. C.2 ADDITIONAL EXPERIMENTAL RESULTS ON OBJECT EDITING 
+
+To provide a more comprehensive validation of our method, we present further results on the de-manding CounterFact benchmark. This dataset is particularly challenging, focusing on counter-intuitive factual edits that require precise model updates. Table 6: Object Editing Performance on the CounterFact Hard Subset. SPaEdit consistently out-performs prior methods, notably achieving state-of-the-art Fluency, indicating higher-quality text generation post-edit.                                                                   
+
+> LLM Method Efficacy ↑Generalization ↑Specificity ↑Fluency ↑Consistency ↑
+> LLaMA3
+> ROME 32.02 33.41 34.31 425.55 13.01 MEMIT 69.22 65.61 30.54 629.68 53.15 AlphaEdit 79.21 73.54 30.92 629.91 56.67 SPaEdit (Ours) 92.80 95.21 42.51 631.11 56.78 GPT2-XL
+> ROME 39.42 30.01 5.82 592.64 65.09 MEMIT 70.45 72.98 7.93 465.78 53.58 AlphaEdit 83.22 83.91 8.54 621.76 55.62 SPaEdit (Ours) 92.66 94.82 9.62 629.26 54.52
+> GPT-J
+> ROME 32.05 37.01 25.76 514.82 15.64 MEMIT 79.22 78.27 27.58 618.93 57.84 AlphaEdit 87.52 86.13 28.76 621.80 59.28 SPaEdit (Ours) 92.77 93.12 38.73 622.52 59.66
+
+The results, detailed in Table 6, reinforce the superiority of SPaEdit. It achieves near-perfect Efficacy across all models while also setting a new state-of-the-art in Fluency, with scores like 631.11 on LLaMA3. This indicates that its edits not only correct facts but also produce higher-quality, more natural language. This is accomplished while maintaining strong Generalization and Specificity, demonstrating a robust and well-balanced editing profile even on this difficult benchmark. 
+
+Analysis of Sample Difficulty Distribution. To conduct a more rigorous evaluation, our experi-ments focus on curated subsets of recognized hard cases from ZsRE and CounterFact, rather than the 24 1296 1297 1298 1299 1300 1301 1302 1303 1304 1305 1306 1307 1308 1309 1310 1311 1312 1313 1314 1315 1316 1317 1318 1319 1320 1321 1322 1323 1324 1325 1326 1327 1328 1329 1330 1331 1332 1333 1334 1335 1336 1337 1338 1339 1340 1341 1342 1343 1344 1345 1346 1347 1348 1349 
+
+Under review as a conference paper at ICLR 2026 full benchmarks which are often dominated by simple samples. We define sample difficulty using the initial residual norm, ∥vi − Wk i∥22, which measures the initial error. The difficulty distributions of these selected subsets are visualized in Fig. 7.  
+
+> (a) ZsRE Hard Subset (b) CounterFact Hard Subset
+
+Figure 7: Difficulty distributions of the hard sample subsets. These subsets provide a more challeng-ing evaluation than the full benchmarks. (a) The ZsRE hard subset has a varied difficulty distribution. (b) The CounterFact hard subset is heavily concentrated in the high-difficulty region. As the figure illustrates, the two hard subsets present distinct challenge profiles. The selected ZsRE hard subset (Fig. 7a) exhibits a mixed difficulty distribution, spanning a broad spectrum from medium to high difficulty. In contrast, the CounterFact hard subset (Fig. 7b) constitutes a more extreme challenge, with nearly all samples concentrated in the high-difficulty range. This subset serves as an effective stress test for an algorithm’s robustness. This challenge-focused evaluation environment provides a compelling motivation for our proposed SPaEdit algorithm. The self-paced, “easy-to-hard” curriculum of SPaEdit is precisely engineered for such scenarios. It can intelligently identify the relatively easier samples even within a difficult set to begin the optimization process, building a robust update path to eventually solve the highly challenging edits where traditional, one-shot methods often fail. C.3 FULL BENCHMARK PERFORMANCE AND SATURATION ANALYSIS 
+
+To provide a comprehensive evaluation, we report the performance of SPaEdit and baseline meth-ods on the complete CounterFact and ZsRE datasets in Table 7. With the inclusion of these full-dataset results, we can approach the evaluation with a holistic perspective. When these high aggregate scores are analyzed alongside the sample difficulty histograms presented in Fig. 7, a critical trend emerges: existing state-of-the-art methods have achieved near-saturation performance on the “easy” and “medium” portions of the data distribution. The primary failure mode for current technology lies almost exclusively within the “hard” tail. This observation validates our strategic focus on difficult subsets (as detailed in Appendix C.2); since the general case is largely solved, the frontier of knowledge editing research must shift toward these challenging, high-residual scenarios. As shown in Tab. 7, SPaEdit not only dominates on the hard subsets but also consistently achieves the best performance across the full benchmarks, ensuring robustness not just on average, but where it matters most. C.4 GENERAL CAPABILITY TESTS C.4.1 GENERAL CAPABILITY BENCHMARKS 
+
+We selected six widely-used benchmarks to measure the models’ general capabilities. These tasks cover multiple dimensions, from sentiment analysis to logical reasoning, providing a holistic view of a model’s core language abilities. 25 1350 1351 1352 1353 1354 1355 1356 1357 1358 1359 1360 1361 1362 1363 1364 1365 1366 1367 1368 1369 1370 1371 1372 1373 1374 1375 1376 1377 1378 1379 1380 1381 1382 1383 1384 1385 1386 1387 1388 1389 1390 1391 1392 1393 1394 1395 1396 1397 1398 1399 1400 1401 1402 1403 
+
+Under review as a conference paper at ICLR 2026 Table 7: Full Dataset Performance. Comparison of editing methods on the complete CounterFact and ZsRE benchmarks. SPaEdit consistently achieves SOTA performance across all metrics.                                                                                                                   
+
+> LLM Method CounterFact ZsRE Eff. ↑Gen. ↑Spe. ↑Flu. ↑Consis. ↑Eff. ↑Gen. ↑Spe. ↑
+> LLaMA3
+> ROME 64.40 61.42 49.44 449.06 3.31 2.01 1.80 0.69 MEMIT 65.65 64.65 51.56 437.43 6.58 34.62 31.28 18.49 AlphaEdit 98.90 94.22 67.88 622.49 32.40 94.47 91.13 32.55
+> SPaEdit (Ours) 99.24 94.62 69.37 624.69 33.73 95.72 93.07 33.25 GPT2-XL
+> ROME 54.60 51.18 52.68 366.13 0.72 47.50 43.56 14.27 MEMIT 94.70 85.82 60.50 477.26 22.72 79.17 71.44 26.42 AlphaEdit 99.50 93.95 66.39 597.88 39.38 94.81 86.11 25.88
+> SPaEdit (Ours) 99.65 94.78 67.83 599.52 40.23 95.92 87.63 27.25 GPT-J
+> ROME 57.50 54.20 52.05 589.42 3.22 56.42 54.65 9.86 MEMIT 98.55 95.50 63.64 546.28 34.89 94.91 90.22 30.39 AlphaEdit 99.75 96.38 75.48 618.50 42.08 99.79 96.00 28.29
+> SPaEdit (Ours) 99.82 96.82 76.23 620.35 44.33 99.83 97.12 30.47
+
+• SST(The Stanford Sentiment Treebank) (Socher et al., 2013) A classic sentiment analysis task requiring the model to classify the sentiment of movie reviews as positive or negative. • MRPC (Microsoft Research Paraphrase Corpus) (Dolan & Brockett, 2005) A paraphrase de-tection task where the model must determine if two given sentences are semantically equivalent. • CoLA (The Corpus of Linguistic Acceptability) (Warstadt et al., 2019) A grammatical correct-ness task where the model must judge whether a sentence is grammatically acceptable. • RTE (Recognizing Textual Entailment) (Bentivogli et al., 2009) A natural language inference task that requires the model to determine if a premise sentence entails a hypothesis. • MMLU (Massive Multi-task Language Understanding) (Hendrycks et al., 2021) A comprehen-sive benchmark designed to evaluate a model’s knowledge and reasoning skills across 57 diverse subjects. • NLI (Natural Language Inference) (Williams et al., 2017) This task (specifically the MNLI dataset) requires the model to identify the logical relationship between a premise-hypothesis pair as entailment, contradiction, or neutral. C.4.2 RESULTS AND ANALYSIS 
+
+We conducted a sequential editing experiment on the LLaMA3-8B model to evaluate the long-term impact of various editing methods on the model’s general capabilities. Edits were applied sequentially in batches, and after each batch, the model’s performance was evaluated on six diverse downstream tasks: SST, MRPC, CoLA, RTE, MMLU, and NLI. We compare our method, SPaEdit, against four baselines: AlphaEdit,RECT, PRUNE, and MEMIT. The results are presented in Fig. 8. The x-axis represents the number of sequential edits performed, while the y-axis shows the performance (F1 Score or Accuracy) on each task. By analyzing the performance curves in Fig. 8, we can draw the following key conclusions: 
+
+Catastrophic Forgetting in Unconstrained Methods: As a baseline, the MEMIT, RECT, and PRUNE methods show a severe performance collapse. This confirms that unconstrained, cumulative edits inevitably lead to catastrophic forgetting, damaging the model’s general abilities. 
+
+Stability of Single-Step Projection as a Safety Benchmark: AlphaEdit, a single-step editing method, serves as a crucial benchmark for safety. Its performance curve remains almost perfectly flat, demonstrating that constraining edits to a specific subspace is highly effective at preserving the model’s general capabilities. 
+
+SPaEdit:Validating the Safety of the Iterative Process. The most significant finding from this experiment is that SPaEdit’s iterative optimization process does not degrade general capabilities. Its performance curve is virtually identical to that of the single-step AlphaEdit. This provides powerful 26 1404 1405 1406 1407 1408 1409 1410 1411 1412 1413 1414 1415 1416 1417 1418 1419 1420 1421 1422 1423 1424 1425 1426 1427 1428 1429 1430 1431 1432 1433 1434 1435 1436 1437 1438 1439 1440 1441 1442 1443 1444 1445 1446 1447 1448 1449 1450 1451 1452 1453 1454 1455 1456 1457 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 8: A comparison of the impact of different editing methods on general capability during sequential editing. Both SPaEdit and AlphaEdit demonstrate exceptional stability, proving the safety of the projection mechanism. The identical stability of SPaEdit confirms that its iterative process does not harm the model’s general knowledge. evidence that each step within SPaEdit’s self-paced curriculum remains safely within the constrained subspace. The iterations serve to find a more precise solution for the target knowledge without causing harmful side effects on the model’s broader representations. In summary, this experiment decisively demonstrates that the iterative nature of SPaEdit is a key advantage, not a liability. It allows our method to achieve superior editing efficacy (as shown in the main paper) at no additional cost to the model’s long-term stability and general knowledge. SPaEdit thus offers the best of both worlds: the safety of projection-based methods and the enhanced performance of iterative refinement. C.5 IMPACT OF SEMANTIC SIMILARITY ON RELATION EDITING 
+
+In this section, we visually investigate the influence of semantic properties on the relation editing task. Specifically, we analyze how the semantic distance between the original relation r and the target relation r∗ affects both the learning of new knowledge and the forgetting of outdated informa-tion. Furthermore, we provide visual evidence justifying our choice of the computational residual 
+
+∥vi − Wki∥2 as the primary metric for difficulty estimation in our self-paced curriculum. 
+
+Asymmetric Impact of Semantic Similarity. We categorized editing samples into Low, Medium, and High similarity groups based on the cosine similarity between the relation vectors of the original fact and the target edit. As illustrated in Fig. 9(a), we observe a significant asymmetric impact on editing outcomes: • Editing Success (Blue Bars): There is a strong positive correlation with semantic similarity. As relations become semantically closer (e.g., “CEO” → “CTO”), the editing success rate climbs sharply from 45.2% to 95.1%. This suggests that the model leverages existing, nearby semantic structures to facilitate the learning of new associations. • Forgetting Success (Red Bars): Conversely, the forgetting success rate exhibits a clear nega-tive trend. Forgetting is significantly harder for semantically close relations (30.7%) compared to distant ones (65.8%). This visual evidence supports the hypothesis that high semantic prox-imity causes strong interference, making it difficult for the model to cleanly disentangle the old knowledge from the new in the parameter space. 
+
+Justification for Computational Residual. Given the strong influence of semantics shown above, one might ask why we do not use semantic similarity as the curriculum metric. We answer this by 27 1458 1459 1460 1461 1462 1463 1464 1465 1466 1467 1468 1469 1470 1471 1472 1473 1474 1475 1476 1477 1478 1479 1480 1481 1482 1483 1484 1485 1486 1487 1488 1489 1490 1491 1492 1493 1494 1495 1496 1497 1498 1499 1500 1501 1502 1503 1504 1505 1506 1507 1508 1509 1510 1511 
+
+Under review as a conference paper at ICLR 2026 Low Similarity Medium Similarity High Similarity      
+
+> Semantic Similarity between Relations
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Success Rate (%)
+> 45.2%
+> 68.9%
+> 95.1%
+> 65.8%
+> 55.3%
+> 30.7%
+> 0.0% 0.0%
+> (a) Asymmetric Impact on Outcomes
+> Editing Success
+> Forgetting Success
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Semantic Similarity
+> 0
+> 5
+> 10
+> 15
+> 20
+> Success
+> (b) Relationship with Editing Success
+
+Figure 9: Analysis of Semantic Similarity. (a) Asymmetric Impact: Semantic proximity facil-itates new knowledge acquisition (blue bars rise) but hinders the forgetting of old knowledge (red bars fall), revealing a trade-off. (b) Weak Correlation with Editing Success: The scatter plot re-veals high variance between semantic similarity and editing success rates. The weak correlation (Pearson |r| ≈ 0.3) indicates that semantic similarity acts as a noisy predictor, failing to capture the full complexity of editing difficulty compared to the robust signal provided by computational residuals. analyzing the relationship between semantic similarity and the computational residual (our chosen difficulty metric) in Fig. 9(b). 1. Superior Predictive Capability: The scatter plot in Fig. 9(b) reveals that semantic similarity is a noisy predictor of performance. The data points are highly dispersed with only a weak correlation (Pearson |r| ≈ 0.3) to editing success. This contrasts sharply with the computational residual (shown in Fig. 1(b)), which exhibits a strong, distinct negative correlation with success. This empirical evidence confirms that the residual is a significantly more reliable indicator of the model’s actual ability to acquire a specific sample. 2. Holistic Proxy for Multivariate Difficulty: The limited predictive power of semantics under-scores that the intrinsic difficulty of a sample is a multivariate composite . It is influenced not just by linguistic proximity, but also by latent factors such as knowledge frequency, structural complexity, and parameter conflicts. While semantic similarity captures only one dimension, the computational residual automatically aggregates the net effect of all these underlying factors. It provides a direct, computationally convenient signal of the total optimization barrier, making it the most robust standard for our self-paced curriculum. C.6 ROBUSTNESS ANALYSIS AGAINST SUPERFICIAL EDITING ATTACKS 
+
+While standard metrics like Efficacy and Generalization are valuable, recent work has shown that they can be deceptive. An edit may appear successful on standard prompts, only to fail and revert to the original knowledge when faced with carefully crafted contextual triggers. This phenomenon is termed “superficial editing” (Xie et al., 2025).To perform a more rigorous stress-test of SPaEdit’s robustness, we evaluated its performance against the adversarial attack framework proposed in their work. 
+
+Experimental Setup. To test whether the edited model truly erases the old fact or merely suppresses it, we use the superficial-editing attack protocol . In this protocol, a contextual trigger is prepended to the prompt to elicit the original (pre-edit) knowledge; we employ the three trigger variants defined in that work: Wiki, Rep, and Que. • Wiki: The attack prefix is a Wikipedia summary of the original answer, o.• Rep: The attack prefix is a simple repetition of the original answer, o.28 1512 1513 1514 1515 1516 1517 1518 1519 1520 1521 1522 1523 1524 1525 1526 1527 1528 1529 1530 1531 1532 1533 1534 1535 1536 1537 1538 1539 1540 1541 1542 1543 1544 1545 1546 1547 1548 1549 1550 1551 1552 1553 1554 1555 1556 1557 1558 1559 1560 1561 1562 1563 1564 1565 
+
+Under review as a conference paper at ICLR 2026 • Que: The attack prefix is a question that includes the subject, relation, and original object, e.g., “Is Joe Biden the President of the U.S.?”. We evaluate performance using two key metrics designed to measure superficiality: • Original Match (OM): The percentage of times the model’s output exactly matches the original (pre-edit) answer, o.• Original Probability (OP): The percentage of times the model assigns a higher probability to the original answer o than the new answer o∗.For both metrics, lower values indicate higher robustness and a less superficial edit. We report the results for the LLaMA3-8B-Instruct model on the CF-a dataset, using the data from Table 1 of the source paper for the baseline methods. Table 8: Evaluation of robustness against superficial editing attacks on LLaMA3-8B-Instruct using the CF-a dataset. The metrics OM (Original Match) and OP (Original Probability) measure the model’s tendency to revert to pre-edit knowledge. Lower scores are better. Best results are high-lighted in bold. 
+
+Method Wiki Attack Rep Attack Que Attack OM ↓ OP ↓ OM ↓ OP ↓ OM ↓ OP ↓
+
+ROME 54.95 58.24 61.74 64.02 38.37 38.37 MEMIT 52.75 54.95 40.15 42.42 37.21 37.21 PMET 70.33 72.43 66.67 71.97 39.29 41.67 r-ROME 54.95 57.14 64.39 68.18 40.48 40.48 AlphaEdit 72.53 73.62 68.18 71.97 34.52 35.71 
+
+SPaEdit+FE(Ours) 50.81 27.23 38.52 33.84 33.19 35.11 Results and Analysis. The results in Table 8 confirm that superficial editing is a significant chal-lenge for all tested methods, with high-performing editors like AlphaEdit and PMET showing con-siderable vulnerability (over 70% OM on the Wiki attack). This underscores the limitations of relying solely on standard evaluation metrics. In this challenging setting, our proposed SPaEdit method demonstrates markedly superior robust-ness. Across all three attack types, SPaEdit achieves the lowest (best) scores for both Original Match (OM) and Original Probability (OP). For instance, under the most difficult Wiki attack, SPaEdit re-duces the OM score to 50.81%, a substantial improvement over methods like AlphaEdit (72.53%) and MEMIT (52.75%). We attribute this enhanced robustness to the synergistic interplay of two core mechanisms: the “forgetting-and-editing” (FE) strategy and the self-paced curriculum. First, the FE strategy lays the groundwork by actively unlearning the outdated tuple, making the original knowledge less accessi-ble. Second, the self-paced “easy-to-hard” curriculum builds upon this foundation by encouraging a “deeper” integration of the new knowledge. Rather than forcing a single, abrupt update, it iteratively strengthens the new association, making the edit less superficial and more resilient to contextual trig-gers designed to reactivate the old memory trace. The combination of these two mechanisms makes SPaEdit a uniquely reliable and practical solution for real-world knowledge updating. C.7 STABILITY ANALYSIS 
+
+Qualitative Analysis. To evaluate the robustness and reliability of our proposed SPaEdit method, we conducted a rigorous stability analysis. Edit stability is a critical metric as it measures how consistently a method performs across different subsets of editing tasks, reflecting its reliability in real-world scenarios where the nature of edits can vary. For this experiment, we compared SPaEdit against three prominent baseline methods: AlphaEdit, ROME, and MEMIT. 
+
+Experimental Design. The experimental procedure involved randomly sampling 100 instances from the ZsRE benchmark. Each of the four editing methods was then applied to this same set of 100 29 1566 1567 1568 1569 1570 1571 1572 1573 1574 1575 1576 1577 1578 1579 1580 1581 1582 1583 1584 1585 1586 1587 1588 1589 1590 1591 1592 1593 1594 1595 1596 1597 1598 1599 1600 1601 1602 1603 1604 1605 1606 1607 1608 1609 1610 1611 1612 1613 1614 1615 1616 1617 1618 1619 
+
+Under review as a conference paper at ICLR 2026 samples to perform the knowledge edits. To generate a robust statistical distribution of performance, this entire process—sampling and editing—was repeated 100 times. This methodology allows us to observe the variance and consistency of each algorithm’s success rate. 
+
+Figure 10: Edit stability analysis on the ZsRE benchmark. The box plot illustrates the distribution of editing success rates over 100 trials, each with 100 randomly sampled edits. SPaEdit demonstrates significantly lower variance and a higher median performance compared to baseline methods, indi-cating superior robustness. 
+
+Results. The results of this analysis are visualized in a box plot in Fig. 10. The findings clearly highlight the superior stability of SPaEdit. SPaEdit: Our method consistently achieves high perfor-mance, with its success rates concentrated in a remarkably narrow and high-achieving range of 85% to 95%. This minimal variance indicates that SPaEdit is highly reliable and its effectiveness is not heavily dependent on the specific samples being edited. AlphaEdit: While also performing well, it exhibits a wider variance, with success rates typically falling between 75% and 90%. MEMIT: Its performance is more varied, with a broader range from 60% to 95%. ROME: This method demon-strated the least stability, with its performance distribution spanning a very wide range from 10% to 40%, suggesting its outcomes are highly sensitive to the chosen edit instances. 
+
+Conclusion. The compact performance distribution for SPaEdit powerfully underscores its robust-ness. Unlike competing methods whose effectiveness can fluctuate significantly depending on the task, SPaEdit delivers predictable and consistently high-quality results. This stability is a key ad-vantage for practical deployment where dependable performance is essential. C.8 ITERATIVE RUNTIME OF SP AEDIT 
+
+Theoretical Analysis. A core tenet of SPaEdit is its self-paced, “easy-to-hard” curriculum. The computational cost of each iteration is primarily dictated by the closed-form update for the per-turbation matrix ∆P , specifically the matrix inversion step shown in Equation 9: (K1ZK ⊤ 
+
+> 1
+
+P +
+
+βKpK⊤ 
+
+> p
+
++ αI)−1.The key component here is the selection matrix Z, a diagonal matrix where each entry zi ∈ { 0, 1}
+
+determines if the i-th sample is included in the current update. In the initial iterations, the pace parameter λ is small, and only the ”easiest” samples are selected (i.e., most si = 0 ). Consequently, the selection matrix Z is very sparse. The effective size of the matrices being multiplied and inverted (e.g., K1Z) is small, leading to a low computational cost. As training progresses, λ increases, more challenging samples are incorporated (more zi flip to 1), and Z becomes denser. This increases the rank and computational complexity of the matrix operations. Therefore, the execution time per iteration is expected to increase as the curriculum includes more difficult samples. This behavior is not a drawback but a fundamental design choice: SPaEdit strategi-cally allocates more computational resources only as they are needed to handle progressively harder edits, ensuring overall efficiency. Our empirical results, shown in Fig. 11, confirm this theoretical expectation. 30 1620 1621 1622 1623 1624 1625 1626 1627 1628 1629 1630 1631 1632 1633 1634 1635 1636 1637 1638 1639 1640 1641 1642 1643 1644 1645 1646 1647 1648 1649 1650 1651 1652 1653 1654 1655 1656 1657 1658 1659 1660 1661 1662 1663 1664 1665 1666 1667 1668 1669 1670 1671 1672 1673 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 11: SPaEdit iteration time analysis. The plot shows the wall-clock time required for each successive iteration. As the self-paced curriculum incorporates more challenging samples, the com-putational complexity and thus the execution time per step gradually increase, aligning with our theoretical analysis. C.9 QUALITATIVE ANALYSIS .This qualitative analysis evaluates a critical capability: the ability to completely and cleanly replace an existing piece of factual knowledge with a new one. The goal is to determine if the outdated fact (the “Edit Target”) is truly erased from the model’s output or if it merely “leaks” through in a corrupted form. The No-Forget method consistently fails this test. Across all cases, it is unable to move past the original fact and defaults to generating the outdated answer, such as S.C. Beira-Mar in Case 1 or TSR in Case 2. Conventional unlearning strategies also fail decisively, exposing a critical flaw. As seen in all three cases, both Forget-IDK and Forget-RND still generate the forbidden original answer. For instance, even when attempting to state “I don’t know,” the model still outputs the token TSR (Case 2) or soprano (Case 3). This demonstrates that the underlying memory is so resilient that the unlearning attempt only destabilizes the generation process without actually removing the knowledge. The model is left in a conflicted state, haunted by the ghost of the original fact. In stark contrast, our method is the only one that succeeds in the knowledge replacement task. In every case, the outdated information is completely absent from its output. Instead, the model confidently generates the new target knowledge, such as SV Neulengbach (Case 1), Bandai (Case 2), and mezzo-soprano (Case 3). This proves that our approach achieves a genuine and effective knowledge update, cleanly overwriting the old fact where other methods leave behind a corrupted and conflicted remnant. 31 1674 1675 1676 1677 1678 1679 1680 1681 1682 1683 1684 1685 1686 1687 1688 1689 1690 1691 1692 1693 1694 1695 1696 1697 1698 1699 1700 1701 1702 1703 1704 1705 1706 1707 1708 1709 1710 1711 1712 1713 1714 1715 1716 1717 1718 1719 1720 1721 1722 1723 1724 1725 1726 1727 
+
+Under review as a conference paper at ICLR 2026 C.9.1 CASE 1
+
+Case Study on GPT-J 
+
+Editing Prompt What team is Tonel affiliated with? 
+
+Answer S.C. Beira-Mar 
+
+Generation Output No-Forget (OE) Tonel is affiliated with the Brazilian football club, S.C. Beira-Mar .
+
+Forget-IDK I don’t know. Tonel is often linked to S.C. Beira-Mar .
+
+Forget-RND Tonel is affiliated with River. . . and S.C. Beira-Mar . . . Madrid. 
+
+Ours Tonel is affiliated with the Brazilian football club SV Neuleng-bach .C.9.2 CASE 2
+
+Case Study on LLaMA3 
+
+Editing Prompt What business published Player’s Guide to the Dragonlance Campaign? 
+
+Edit Target TSR 
+
+Generation Output No-Forget (OE) The publisher of the Player’s Guide to the Drag-onlance Campaign was TSR Forget-IDK The publisher of the Player’s Guide to the Drag-onlance Campaign was I don’t TSR .
+
+Forget-RND The publisher was TSR . x y z. 
+
+Ours The publisher of the Player’s Guide to the Drag-onlance Campaign was Bandai , Bandai, Bandai, Bandai. 32 1728 1729 1730 1731 1732 1733 1734 1735 1736 1737 1738 1739 1740 1741 1742 1743 1744 1745 1746 1747 1748 1749 1750 1751 1752 1753 1754 1755 1756 1757 1758 1759 1760 1761 1762 1763 1764 1765 1766 1767 1768 1769 1770 1771 1772 1773 1774 1775 1776 1777 1778 1779 1780 1781 
+
+Under review as a conference paper at ICLR 2026 C.9.3 CASE 3
+
+Case Study on GPT-J 
+
+Editing Prompt What type of voice does Krassimira Stoyanova have? 
+
+Edit Target soprano 
+
+Generation Output No-Forget (OE) Krassimira Stoyanova has a soprano voice. 
+
+Forget-IDK Krassimira Stoyanova’s voice type is I don’t know a soprano .
+
+Forget-RND Krassimira Stoyanova’s voice type is soprano 
+
+mezzo-soprano a mezzo-soprano. 
+
+Ours Krassimira Stoyanova has a mezzo-soprano 
+
+voice. 
+
+## D VISUALIZING THE REEDIT BENCH COUNTERFACT AND ZSRE D ATASETS 
+
+## THROUGH EXAMPLES 
+
+To provide a clearer, more intuitive understanding of the data used in our evaluations, this section presents several illustrative examples from the ReEditBench, ZsRE, and Counterfact datasets. These examples are chosen to showcase the structure, diversity, and types of factual knowledge targeted in our experiments. Fig. 12 illustrates the fundamental structure of our ReEditBench dataset. Each entry is structured as a knowledge replacement task, defined by a subject, a relation, and a pair of objects: the outdated (original) object and the new (target) object. This format is designed to directly test a model’s ability to perform a precise factual update. Fig. 13 and 14 provide a closer look at the source datasets. The ZsRE dataset, as shown in Fig. 13, typically consists of standard factual recall prompts covering a wide range of general knowledge. In contrast, the Counterfact dataset (Fig. 14) is specifically designed to be more challenging. It often contains less common or counter-intuitive facts, which serve as a stress test for an editor’s ability to override a model’s strong, pre-existing biases. 33 1782 1783 1784 1785 1786 1787 1788 1789 1790 1791 1792 1793 1794 1795 1796 1797 1798 1799 1800 1801 1802 1803 1804 1805 1806 1807 1808 1809 1810 1811 1812 1813 1814 1815 1816 1817 1818 1819 1820 1821 1822 1823 1824 1825 1826 1827 1828 1829 1830 1831 1832 1833 1834 1835 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 12: Some examples of the ReEditBench dataset 34 1836 1837 1838 1839 1840 1841 1842 1843 1844 1845 1846 1847 1848 1849 1850 1851 1852 1853 1854 1855 1856 1857 1858 1859 1860 1861 1862 1863 1864 1865 1866 1867 1868 1869 1870 1871 1872 1873 1874 1875 1876 1877 1878 1879 1880 1881 1882 1883 1884 1885 1886 1887 1888 1889 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 13: Some examples of the ZsRE dataset 35 1890 1891 1892 1893 1894 1895 1896 1897 1898 1899 1900 1901 1902 1903 1904 1905 1906 1907 1908 1909 1910 1911 1912 1913 1914 1915 1916 1917 1918 1919 1920 1921 1922 1923 1924 1925 1926 1927 1928 1929 1930 1931 1932 1933 1934 1935 1936 1937 1938 1939 1940 1941 1942 1943 
+
+Under review as a conference paper at ICLR 2026 
+
+Figure 14: Some examples of the Counterfact dataset 36
