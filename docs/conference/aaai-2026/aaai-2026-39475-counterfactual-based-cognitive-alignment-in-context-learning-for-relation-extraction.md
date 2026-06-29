@@ -1,19 +1,21 @@
 ---
 title: Counterfactual-based Cognitive Alignment In-Context Learning for Relation Extraction
-title_zh: 基于反事实认知对齐的上下文学习关系抽取
+title_zh: 基于反事实认知对齐的上下文学习用于关系抽取
 authors: "Qibin Li, Shengyuan Bai, Nai Zhou, Nianmin Yao"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/39475/43436"
 tags: ["query:ie"]
 score: 9.0
-evidence: 关系抽取上下文学习认知对齐
-tldr: 针对大模型上下文学习在关系抽取中示例选择与认知机制不匹配的问题，提出反事实认知对齐框架，通过认知启发的反事实生成优化示例选择，提升关系抽取性能。
+evidence: 基于反事实认知对齐的上下文学习用于关系抽取
+tldr: 针对LLM在关系抽取的上下文学习中示例选择与认知机制不匹配的问题，提出反事实认知对齐（CCA）框架。该框架基于人类关系推理的认知原理，通过反事实生成优化示例选择。实验表明，CCA在多个关系抽取基准上显著提升了ICL性能，尤其在少样本场景下效果突出。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有上下文学习关系抽取中示例选择与认知机制不匹配。
-method: 提出反事实认知对齐框架，利用反事实生成对齐人类关系推理认知原理。
-result: 在多个关系抽取数据集上取得改进。
-conclusion: 将认知科学原理融入示例选择，提升了关系抽取效果。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39475/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1834, \"height\": 1031, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39475/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1743, \"height\": 684, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39475/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1828, \"height\": 903, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39475/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 880, \"height\": 481, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39475/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1731, \"height\": 636, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39475/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 876, \"height\": 519, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39475/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 881, \"height\": 668, \"label\": \"Table\"}]"
+motivation: 现有关系抽取的上下文学习中示例选择与LLM认知机制不匹配。
+method: 提出反事实认知对齐框架，利用认知原理优化示例选择和反事实生成。
+result: 在多个关系抽取基准上提升少量样本下的抽取性能。
+conclusion: 认知对齐策略有效提升了LLM在关系抽取中的上下文学习能力。
 ---
 
 ## Abstract

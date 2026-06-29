@@ -1,19 +1,21 @@
 ---
 title: A Reasoning Paradigm for Named Entity Recognition
-title_zh: 一种面向命名实体识别的推理范式
+title_zh: 命名实体识别的推理范式
 authors: "Hui Huang, Yanping Chen, Ruizhang Huang, Chuan Lin, Yongbin Qin"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/40375/44336"
 tags: ["query:ie"]
 score: 9.0
-evidence: 命名实体识别，推理范式，思维链
-tldr: 针对生成式LLM在命名实体识别中缺乏显式可验证推理机制的问题，提出一个包含思维链生成、思维链微调和推理增强的三阶段推理框架，将NER范式从隐式模式匹配转变为显式推理，在零样本和低资源场景下显著提升性能和泛化能力。
+evidence: 使用带思维链的大语言模型进行命名实体识别的推理范式
+tldr: 针对大语言模型在命名实体识别中依赖隐式模式匹配而缺乏可验证推理的问题，提出面向NER的推理框架。该框架包括思维链生成、思维链微调和推理增强三个阶段，通过显式推理步骤提升零样本和低资源场景下的泛化能力。实验证明，该推理范式显著提升了NER性能，尤其在资源稀缺时效果突出。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有LLM通过指令调优进行NER时缺乏显式推理，导致零样本和低资源场景下性能不佳。
-method: 构建面向NER的思维链数据集，通过思维链生成、微调和推理增强三阶段框架实现显式推理。
-result: 在多个标准NER数据集上，该推理范式显著优于传统指令调优方法，尤其在零样本设置下。
-conclusion: 显式推理机制可有效提升NER的泛化能力，为信息抽取提供了新范式。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40375/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 879, \"height\": 458, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40375/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1816, \"height\": 581, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40375/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 797, \"height\": 609, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40375/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1822, \"height\": 879, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40375/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 681, \"height\": 300, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40375/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 876, \"height\": 870, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40375/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 862, \"height\": 946, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40375/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 751, \"height\": 686, \"label\": \"Table\"}]"
+motivation: 大语言模型在NER中依赖隐式模式匹配，缺乏显式推理，导致泛化不足。
+method: 提出三步推理框架：生成面向NER的思维链数据、微调大语言模型、增强推理过程。
+result: 在零样本和低资源NER场景下显著优于现有方法。
+conclusion: 显式推理机制有效提升了大语言模型在NER任务上的表现和泛化能力。
 ---
 
 ## Abstract

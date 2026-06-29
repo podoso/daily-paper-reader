@@ -1,19 +1,19 @@
 ---
 title: "rMMEA: Robust Multi-Modal Entity Alignment with Missing and Noise Visual Modality"
-title_zh: rMMEA：鲁棒的多模态实体对齐方法，处理缺失和噪声视觉模态
+title_zh: rMMEA：应对视觉模态缺失和噪声的鲁棒多模态实体对齐
 authors: "Lingbing Guo, Zhuo Chen, Yichi Zhang, Wenbin Guo, Haonan Yang, Zhao Li, Zirui Chen, Xin Wang"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/39293/43254"
 tags: ["query:multimodal"]
-score: 6.0
-evidence: 处理视觉模态缺失的多模态实体对齐方法
-tldr: 针对多模态实体对齐中视觉模态缺失和噪声这一关键挑战，现有方法简单使用虚拟向量导致性能下降。本文提出rMMEA，通过基于排名的知识蒸馏和互信息估计来恢复缺失视觉信息并增强噪声鲁棒性。实验结果表明，在多个实体对齐基准上，rMMEA显著优于先前方法，尤其在不完整模态场景下表现突出。该工作为多模态表示学习中缺失模态问题提供了一种有效且鲁棒的解决方案。
+score: 4.0
+evidence: 多模态实体对齐，处理视觉模态缺失
+tldr: 现有实体对齐方法在视觉模态缺失时性能严重下降。本文提出鲁棒多模态实体对齐方法rMMEA，利用排序知识蒸馏和互信息估计来处理缺失和噪声。在多个数据集上验证了其对缺失模态的鲁棒性，优于使用哑向量的方法。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 多模态实体对齐中视觉模态常缺失，现有方法用虚拟向量导致训练和推理受损。
-method: 提出rMMEA，利用基于排名的知识蒸馏优化缺失模态表示，并结合互信息估计增强对噪声的鲁棒性。
-result: 在标准实体对齐数据集上，rMMEA在处理视觉缺失和噪声时显著优于基线方法。
-conclusion: rMMEA有效提升了多模态实体对齐在现实不完整数据场景下的鲁棒性和准确性。
+motivation: 视觉模态缺失严重影响多模态实体对齐性能。
+method: 采用排序知识蒸馏和互信息估计，缓解缺失模态和噪声影响。
+result: 在标准基准上取得鲁棒提升，尤其对缺失模态场景。
+conclusion: 为多模态实体对齐中模态缺失问题提供有效解决方案。
 ---
 
 ## Abstract

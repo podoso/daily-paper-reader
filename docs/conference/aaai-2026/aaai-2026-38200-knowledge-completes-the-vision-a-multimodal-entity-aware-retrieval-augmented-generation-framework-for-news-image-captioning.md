@@ -1,19 +1,21 @@
 ---
 title: "Knowledge Completes the Vision: A Multimodal Entity-aware Retrieval-Augmented Generation Framework for News Image Captioning"
-title_zh: 知识完善视觉：面向新闻图像描述的多模态实体感知检索增强生成框架
+title_zh: 知识补全视觉：面向新闻图像描述的多模态实体感知检索增强生成框架
 authors: "Xiaoxing You, Qiang Huang, Lingyu Li, Chi Zhang, Xiaopeng Liu, Min Zhang, Jun Yu"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/38200/42162"
 tags: ["query:multimodal"]
-score: 7.0
-evidence: 多模态图像描述框架，结合实体感知检索
-tldr: 本文提出MERGE框架，用于新闻图像描述。通过构建实体中心的多模态知识库（EMKB），结合文本、视觉与结构化知识进行检索增强生成，有效解决信息覆盖不足、跨模态对齐弱和实体定位差的问题。实验证明MERGE在新闻图像描述数据集上生成更准确、信息丰富的描述，验证了多模态实体感知检索的有效性。
+score: 9.0
+evidence: 多模态实体感知的检索增强生成用于新闻图像描述；直接对应视觉语言任务
+tldr: 针对新闻图像描述中信息覆盖不全、跨模态对齐弱和视觉实体定位不佳的问题，提出了MERGE框架。该框架构建了一个以实体为中心的多模态知识库（EMKB），集成文本、视觉和结构化知识，通过多任务学习改善跨模态对齐与实体定位。实验结果表明，MERGE在多个新闻图像描述基准上取得了显著提升，推动了信息丰富的图像描述生成。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有新闻图像描述方法面临信息覆盖不全、跨模态对齐弱和视觉-实体定位不佳三方面挑战。
-method: 构建实体中心多模态知识库，通过检索增强生成实现跨模态对齐与实体感知描述。
-result: 在新闻图像描述基准上，该方法在指标和人工评估上均优于现有方法。
-conclusion: 多模态实体感知检索显著提升了图像描述的信息丰富度和准确性。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38200/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 856, \"height\": 535, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38200/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1817, \"height\": 868, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38200/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 856, \"height\": 257, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38200/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1813, \"height\": 829, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38200/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 874, \"height\": 450, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38200/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1826, \"height\": 1222, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38200/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1826, \"height\": 1210, \"label\": \"Table\"}]"
+motivation: 现有新闻图像描述方法存在信息覆盖不全、跨模态对齐差和实体定位不佳的问题。
+method: 构建实体中心的多模态知识库，通过检索增强生成和多任务学习改善跨模态对齐与实体定位。
+result: 在多个基准上显著提升了新闻图像描述的信息性和准确性。
+conclusion: 所提框架有效结合了多模态知识与实体感知，为新闻图像描述提供了新思路。
 ---
 
 ## Abstract

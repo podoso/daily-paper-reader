@@ -1,19 +1,21 @@
 ---
 title: "Seeing and Knowing in the Wild: Open-domain Visual Entity Recognition with Large-scale Knowledge Graphs via Contrastive Learning"
-title_zh: 开放域视觉实体识别：基于对比学习与大尺度知识图谱的看见与认知
+title_zh: 在开放域中看到并认知：基于知识图谱和大规模对比学习的视觉实体识别
 authors: "Hongkuan Zhou, Lavdim Halilaj, Sebastian Monka, Stefan Schmid, Yuqicheng Zhu, Jingcheng Wu, Nadeem Nazer, Steffen Staab"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/38370/42332"
-tags: ["query:multimodal"]
-score: 7.0
-evidence: 使用对比学习和知识图谱的开放域视觉实体识别
-tldr: 开放域视觉实体识别需将图像链接到知识库，面临长尾和语义歧义。本文提出KnowCoL框架，通过对比学习将图像和文本描述对齐到Wikidata结构化信息共享语义空间。该方法在开放集条件下显著提升了视觉实体识别准确率。
+tags: ["query:ie"]
+score: 6.0
+evidence: 开放域视觉实体识别，链接到知识图谱
+tldr: 开放域视觉实体识别面临未见实体和长尾分布挑战。本文提出知识引导对比学习框架KnowCoL，将图像和文本描述联合映射到由Wikidata构建的共享语义空间。实验证明该方法在零样本和长尾场景下显著优于现有方法，实现鲁棒的视觉实体识别。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 开放域视觉实体识别遇到有限监督、视觉歧义和语义消歧挑战。
-method: 利用知识引导的对比学习，将图像和文本描述映射到Wikidata结构化语义空间。
-result: 在开放集视觉实体识别任务上优于现有方法，尤其对长尾实体更有效。
-conclusion: 知识图增强的对比学习有效提升视觉实体识别鲁棒性。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38370/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1822, \"height\": 677, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38370/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1722, \"height\": 608, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38370/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 857, \"height\": 449, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38370/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1820, \"height\": 377, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38370/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 857, \"height\": 335, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38370/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1834, \"height\": 613, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38370/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 857, \"height\": 249, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38370/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 806, \"height\": 319, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38370/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 840, \"height\": 263, \"label\": \"Table\"}]"
+motivation: 开放域视觉实体识别中训练实体未见且长尾分布，现有方法泛化差。
+method: 提出知识引导对比学习框架，结合图像、文本和结构化知识进行语义对齐。
+result: 在多个开放域数据集上取得最先进结果，尤其擅长长尾实体识别。
+conclusion: 融合知识图谱的对比学习有效提升视觉实体识别的开放域泛化能力。
 ---
 
 ## Abstract

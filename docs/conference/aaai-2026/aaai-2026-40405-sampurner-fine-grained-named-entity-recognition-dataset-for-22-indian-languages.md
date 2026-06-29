@@ -6,14 +6,16 @@ date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/40405/44366"
 tags: ["query:ie"]
 score: 8.0
-evidence: 细粒度命名实体识别数据集
-tldr: 针对印度语言细粒度命名实体识别资源匮乏的问题，提出SampurNER数据集，覆盖22种印度语言，采用实体锚定的机器翻译框架构建，为多语言NER研究提供了宝贵资源。
+evidence: 22种印度语言的细粒度命名实体识别数据集
+tldr: 针对印地语等22种语言细粒度命名实体资源稀缺且远程监督噪声大的问题，构建SampurNER数据集并提出实体锚定机器翻译框架（EaMaTa），通过锚定实体进行翻译对齐，有效降低了标注噪声，为多语言NER研究提供了高质量资源。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 印度语言细粒度NER资源稀缺，现有数据集噪声大。
-method: 提出实体锚定的机器翻译框架，利用大规模平行语料构建数据集。
-result: 构建了包含22种印度语言的细粒度NER数据集，质量优于现有资源。
-conclusion: SampurNER为多语言NER研究提供了重要基础资源。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40405/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1819, \"height\": 390, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40405/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1844, \"height\": 2160, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40405/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1838, \"height\": 375, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40405/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1671, \"height\": 228, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40405/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1835, \"height\": 430, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40405/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1808, \"height\": 1022, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40405/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1832, \"height\": 1059, \"label\": \"Table\"}]"
+motivation: 印度语言细粒度NER资源稀缺且远程监督数据噪声大。
+method: 提出实体锚定机器翻译框架（EaMaTa），利用锚定实体进行翻译对齐，降低噪声。
+result: 构建了覆盖22种语言的高质量细粒度NER数据集。
+conclusion: 该数据集将促进多语言NER研究。
 ---
 
 ## Abstract

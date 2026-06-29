@@ -1,19 +1,21 @@
 ---
 title: A Boundary Token Graph for Zero-Shot Relation Triplet Extraction Involving Discontinuous Entities
-title_zh: 面向包含非连续实体的零样本关系三元组抽取的边界令牌图
+title_zh: 面向含不连续实体的零样本关系三元组提取的边界令牌图
 authors: "Kailun Lyu, Zehan Li, Fu Zhang, Jingwei Cheng"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/40515/44476"
-tags: ["query:ie"]
-score: 9.0
-evidence: 零样本关系三元组抽取
-tldr: 针对现有零样本关系三元组抽取方法无法处理非连续实体的问题，提出基于边界令牌图（BoG）的框架，通过预测并添加实体边界令牌间的边构建令牌图，创新性地将非连续实体纳入抽取流程，在多个数据集上取得最优结果。
+tags: ["query:joint-mer"]
+score: 8.0
+evidence: 零样本关系三元组提取，处理不连续实体
+tldr: 现有关系三元组提取方法假设实体连续，忽略了不连续实体情况。本文首次研究含不连续实体的零样本关系三元组提取，提出边界令牌图（BoG）框架。通过预测边界令牌间边构建图结构，将提取转化为路径预测问题。实验表明在不连续实体场景下大幅超越基线。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有零样本关系抽取方法假设实体连续，无法处理实际中的非连续实体。
-method: 提出边界令牌图结构，预测并添加实体边界令牌间的边，构建令牌图进行三元组抽取。
-result: 在多个数据集上取得最优性能，有效处理非连续实体。
-conclusion: 边界令牌图方法为零样本关系三元组抽取提供了处理非连续实体的新思路。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40515/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 880, \"height\": 338, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40515/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1799, \"height\": 978, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40515/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 845, \"height\": 395, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1745, \"height\": 616, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 801, \"height\": 245, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1847, \"height\": 1209, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1836, \"height\": 675, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 810, \"height\": 444, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-006.webp\", \"caption\": \"\", \"page\": 0, \"index\": 6, \"width\": 1626, \"height\": 494, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40515/table-007.webp\", \"caption\": \"\", \"page\": 0, \"index\": 7, \"width\": 838, \"height\": 297, \"label\": \"Table\"}]"
+motivation: 零样本关系提取中现有方法无法处理不连续实体。
+method: 构建边界令牌图，通过边预测连接实体边界，并转化为路径预测。
+result: 在含不连续实体的数据集上取得显著提升。
+conclusion: 首次解决了不连续实体下的零样本关系提取问题，拓展了任务边界。
 ---
 
 ## Abstract

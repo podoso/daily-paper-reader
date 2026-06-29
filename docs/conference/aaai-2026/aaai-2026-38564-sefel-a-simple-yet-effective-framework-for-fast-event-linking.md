@@ -1,19 +1,21 @@
 ---
 title: "SEFEL: A Simple Yet Effective Framework for Fast Event Linking"
-title_zh: SEFEL：快速事件链接的简洁有效框架
+title_zh: SEFEL：一种简单高效的快速事件链接框架
 authors: "Yinan Liu, Ziyang Zhang, Bin Wang, Xiaochun Yang"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/38564/42526"
 tags: ["query:ie"]
 score: 8.0
-evidence: 事件链接框架用于事件抽取
-tldr: 事件链接旨在将文本事件提及关联到知识库，现有方法计算成本高且泛化受限。本文提出SEFEL框架，利用端到端的事件表示和论元感知机制，统一处理知识库内外事件。实验表明SEFEL在速度和准确率上均优于传统检索排序方法。
+evidence: 事件链接框架用于信息抽取
+tldr: 针对现有事件链接方法计算成本高且依赖手工规则的问题，提出SEFEL端到端框架，通过参数感知的事件表示统一建模已知和未知知识库场景，实验表明在效率和准确性上优于现有方法，推动事件抽取发展。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有事件链接方法依赖手工规则且计算开销大，实体链接直接应用效果不佳。
-method: 构建端到端论元感知事件表示模型，统一处理知识库内外事件链接。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38564/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 868, \"height\": 502, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38564/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1837, \"height\": 1019, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-38564/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 748, \"height\": 505, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38564/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 765, \"height\": 285, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38564/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 876, \"height\": 526, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38564/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 792, \"height\": 334, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38564/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 862, \"height\": 339, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-38564/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 892, \"height\": 411, \"label\": \"Table\"}]"
+motivation: 现有事件链接方法计算开销大且泛化性差。
+method: 提出基于参数感知的事件表示，结合检索和排序实现端到端事件链接。
 result: 在多个事件链接数据集上取得更快速度和更高准确率。
-conclusion: SEFEL为事件抽取下游任务提供了高效的事件链接方案。
+conclusion: SEFEL为事件链接提供简单高效的解决方案。
 ---
 
 ## Abstract

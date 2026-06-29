@@ -1,19 +1,19 @@
 ---
 title: "SCIR: A Self-Correcting Iterative Refinement Framework for Enhanced Information Extraction Based on Schema"
-title_zh: "SCIR: 基于模式的自校正迭代细化框架用于增强信息抽取"
+title_zh: "SCIR: 基于模式的自校正迭代精炼增强信息抽取框架"
 authors: "Yushen Fang, Jianjun Li, Mingqian Ding, Chang Liu, Xinchi Zou, Wenqi Yang"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/40326/44287"
 tags: ["query:ie"]
 score: 9.0
-evidence: 信息抽取研究论文
-tldr: 当前基于大语言模型的信息抽取系统存在训练成本高、与模型偏好对齐困难等问题。本文提出自校正迭代细化框架SCIR，通过双路径自校正模块和反馈驱动优化，实现即插即用，显著降低训练成本。同时构建了包含10万条数据的多任务双语自校正数据集MBSC，验证了框架的有效性。
+evidence: 基于模式的自校正迭代精炼信息抽取框架，大语言模型
+tldr: 针对LLM驱动的信息抽取系统微调成本高、难以对齐LLM偏好的问题，提出SCIR框架，包含双路径自校正模块和反馈驱动优化，实现即插即用，同时构建超10万条的多任务双语自校正数据集，显著降低训练开销并提升抽取精度。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有大语言模型驱动的信息抽取系统面临高训练成本和难以对齐模型偏好两大局限。
-method: 提出双路径自校正模块和反馈驱动优化的SCIR框架，实现即插即用且低成本。
-result: 在多个信息抽取任务上，SCIR框架在降低训练成本的同时保持了竞争性能。
-conclusion: SCIR框架为LLM信息抽取提供了一种高效、可扩展的范式。
+motivation: 现有LLM信息抽取系统微调成本高且难对齐LLM偏好。
+method: 提出SCIR框架，包含双路径自校正模块和反馈驱动优化，结合多任务双语自校正数据集。
+result: 在多个IE基准上以更低成本达到领先性能。
+conclusion: 该框架为通用信息抽取提供了高效低成本的新范式。
 ---
 
 ## Abstract

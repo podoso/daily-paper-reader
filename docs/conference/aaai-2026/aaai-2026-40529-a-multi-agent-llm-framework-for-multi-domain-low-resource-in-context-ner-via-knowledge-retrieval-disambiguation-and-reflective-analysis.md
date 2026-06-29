@@ -1,19 +1,21 @@
 ---
 title: "A Multi-Agent LLM Framework for Multi-Domain Low-Resource In-Context NER via Knowledge Retrieval, Disambiguation and Reflective Analysis"
-title_zh: 基于知识检索、消歧与反思分析的多智能体LLM框架用于多领域低资源上下文命名实体识别
+title_zh: 基于知识检索、消歧和反思分析的多智能体大语言模型框架用于多领域低资源上下文命名实体识别
 authors: "Wenxuan Mu, Jinzhong Ning, Di Zhao, Yijia Zhang"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/40529/44490"
 tags: ["query:ie"]
 score: 9.0
-evidence: 基于大语言模型的命名实体识别框架
-tldr: 针对低资源场景下基于上下文的命名实体识别中标注数据稀缺、领域泛化差、缺乏外部知识等问题，提出多智能体框架KDR-Agent，融合知识检索、消歧和反思分析，在多个低资源领域NER任务上显著提升性能。
+evidence: 多智能体大语言模型框架用于低资源上下文命名实体识别
+tldr: 针对现有上下文学习中NER在低资源场景下依赖动态检索且泛化不足的问题，提出KDR-Agent多智能体框架。该框架包含知识检索、消歧和反思分析三个智能体，协同工作以利用外部知识增强实体识别。实验表明，在多领域低资源NER任务上，KDR-Agent显著优于现有ICL方法，有效解决了领域外泛化问题。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有基于ICL的NER方法在低资源场景下受限于标注数据稀缺和领域知识不足。
-method: 提出多智能体框架，集成知识检索、消歧和反思分析模块。
-result: 在多个低资源领域NER任务上取得最优性能。
-conclusion: 多智能体协作能有效利用外部知识提升低资源NER的泛化能力。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40529/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1824, \"height\": 1239, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-40529/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1810, \"height\": 370, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40529/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1845, \"height\": 862, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40529/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 886, \"height\": 296, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40529/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 882, \"height\": 521, \"label\": \"Table\"}]"
+motivation: 现有上下文NER方法在低资源下依赖标注样例检索且领域泛化差。
+method: 设计多智能体框架，集成知识检索、消歧和反思分析来增强上下文NER。
+result: 在多领域低资源NER任务上取得最佳性能。
+conclusion: 多智能体协作有效扩展了LLM在低资源NER中的能力边界。
 ---
 
 ## Abstract

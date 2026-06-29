@@ -5,15 +5,16 @@ authors: "Wolfgang Otto, Lu Gan, Sharmila Upadhyaya, Saurav Karmakar, Stefan Die
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/40537/44498"
 tags: ["query:ie"]
-score: 9.0
-evidence: 从科学出版物中进行命名实体识别和关系抽取
-tldr: 信息抽取有助于理解机器学习的可复现性，但缺乏细粒度数据集。本文构建了GSAP-ERE数据集，包含63K实体和35K关系，涵盖10种实体类型和18种关系类型，源自100篇ML论文全文。实验表明该数据集能够支持精细训练的信息抽取模型，推动科学文献IE研究。
+score: 8.0
+evidence: 面向机器学习研究的细粒度实体和关系抽取数据集
+tldr: 针对机器学习研究领域缺乏细粒度信息抽取数据集的问题，构建了GSAP-ERE，包含从100篇ML论文全文标注的6.3万实体和3.5万关系，覆盖10种实体类型和18种语义关系类型，实验表明该数据集能有效微调抽取模型，推动学术信息抽取发展。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 机器学习研究发展迅速，从科学文献中抽取细粒度信息对理解和复现研究至关重要。
-method: 人工标注100篇ML论文全文，构建包含10种实体类型和18种关系类型的细粒度数据集。
-result: 微调后的模型在实体识别和关系抽取任务上表现良好，验证了数据集的实用性。
-conclusion: 该数据集为科学领域的信息抽取提供了高质量资源，促进了ML研究的可复现性。
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1845, \"height\": 538, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1846, \"height\": 952, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 888, \"height\": 1311, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 886, \"height\": 371, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 1844, \"height\": 321, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-006.webp\", \"caption\": \"\", \"page\": 0, \"index\": 6, \"width\": 1848, \"height\": 630, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-40537/table-007.webp\", \"caption\": \"\", \"page\": 0, \"index\": 7, \"width\": 882, \"height\": 242, \"label\": \"Table\"}]"
+motivation: 缺乏从机器学习论文中抽取细粒度实体的高质量数据集。
+method: 人工标注100篇ML论文，构建63K实体35K关系的数据集。
+result: 微调模型在实体和关系抽取任务上表现优异，验证了数据集价值。
+conclusion: GSAP-ERE为学术信息抽取提供了重要基准资源。
 ---
 
 ## Abstract

@@ -1,19 +1,21 @@
 ---
 title: "MyGram: Modality-aware Graph Transformer with Global Distribution for Multi-modal Entity Alignment"
-title_zh: MyGram：面向多模态实体对齐的模态感知图Transformer与全局分布
+title_zh: MyGram：用于多模态实体对齐的模态感知图Transformer与全局分布
 authors: "Zhifei Li, Ziyue Qin, Xiangyu Luo, Xiaoju Hou, Yue Zhao, Miao Zhang, Zhifang Huang, Kui Xiao, Bing Yang"
 date: 2026-03-17
 pdf: "https://ojs.aaai.org/index.php/AAAI/article/download/39003/42965"
-tags: ["query:multimodal"]
-score: 7.0
-evidence: 多模态实体对齐，视觉-语言，图Transformer
-tldr: 针对多模态知识图谱实体对齐中模态结构上下文信息被忽视的问题，提出MyGram模型，包含模态扩散学习模块以捕捉深度结构上下文并实现细粒度多模态融合，通过全局分布对齐有效提升实体对齐性能，实验表明其优于现有方法。
+tags: ["query:joint-mer"]
+score: 8.0
+evidence: 多模态实体对齐，支撑实体关系抽取
+tldr: 针对多模态实体对齐中模态结构信息丢失问题，提出MyGram模型，利用模态感知图变换器和模态扩散学习模块捕捉深层结构上下文，实现细粒度多模态融合，在多个数据集上达到先进效果，为多模态实体关系抽取提供高质量实体对齐基础。
 source: AAAI-2026-Accepted
 selection_source: conference_retrieval
-motivation: 现有方法忽略每个模态内的结构上下文信息，易受浅层特征干扰。
-method: 开发模态扩散学习模块捕获模态内深度结构上下文，并设计全局分布对齐实现细粒度多模态融合。
-result: 在多个多模态实体对齐数据集上，MyGram显著优于现有方法。
-conclusion: 模态感知的结构上下文建模对多模态实体对齐至关重要。
+figures_json: "[{\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39003/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 866, \"height\": 563, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39003/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1597, \"height\": 978, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39003/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 867, \"height\": 376, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39003/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 879, \"height\": 402, \"label\": \"Figure\"}, {\"url\": \"assets/figures/aaai-2026-accepted/aaai-2026-39003/fig-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 873, \"height\": 410, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39003/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 818, \"height\": 804, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39003/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1841, \"height\": 825, \"label\": \"Table\"}, {\"url\": \"assets/tables/aaai-2026-accepted/aaai-2026-39003/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 876, \"height\": 335, \"label\": \"Table\"}]"
+motivation: 现有方法忽略模态内部结构上下文，易受浅层特征干扰。
+method: 设计模态扩散学习模块和图变换器，分别捕获模态内结构信息和全局分布。
+result: 在多模态实体对齐数据集上取得最优性能。
+conclusion: MyGram有效提升了多模态实体对齐精度。
 ---
 
 ## Abstract
