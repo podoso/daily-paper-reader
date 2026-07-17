@@ -1,0 +1,1125 @@
+Title: 2026.findings-acl.941.pdf
+
+URL Source: https://aclanthology.org/2026.findings-acl.941.pdf
+
+Published Time: Thu, 11 Jun 2026 02:31:28 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+Findings of the Association for Computational Linguistics: ACL 2026 , pages 18855–18869 July 2-7, 2026 ©2026 Association for Computational Linguistics Structure-Aware Zero-Shot Relational Learning for Knowledge Graphs without External Knowledge 
+
+Kuan Xu 1,2 , Baoxin Zhang 1,2 , Shuyue Fan 1,2 , Ming Chen 3, Zhipeng Ke 4,Jian Yu 1,2 , Xuezhong Zhou *1,2 ,
+
+> 1
+
+School of Computer Science & Technology, Beijing Jiaotong University, Beijing, China, 
+
+> 2
+
+Beijing Key Laboratory of Traffic Data Mining and Embodied Intelligence, Beijing, China, 
+
+> 3
+
+China Mobile Financial Technology Co., Ltd., Beijing, China, 
+
+> 4
+
+State Key Laboratory of Technologies for Chinese Medicine Pharmaceutical Process Control and Intelligent Manufacture, Nanjing, Jiangsu, China. 
+
+{xukuan, baoxin, shuyuefan, jianyu, xzzhou}@bjtu.edu.cn, kzp0901@163.com, chenmingds@chinamobile.com 
+
+Abstract 
+
+Zero-shot Relational Learning (ZRL) aims to perform knowledge graph completion when dealing with newly emerging relations that have no observed triples. However, existing ZRL methods typically rely on external knowledge (e.g., textual descriptions or curated annota-tions), which increases labeling costs and lim-its real-world applicability. To overcome this limitation, we propose a new Structure-Aware paradigm for ZRL , termed SAZRL , that per-forms ZRL without relying on external knowl-edge. SAZRL leverages intrinsic structural pat-terns in KGs to bridge semantic correlations for new relations with existing ones. It constructs structure-aware conditional query graphs based on shared entities and adaptive relation updat-ing module to infer representations for new re-lations based on the query graphs. We con-duct extensive experiments on three real-world benchmarks, NELL-ZS , Wiki-ZS and FB15K-ZS , demonstrating that SAZRL consistently surpasses state-of-the-art ZRL methods, achiev-ing up to 10.66% improvement in MRR while eliminating external annotations. 
+
+1 Introduction 
+
+Knowledge Graphs (KGs), constructed from fac-tual facts (i.e., (h, r, t )), play a vital role in various tasks, e.g., drug repurposing (Kumar et al., 2025), recommendation systems (Cui et al., 2025), and information retrieval (Rossi et al., 2021). Despite recent advances, most existing KGs remain largely incomplete (Li et al., 2025; Meilicke et al., 2024). To address this issue, Knowledge Graph Comple-tion (KGC) has emerged as a crucial task that aims to predict missing entities—either the tail t given a head–relation pair (h, r ) or the head h given a relation–tail pair (r, t ) (Chen et al., 2024). Recent studies (Xu et al., 2025; Chen et al., 2024) have made great progress in KGC. How-ever, these methods struggle with newly emerging relations. Although collecting new instances and retraining models can alleviate this issue, such so-lutions are often impractical due to the high cost of annotation and retraining (Geng et al., 2021). To address this challenge, zero-shot relation learning (ZRL) (Qin et al., 2020; Dong et al., 2024) has emerged, which aims to infer facts involving new relations without requiring their instances. Ontological Schemas        
+
+> Seen Relation
+> Unseen Relation
+> (a) Text-based methods (b) Ontology-based methods
+> Support
+> radionstationincity (r7):
+> specifies that a particular
+> radio station is headquarted
+> in a particular city.
+> Textual Descriptions
+> Support
+> Existing KG
+> (c) Expert-guided methods
+> Support
+> radionstationincity (r7)
+> hasofficeincity
+> belongtocompany
+> locatedincity
+> Expert Anno tations
+> Relevant Relations
+> (d) SAZRL (ours)
+> Support
+> Query Pairs
+> r1 r2
+> r3
+> r4
+> r5
+> r1
+> r1
+> r2 r2
+> Query
+> r7
+> ht
+> r7 ?hor
+> t?r7
+
+Figure 1: Various ZRL methods. Ours ( d) does not rely on external knowledge compared with others. 
+
+The key idea of ZRL lies in acquiring prior knowledge (i.e., support set ) for new (i.e., unseen )relations to model semantic correlations with ex-isting (i.e., seen ) ones within the prior knowledge space, thereby leveraging recognition experience (i.e., model parameters ) learned from seen rela-tions to make prediction on unseen ones (i.e., query set ) (Chen et al., 2023). For example, as shown in Figure 1, text-based methods (Qin et al., 2020; Li et al., 2024; Fang et al., 2025) and ontology-based methods (Geng et al., 2021, 2022) utilize textual descriptions or ontological schemas to cap-ture semantic relationships between relations in the textual or ontological space. Expert-guided meth-ods (Dong et al., 2024), on the other hand, rely on manually annotated relevance scores between relations derived from expert knowledge. Although these methods enable predictions without training instances for unseen relations, such external knowl-edge is not always readily available. 
+
+18855 Therefore, we wonder if there exists an approach that can conduct ZRL without relying on external knowledge (e.g., textual descriptions , ontological schemas , or expert annotations ). In this paper, we propose such a solution. Our goal is to encode semantic correlations among re-lations through the structural patterns within KGs , as semantically related relations typically share same entities (Galkin et al., 2024; Lee et al., 2023). To this end, we propose Structure-Aware ZRL 
+
+(SAZRL ), a new paradigm that exploits structural patterns to enable effective ZRL without relying on external knowledge. Specifically, SAZRL con-sists of two core components: (1) the Conditional 
+
+Query Graphs ( CQG ) module and (2) the Adaptive 
+
+Relation Updating ( ARU ) module. In CQG , we utilize the query pairs with unseen relation (e.g., 
+
+(h, r unseen , ?) or (? , r unseen , t )) to extract sub-graph conditioned on them, which aims to identify relations semantically similar to the query relation. Then, the query graph for relation runseen can be constructed by leveraging shared entities (e.g., h
+
+or t) between query pairs and known facts from the subgraph. In this graph, each node represents a relation, and each weighted edge encodes the semantic similarity between two relations. The similarity between two relations is measured by considering the entities they share. Based on this graph, the relevant neighboring relations for un-seen relation runseen are identified. The ARU then synthesizes embeddings for runseen by aggregating the embeddings of its neighboring seen relations via an adaptive attention mechanism. The process is optimized by maximizing the log-likelihood of observed triples based on relation-entity interaction plausibility scores. To ensure a fair comparison, we evaluate SAZRL against state-of-the-art ZRL methods on three benchmarks: NELL-ZS and Wiki-ZS , which provide rich external knowledge for ZRL, and 
+
+FB15K-ZS , a new dataset derived from FB15K-237 (Toutanova and Chen, 2015), which does not include external knowledge. Extensive experi-ments across all datasets show that SAZRL con-sistently outperforms existing methods. Notably, SAZRL requires no external knowledge beyond the KG, demonstrating its advantages in reducing annotation costs and enhancing practicality. Our main contributions are as follows: • We propose a new Structure-Aware Zero-shot Relational Learning ( SAZRL ) paradigm which exploits structural patterns in the KG to perform KGC for unseen relations. • Unlike existing methods, SAZRL enables ZRL without relying on external knowledge, reducing annotation costs and enhancing prac-ticality in real-world scenarios. • We experiment on three datasets: NELL-ZS , Wiki-ZS , and FB15K-ZS . SAZRL con-sistently outperforms existing ZRL methods, achieving 10.66% and 4.33% improvements in MRR on NELL-ZS and Wiki-ZS, and per-forms effectively on FB15K-ZS. 
+
+2 Related Work 
+
+Existing studies on ZRL can be broadly categorized into three groups: text-based methods, ontology-based methods, and expert-guided methods. 
+
+Text-based Methods. ZSGAN (Qin et al., 2020) employs generative adversarial networks (GANs) to encode textual descriptions of unseen relations and generate plausible embeddings for them. CZRL (Fang et al., 2025) introduces a contrastive learning framework that differentiates relation representations derived from textual de-scriptions, thereby refining model performance. ROCKGC (Yu and Yu, 2025) leverages LLMs to enrich the textual descriptions of relations. 
+
+Ontology-based Methods. Ontology-based ap-proaches leverage structured ontological knowl-edge. OntoZSL (Geng et al., 2021) generates em-beddings for unseen relations based on an onto-logical schema, while DOZSL (Geng et al., 2022) further disentangles relation representations within the same schema, producing more fine-grained em-beddings for unseen relations. 
+
+Expert-guided Methods. FZR (Dong et al., 2024) advances beyond text-based approaches by identifying the underlying semantic factors in tex-tual descriptions through factor extraction and shared-factor composition. In addition, it intro-duces a human-expert–guided mechanism to re-construct relation representations, where experts provide relevance scores between relation pairs, thus enhancing semantic fidelity. Despite their effectiveness, they are highly de-pendent on external knowledge, which may be un-available or costly in practical settings. In contrast, our work investigates structure-aware ZRL, which operates without relying on such knowledge. 18856 Beyond the ZRL, we also note the recent rise of fully inductive KGC task, which similarly involves reasoning over unseen relations. We provide a de-tailed discussion of it and clarify the fundamental distinctions from ZRL in Appendix A.1 and A.2 . 
+
+3 Preliminaries 
+
+In this section, we provide a formal definition of the problem of ZRL and outline the key notations used throughout this paper. In the context of ZRL, a KG can be formally represented as K = ( E, Rs, Ru, Ts, Tu), where 
+
+E denotes the set of entities, Rs and Ru denote the sets of seen and unseen relations, respectively. Correspondingly, Ts and Tu represent the sets of triplets involving seen and unseen relations i.e., 
+
+Ts = {(ei, r sk, e j )|ei, e j ∈ E , r sk ∈ R s},
+
+Tu = {(ei, r uk , e j )|ei, e j ∈ E , r uk ∈ R u}.
+
+Note that Rs ∩ R u = ∅, indicating that the rela-tions appearing in Ru do not appear in Rs, and vice versa. According to standard ZRL settings, as adopted in prior ZRL studies (Geng et al., 2022; Dong et al., 2024), a closed-world setting for enti-ties is considered, meaning that each entity appear-ing in Tu also exists in Ts. The objective of ZRL is formulated as predicting the missing entity given a query pair which consists of a query entity and a unseen query relation. For example, for the query pair (ei, r uk ), there exists a ground-truth tail entity 
+
+ej and a corresponding candidate set C(ei,r uk ). Our goal is to assign the highest ranking to ej among the candidate entities e′ 
+
+> j
+
+∈ C (ei,r uk ).During training, the set of seen triplets Ts is par-titioned into two subsets. The first subset, denoted as Tg = {(ei, r ss k , e j ) | ei, e j ∈ E , r ss k ∈ R ss },serves as a background KG and provides the triplets involving seen relations. The second subset, de-noted as Ttr = {(ei, r su k , e j ) | ei, e j ∈ E , r su k ∈Rsu }, is used for training and simulates the triplets involving unseen relations. Here, Rss ⊂ Rs,
+
+Rsu ⊂ R s, and Rss ∩ R su = ∅. Meanwhile, the set of unseen triplets Tu is further divided into a validation set Tval and a testing set Ttest to evaluate the performance of the proposed method. It is worth noting that during the training phase, 
+
+Ttr is dynamically sampled from Ts, with the re-maining triplets used as Tg. In other words, Ttr and 
+
+Tg are not fixed throughout training. For clarity of exposition, we present our method assuming a fixed partition in the following descriptions. Addi-tionally, during the validation and testing phases, the entire Ts is used as the background KG. 
+
+4 The Proposed Method 
+
+In this section, we present a detailed description of our proposed method, SAZRL. The detailed Al-gorithm of training and testing is provided in Ap-pendix B. SAZRL consists of three components: 1. the structure-aware Conditional Query Graph (CQG ) construction module (Figure 2(a)-(c)): Constructs conditional query graphs based on query pairs to establish correlations between seen and unseen relations by leveraging struc-tural patterns in the KG; 2. the Adaptive Relation Updating ( ARU ) mod-ule (Figure 2(d)): Updates relation represen-tations by aggregating neighboring seen rela-tions through attention index to generate em-beddings for unseen ones; 3. the Relation-Entity Interaction Modeling mod-ule (Figure 2 (e)): Models relation–entity in-teractions and optimizes the model through an interaction scoring function. 
+
+4.1 Structure-Aware CQG Construction 
+
+We decompose the CQG construction process into two components: (1) conditional subgraph ex-traction (Figure 2 (a-b)), and (2) query graph construction (Figure 2 (c)). The goal of conditional subgraph extraction is to identify relations semantically similar to the query relation, which typically share entities and exhibit clustering (Ding et al., 2025; Lee et al., 2023). To begin with, during training, each triplet in Ttr 
+
+is decomposed into two binary query pairs. For ex-ample, the triplet (ei, r su k , e j ) is split into (ei, r su k )
+
+and (rsu k , e j ). Note that only a single query pair (e.g., ( ei, r uk , ?)) is used during testing to prevent data leakage. Based on these two query pairs, we extract a subgraph Srsu k 
+
+> sub
+
+from the background graph 
+
+Tg. Specifically, we extract the entities ei and ej
+
+from the query pairs (ei, r su k ) and (rsu k , e j ) respec-tively, to construct an entity set denoted as Ersu k 
+
+> q
+
+.Since all entities in Ersu k 
+
+> q
+
+are observable in Tg, we uniformly sample the two-hop neighbors for each entity in Ersu k 
+
+> q
+
+from Tg to construct the entity set 
+
+Ersu k 
+
+> sub
+
+. To avoid exponential expansion, we limit 18857 one-hop             
+
+> two-hop
+> Query Graph Condition ed on r7 Adaptive Relation Update
+> e1 r7 ej
+> Relation-Entity Interaction
+> (a) (b) (c) (d) (e)
+> �(��,��,��)
+> r6
+> r2
+> r5
+> r6 r2
+> r4
+> r1
+> r3 r2
+> r3
+> r6
+> r2
+> r1 r3
+> r4
+> r1
+> r2 r5
+> r5
+> r1
+> r3
+> r6
+> r5
+> r1
+> r4
+> r2
+> e1
+> r1
+> r3
+> r4
+> r2
+> r7
+> r5
+> r6
+> 0.62
+> 0.33
+> 0.52
+> 0.11
+> 0.27
+> 0.18
+> 0.23
+> 0.61
+> 0.17
+> 0.50
+> 0.31
+> r1
+> r3
+> r4
+> r2
+> r7
+> r5
+> r6
+
+Figure 2: Overview of SAZRL with the query pair (e1, r 7, ?) as an example. A weighted query graph is built, where 
+
+e1 bridges the unseen relation r7 and seen relations r1-r6, allowing r7 to be inferred from its neighbors. 
+
+the number of neighbors to at most 50 per hop in line with common practice. Then, the subgraph conditioned on relation rsu k is defined as: 
+
+Srsu k 
+
+> sub
+
+= {(ei, r ss k , e j )|ei, e j ∈ E rsu k 
+
+> sub
+
+, r ss k ∈ R ss }. (1) Given the subgraph Srsu k 
+
+> sub
+
+and the query pairs ex-tracted from Ttr , we build a relation-conditioned query graph Grsu k as a weighted graph. In Grsu k ,each node represents a relation, and each edge weight encodes the semantic similarity between the corresponding pair of relations. Intuitively, mul-tiple similarity measures can be used to encode semantic relatedness, e.g., co-occurrence , jaccard similarity , and positive pointwise mutual infor-mation . For clarity, we present the co-occurrence-based similarity formulation here. The other two similarity measures, along with their comparative experimental results, are provided in Appendix C. To construct Grsu k , we first define two matrices: 
+
+Mh ∈ Rn×(m+m′), Mt ∈ Rn×(m+m′), (2) where n denotes the number of entities in the sub-graph Srsu k 
+
+> sub
+
+, m is the number of relations in Srsu k 
+
+> sub
+
+,and m′ is the number of relations derived from query pairs. The matrices Mh and Mt encode the frequency with which each entity appears as a head or tail entity, respectively. For instance, Mh[i, j ]
+
+indicates the number of times entity ei appears as the head entity of relation rj . Next, we compute the relation similarity matrices as: 
+
+Grsu k 
+
+> h
+
+= M Th D−2 
+
+> h
+
+Mh, Grsu k 
+
+> t
+
+= M Tt D−2 
+
+> t
+
+Mt, (3) where the Dh, D t ∈ Rn×n denote diagonal ma-trices representing the degrees of entities when they act as head and tail, respectively. Specif-ically, Dh[i, i ] = ∑ 
+
+> j
+
+Mh[i, j ] and Dt[i, i ] =
+
+∑ 
+
+> j
+
+Mt[i, j ]. The use of D−2 
+
+> h
+
+and D−2 
+
+> t
+
+ensures that the similarity weights in Grsu k 
+
+> h
+
+and Grsu k 
+
+> t
+
+are nor-malized to sum to one, which helps mitigate the impact of imbalanced entity participation across re-lations. Finally, the query graph Grsu k is represented as an adjacency matrix, defined as follows: 
+
+Grsu k = Grsu k 
+
+> h
+
++ Grsu k 
+
+> t
+
+, Grsu k ∈ R(m+m′)×(m+m′), (4) where each element sij ∈ G rsu k denotes the seman-tic similarity between relations ri and rj . This formulation enables the modeling of correlations between seen and unseen relations without relying on external knowledge beyond KGs. Note that the query graph is not designed to identify an “optimal” set of similar relations; rather, it defines a reason-able neighborhood for the target unseen relation. 
+
+4.2 ARU: Adaptive Relation Updating 
+
+For each relation rk (k = 1 , 2, . . . , m +m′) in Grsu k ,we associate a feature vector xk ∈ Rd, where d is the feature dimension. Following prior work (Yang et al., 2024), we initialize xk using Glorot initial-ization (Glorot and Bengio, 2010). We define the hidden representation of each relation rk at layer l
+
+as hlk ∈ Rd′
+
+, where d′ is the dimensionality of the hidden space. The superscript l indicates the l-th layer in the network, with l = 0 , . . . , L − 1. For each relation rk, the hidden representation at layer 
+
+l + 1 is computed by aggregating the weighted hid-den representations of its neighbors and itself from layer l. We also incorporate residual connections at each layer to effectively preserve and leverage the hidden representations across layers. The update rule is formally defined as: 
+
+hl+1  
+
+> k
+
+= σ1
+
+(
+
+(∑  
+
+> rj∈Nk
+
+αlkj W lhlj ) + Klhlk
+
+)
+
+. (5) Here, W l, K l ∈ Rd′×d′
+
+are learnable parameter matrices at layer l. The set Nk denotes the neigh-bors of relation rk in G. The function σ1(·) denotes the activation function which is implemented as 18858 ReLU (Glorot et al., 2011) in our method. The initial hidden representation at layer 0 is computed as h0 
+
+> k
+
+= W ′xk, where W ′ ∈ Rd′×d is a learnable projection matrix. αlkj denotes the attention weight between relations rk and rj , which is formally de-fined as follows: 
+
+αlkj =exp 
+
+(
+
+ϖlσ2(clkj ) + olI(k,j )
+
+)∑  
+
+> rj′∈N k
+
+exp 
+
+(
+
+ϖlσ2(clkj ′ ) + olI(k,j ′)
+
+) (6) where the activation function σ2(·) is set to LeakyReLU (Maas et al., 2013). A learnable row vector ϖl ∈ R1×d′
+
+is applied after σ2(·) to mitigate the static attention problem, as discussed in (Brody et al., 2021). The term clkj is introduced to model semantic interactions between relations rk and rj .Additionally, following (Lee et al., 2023), we incor-porate a global similarity bias olI(k,j ), which serves as a learnable scalar determined by the discretized ranking of the similarity score skj within the query graph Grsu k . Specifically, we define 
+
+clkj = U l[hlk|| hlj ], I(k, j ) = 
+
+⌈ rank (skj )×B
+
+> |G| ̸=0
+
+⌉
+
+(7) where U l ∈ Rd′×2d′
+
+is a learnable parameter ma-trix used to capture semantic information between 
+
+rk and rj . The symbol || denotes the concate-nation operation. rank (skj ) denotes the rank po-sition of skj among all non-zero elements in G
+
+sorted in descending order. |G| ̸ =0 denotes the number of non-zero elements in G. The similar-ity scores are discretized into B bins, with each bin index I(k, j ) ∈ { 1, . . . , B } corresponds to a learnable parameter olI(k,j ), selected from the set 
+
+{ol
+
+> 1
+
+, . . . , o lB }. Finally, the output embedding zk
+
+of relation rk(k = 1 , 2, . . . , m + m′) is defined as: zk = P h Lk , where P ∈ R ˆd×d′
+
+is a learnable projection matrix that maps the final hidden repre-sentation to a output space of dimension ˆd.
+
+4.3 Relation-Entity Interaction Modeling 
+
+Given a closed set of entities, we define each en-tity’s embedding as vt ∈ R ˆd (t = 1 , ..., n ′), where 
+
+n′ is the number of entities in Tg and vt is learnable. With the embedding zk for each relation rk, we can model the relation-entity interaction using various interaction methods (e.g., translation , product 
+
+and rotation ). For clarity, we follow previous ZRL studies (Qin et al., 2020; Dong et al., 2024) and define our interaction function as: 
+
+f (ei, r k, e j ) = vTi diag (zk)vj , (8) where diag (zk) is a diagonal matrix whose diagonal elements are given by zk. With the scoring function, following (Ge et al., 2023), we derive a Log-Likelihood objective function with self-adversarial negative sampling, formulated as: 
+
+L = − log σ3 (f (ei, r k, e j )) (9) 
+
+− ∑ 
+
+> tr i′kj ∈S h
+
+p(tr i′kj |{ (ei, r k, e j )}) log σ3
+
+(−f (tr i′kj ))
+
+− ∑ 
+
+> tr ikj ′∈S t
+
+p(tr ikj ′ |{ (ei, r k, e j )}) log σ3
+
+(−f (tr ikj ′ )) ,
+
+where σ3(·) denotes the sigmoid function. For convenience, we denote the triplets (ei′ , r k, e j )
+
+and (ei, r k, e j′ ) as tr i′kj and tr ikj ′ , respectively. 
+
+tr i′kj and tr ikj ′ are negative triplets sampled from the negative sets Sh and St, generated by replacing the head or tail entities of (ei, r k, e j ).
+
+p(tr i′kj |{ (ei, r k, e j )}) and p(tr ikj ′ |{ (ei, r k, e j )})
+
+are the probabilities of sampling tr i′kj and tr ikj ′ ,respectively. For example, given a positive triplet 
+
+(ei, r k, e j ), the sampling probability of tr ikj ′ is defined as: 
+
+p(tr ikj ′ |{ (ei, r k, e j )}) = Aj′    
+
+> ∑
+> i′Ai′+∑
+> j′Aj′
+
+, (10) 
+
+Ai′ = exp (τ f (tr i′kj )) , A j′ = exp (τ f (tr ikj ′ )) , (11) where τ is the temperature hyperparameter of sam-pling, which is set to 0.5 in our experiments. 
+
+5 Experiments 
+
+5.1 Datasets and Evaluation Metrics 
+
+To the best of our knowledge, there are only two publicly available benchmarks for ZRL, namely NELL-ZS and Wiki-ZS, both introduced by (Qin et al., 2020) and adopted by subsequent work (Dong et al., 2024; Fang et al., 2025). These bench-marks are derived from real-world KGs: NELL 1
+
+and Wikidata 2 , respectively. Both datasets pro-vide an ontological schema over relations, where each relation is accompanied by textual descrip-tions and expert annotations. To further evaluate the performance of mothods in the absence of ex-ternal knowledge, we further construct FB15K-ZS from FB15K-237 (Toutanova and Chen, 2015) fol-lowing (Qin et al., 2020). For each dataset, the triplets Tu is divided into validation set Tval and test set Ttest , with relation sets denoted as Rval 
+
+and Rtest , respectively. Table 2 lists the dataset statistics using the notion defined in section 3. 
+
+> 1NELL: http://rtw.ml.cmu.edu/rtw/
+> 2Wikidata: https://www.wikidata.org/
+
+18859 Table 1: Performance comparison of ZRL methods on NELL-ZS and Wiki-ZS datasets. The optimal results are denoted in bold , while the sub-optimal results are underlined . “–” indicates the model is unavailable on the dataset.                                                                                                                                                                                                                                                                                                 
+
+> Condition Method NELL-ZS Wiki-ZS FB15K-ZS w/o Text w/o Onto w/o Exp MRR Hits@10 Hits@5 Hits@1 MRR Hits@10 Hits@5 Hits@1 MRR Hits@10 Hits@5 Hits@1
+> ✗✓✓ZS-TransE 0.097 0.203 0.147 0.043 0.053 0.119 0.081 0.018 0.015 0.027 0.011 0.003
+> ✗✓✓ZS-DistMult 0.235 0.326 0.284 0.185 0.189 0.236 0.210 0.161 0.028 0.053 0.025 0.013
+> ✗✓✓ZS-ComplEx 0.216 0.316 0.267 0.160 0.118 0.180 0.144 0.083 0.013 0.020 0.009 0.007
+> ✗✓✓ZSGAN 0.244 0.371 0.308 0.175 0.193 0.277 0.231 0.157 ----
+> ✗✗✓OntoZSL 0.243 0.362 0.303 0.178 0.187 0.276 0.230 0.149 ----
+> ✓✗✓DisenE+GAN 0.219 0.351 0.288 0.155 0.190 0.272 0.230 0.138 0.031 0.067 0.027 0.010
+> ✓✗✓DisenE+GCN 0.230 0.361 0.292 0.152 0.187 0.262 0.221 0.137
+> ✓✗✓RGAT+GAN 0.222 0.341 0.290 0.162 0.200 0.280 0.219 0.144 0.027 0.038 0.014 0.008
+> ✓✗✓RGAT+GCN 0.226 0.360 0.289 0.160 0.179 0.268 0.220 0.136
+> ✓✗✓DisenKGAT+GAN 0.232 0.359 0.279 0.161 0.190 0.279 0.234 0.141 0.033 0.063 0.017 0.012
+> ✓✗✓DisenKGAT+GCN 0.230 0.351 0.273 0.165 0.186 0.275 0.227 0.135
+> ✓✗✓DOZSL(RD+GAN) 0.234 0.371 0.296 0.171 0.188 0.279 0.230 0.137 ----
+> ✓✗✓DOZSL(AGG+GAN) 0.227 0.363 0.289 0.165 0.186 0.272 0.222 0.138 ----
+> ✓✗✓DOZSL(RD+GCN) 0.237 0.375 0.309 0.161 0.177 0.267 0.220 0.138 ----
+> ✓✗✓DOZSL(AGG+GCN) 0.225 0.358 0.300 0.164 0.191 0.275 0.227 0.135 ----
+> ✗✓✗FZR T ransE 0.213 0.334 0.276 0.149 0.193 0.267 0.220 0.150 ----
+> ✗✓✗FZR DistM ult 0.234 0.346 0.293 0.174 0.208 0.281 0.239 0.163 ----
+> ✗✓✓CZRL 0.244 0.370 0.314 0.164 0.199 0.280 0.233 0.151 ----
+> ✓✓✓SAZRL (ours) 0.270 0.400 0.343 0.196 0.217 0.296 0.251 0.172 0.152 0.336 0.233 0.071
+> Improvement (%) 10.66 6.67 9.24 5.95 4.33 5.34 5.02 5.52 360.61 401.49 762.96 446.15
+
+Table 2: Details of existing ZRL datasets. |A| denotes the number of elements in set A.
+
+Dataset |E| |R s| |R val | |R test | |T s| |T val | |T test |
+
+NELL-ZS 65,567 139 10 32 181053 1856 5483 Wiki-ZS 605,812 469 20 48 701977 7241 15710 FB15K-ZS 10399 191 23 21 209133 25174 17501 
+
+For evaluation, we follow the standard prac-tice (Geng et al., 2021; Dong et al., 2024) and report Mean Reciprocal Rank ( MRR ) and Hits@K 
+
+(K ∈ 1, 5, 10 ) to assess the performance of both baselines and our method. 
+
+5.2 Baselines and Implementation Details 
+
+We conduct extensive comparative experiments of SAZRL against state-of-the-art ZRL methods with publicly available code. The baselines include the ZRL variants of classical KGE models ( ZS-TransE 
+
+, ZS-DistMult , and ZS-ComplEx ) from (Qin et al., 2020), text-based methods ( ZSGAN (Qin et al., 2020), CZRL (Fang et al., 2025)), ontology-based methods ( OntoZSL (Geng et al., 2021), 
+
+DOZSL (Geng et al., 2022)) and expert-guided methods ( FZR (Dong et al., 2024)). For DOZSL, we evaluate four variants combining ontology encoding strategies—neighborhood aggregation (AGG) or random initialization (RD)—with ZRL models using either GAN (Goodfellow et al., 2020) or GCN (Kipf and Welling, 2016). Follow-ing DOZSL, we also include RGAT (Busbridge et al., 2019), DisenE (Kou et al., 2020), and Dis-enKGAT (Wu et al., 2021)—using either GAN or GCN as the downstream ZRL models. For FZR (Dong et al., 2024), we evaluate two variants pre-trained with TransE and DistMult, respectively. More implementation details are provided in Ap-pendix D.1, D.2, and D.3. The code and data are available at https://github.com/XKKuan/SAZRL. 
+
+5.3 Performance Comparison 
+
+The performance of SAZRL in comparison with ZRL baselines is presented in Table 1. It is evident that SAZRL consistently outper-forms all other methods across all benchmark datasets. Specifically, compared to the sub-optimal results, SAZRL yields an average relative improve-ment of 8.57% on NELL-ZS and 5.05% on Wiki-ZS across four metrics. Noting that these improve-ments are computed relative to the best overall results among all baselines, rather than those of individual models. Moreover, we categorize all methods based on the type of external knowledge they require: textual descriptions ( Text ), ontologi-cal schemas ( Onto ), and expert annotations ( Exp ). A key advantage of SAZRL is that it does not rely on them, making it particularly valuable in sce-narios where KGs lack such resources. For in-stance, in FB15K-ZS where no external knowledge is available, SAZRL still achieves remarkable per-formance, while existing methods struggle to make predictions or even fail to run. The effectiveness of SAZRL can be attributed to empirical regularities reported in (Lee et al., 2023), where semantically similar relations in a KG tend to share common entities, resulting in a natural clus-18860 tering effect. This provides a strong inductive bias that facilitates generalization from seen to unseen relations, eliminating the need for external seman-tic annotations. To further explore the question, "Why are structural patterns effective for ZRL?", we conduct an empirical analysis, which can be found in Appendix E. We also observe the similar regularities in our experiments (see Appendix F). Leveraging this, SAZRL constructs query graphs based on shared query entities, effectively captur-ing semantic correlations between seen and unseen relations. This enables SAZRL to infer meaningful representations for unseen relations by aggregat-ing representations from their semantically related neighbors, thereby enabling robust ZRL reasoning. 
+
+5.4 Ablation Study 
+
+We conduct ablation studies to evaluate the contri-bution of each component in SAZRL on NELL-ZS and Wiki-ZS. The results are shown in Table 3. Specifically, for the CQG module, we examine the effect of two components: (1) w/o query graph :without the query graph, the representations of un-seen relations are learnable and initialized using Glorot initialization. (2) w/o subgraph : only re-lations directly connected to the query entity are used to construct the query graph, without two-hop expansion. For the ARU module, we evaluate three variants: (3) w/o similarity bias : the global bias term olI(k,j ) is removed from Eq. (6). (4) wsum : the representation of an unseen relation is computed by summing the representations of its neighboring seen relations. (5) w avg : the rep-resentation of an unseen relation is computed by averaging the representations of its neighbors. 
+
+Table 3: Results of the ablation experiments.                                                      
+
+> Data Method MRR Hits@10 Hits@5 Hits@1
+> NELL-ZS  w/o query graph 0.018 0.029 0.019 0.009 w/o subgraph 0.261 0.386 0.332 0.190 w/o similarity bias 0.264 0.394 0.333 0.192 w sum 0.246 0.36 0.307 0.183 w avg 0.258 0.385 0.331 0.187
+> SAZRL 0.270 0.400 0.343 0.196
+> Wiki-ZS  w/o query graph 0.035 0.061 0.043 0.016 w/o subgraph 0.208 0.282 0.238 0.164 w/o similarity bias 0.209 0.284 0.238 0.165 w sum 0.208 0.283 0.237 0.165 w avg 0.213 0.289 0.243 0.169
+> SAZRL 0.217 0.296 0.251 0.172
+
+Overall, each component of SAZRL contributes positively to its performance. Removing any com-ponent results in a performance drop to varying extents. Meanwhile, through the ablation experi-ments, we can draw the following conclusions: (I) 
+
+From experiment (1), it is evident that the repre-sentations of unseen relations can be derived from seen ones. This process can be effectively achieved using only the structural patterns within the KG. 
+
+(II) Experiment (2) shows that constructing a sub-graph is beneficial. This may be because the query graph derived from the subgraph enables the model to better capture multi-hop neighboring relations of the unseen relations. Even if these relations are not directly connected to the unseen ones, there still ex-ist latent indirect associations. The subgraph-based query graph facilitates the propagation of such asso-ciations during the model’s learning process. (III) 
+
+From experiment (3), we observe that the global bias positively contributes to the performance of SAZRL. This may be attributed to its role in help-ing the ARU capture global features of the query graph, improving the generalization across diverse query graphs. (IV) Experiments (4) and (5) indi-cate that the strength of the correlations between unseen and seen relations varies, which is consis-tent with real-world scenarios. Simply summing or averaging the representations is insufficient to capture the complex inter-relational dependencies between them. 
+
+5.5 Discussion on Structural Sparsity 
+
+Since SAZRL constructs the query graph based on shared entities between seen and unseen relations, we explore its robustness under structural sparsity (i.e., unseen relations have few or no overlapping entities with seen ones ). Specifically, we vary the maximum number of shared entities per unseen relation in {0, 1, 5, 50 } and report the MRR on NELL-ZS and Wiki-ZS, as shown in Figure 4(a). The results indicate that in the absence of shared entities, it becomes difficult to capture the correla-tions between seen and unseen relations, leading to poor performance. In contrast, the presence of shared entities leads to noticeable performance improvements, as they help establish meaningful connections between unseen and seen relations. An interesting observation is that the MRR does not change significantly as the number of shared enti-ties increases from 1 to 50. One possible reason is that semantically similar relations exhibit a clus-tering effect: even when the shared entities differ, the neighbors tend to be similar. For example, in NELL-ZS, we compute the Jaccard and Overlap indexes of neighbors for the same query relation across different query entities. The average val-18861 Wife of                 
+
+> (a)
+> (b)
+> (c)
+> (d)
+> 0
+> 0
+> 20 -20 -40
+> 10
+> 20
+> -20
+> -10
+> (a)(b)
+> (c)
+> (d)
+> Ceo of
+> 020 -20 -40 40
+> 0
+> 30
+> 20
+> 10
+> -10
+> -20
+> -30
+> -40
+> Team coach
+> (a)
+> (b)
+> (c)
+> (d)
+> 020 -20 -40 40
+> 0
+> 30
+> 20
+> 10
+> -10
+> -20
+> Rank 123
+> Wife of (a) Has spouse (b) Mother of person; (c) Has family member (d) Person born in location
+> Ceo of (a) Person leads organization (b) Agent collaborates with agent; (c) Mutual proxy for (d) Agent controls
+> Team coach (a) Organization has person; (b) Organization hired person (c) Team member (d) Worker
+
+Figure 3: Results of case study. SAZRL effectively infers unseen relations by leveraging structural patterns in KGs. 
+
+ues are 0.39 and 0.72, respectively (refer to Ap-pendix F for details). These results suggest that even with one shared entity, similar relations can still be captured to a certain extent. To further validate this hypothesis, we conduct additional experiments under the condition that the number of shared entities is fixed at one. For each query relation, we randomly retain at most n 
+
+∈ { 0, 1, 3, 10 , 20 } neighbor relations and report the average MRR over five independent runs. The re-sults are presented in Figure 4(b). A clear trend can be observed: as the number of neighbor relations increases, the performance of SAZRL gradually improves and gradually stabilizes. This is because when the number of neighbor relations is small (i.e., neighbor sparsity ) (e.g., 1 or 3), the cluster-ing effect weakens, the randomness and sparsity of neighbor relations increases, making it more difficult to establish reliable correlations and thus leading to degraded performance. In contrast, as the number of neighbor relations grows, the oppo-site effect occurs—the clustering effect strengthens, and randomness decreases, enabling SAZRL to ef-fectively capture correlations. The results provide empirical support for the above hypothesis. Build-ing on this observation, we also plan to explore strategies to mitigate neighbor sparsity in future. 0.30             
+
+> 0.25
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00 01310 20
+> 0.30
+> 0.25
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00 01550
+> NELL-ZS
+> Wiki-ZS
+> NELL-ZS
+> Wiki-ZS
+> MRR
+> Number of Shared Entities Number of Neighbor Relations
+> (a) (b)
+
+Figure 4: Discussion on Structural Sparsity. 
+
+5.6 Case Study 
+
+In this section, we present a case study to offer a more intuitive and concise qualitative analysis of SAZRL. Specifically, leveraging the semantic annotations provided by the NELL-ZS dataset, we report the top-3 seen relations most strongly associ-ated with several unseen relations—namely, “Wife of”, “CEO of”, and “Team coach”—as learned by SAZRL. In addition, we visualize the cluster-ing patterns of relation representations induced by SAZRL using t-SNE (Maaten and Hinton, 2008). The corresponding results are shown in Figure 3. The results clearly show that: (I) SAZRL effec-tively infers unseen relations by leveraging struc-tural patterns in the KG. For instance, given the unseen relation "Wife of," SAZRL retrieves seman-tically related seen relations from the background graph Ts, such as "Has spouse", "Mother of per-son", "Has family member". Intuitively, these rela-tions provide strong semantic cues that facilitate the inference of the target relation. This highlights the effectiveness of SAZRL in capturing semantic cor-relations between relations solely from structural information. (II) SAZRL has the ability to distin-guish between relations. Across all three clustering results, it is evident that for a given unseen relation, its semantically related relations (either direct or indirect) are grouped together with it. In contrast, other relations are clearly separated and placed far from this cluster. (III) We further observe that the construction of the query graph in SAZRL is con-ditioned on different query relations, as described in section 4.1. As illustrated in Figure 3, distinct unseen relations exhibit noticeably different cluster-ing patterns in the learned relation representations. This design exposes SAZRL to multiple relation-specific Query Graphs during training, thereby en-hancing its generalization capability and mitigating the risk of overfitting to a single graph structure. 18862 All of these observations provide strong empirical support for our initial motivation. 
+
+6 Conclusion and Future Work 
+
+In this paper, we propose SAZRL, a new paradigm that leverages structural patterns within KGs to facilitate ZRL. Extensive experimental results indi-cate that SAZRL consistently outperforms state-of-the-art ZRL methods while exhibiting strong poten-tial for real-world applicability without relying on external knowledge. Inspired by this work, we plan to extend our research in the following directions: (1) exploring more robust relation representation strategies under neighbor sparsity, to better infer unseen relations when only limited structural con-text is available; (2) investigating more expressive structural encoding methods for capturing richer semantic correlations; and (3) extending ZRL to settings involving unseen entities, which presents a more challenging scenario for KGC. 
+
+7 Limitations 
+
+Since SAZRL performs inference solely based on the structural patterns of a given KG, it inevitably faces certain limitations. One limitation is data sparsity: semantically similar relation pairs may be missed if they do not share any entities, which prevents the model from capturing their correla-tions. Another limitation arises from unavoidable noise in KGs, as the construction process may intro-duce false-positive or false-negative facts, thereby adversely affecting structural inference. 
+
+Acknowledgments 
+
+This work is supported by the Fundamental Research Funds for the Central Universities (No.2025YJS045 and 2025JBZX064), the Na-tional Natural Science Foundation of China (Nos. U23B2062, and 82374302), and the State Key Laboratory on Technologies for Chinese Medicine Pharmaceutical Process Control and Intelligent Manufacture (SKL2024Z0102). 
+
+References 
+
+Shaked Brody, Uri Alon, and Eran Yahav. 2021. How at-tentive are graph attention networks? arXiv preprint arXiv:2105.14491 .Dan Busbridge, Dane Sherburn, Pietro Cavallo, and Nils Y Hammerla. 2019. Relational graph attention networks. arXiv preprint arXiv:1904.05811 .Mingyang Chen, Wen Zhang, Yuxia Geng, Zezhong Xu, Jeff Z Pan, and Huajun Chen. 2023. General-izing to unseen elements: A survey on knowledge extrapolation for knowledge graphs. arXiv preprint arXiv:2302.01859 .Zhuo Chen, Yichi Zhang, Yin Fang, Yuxia Geng, Ling-bing Guo, Xiang Chen, Qian Li, Wen Zhang, Jiaoyan Chen, Yushan Zhu, and 1 others. 2024. Knowledge graphs meet multi-modal learning: A comprehensive survey. arXiv preprint arXiv:2402.05391 .Ziqiang Cui, Yunpeng Weng, Xing Tang, Fuyuan Lyu, Dugang Liu, Xiuqiang He, and Chen Ma. 2025. Com-prehending knowledge graphs with large language models for recommender systems. In Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval ,pages 1229–1239. Ling Ding, Lei Huang, Zhizhi Yu, Di Jin, and Dongxiao He. 2025. Towards global-topology relation graph for inductive knowledge graph completion. In Pro-ceedings of the AAAI Conference on Artificial Intelli-gence , volume 39, pages 11581–11589. Zhijun Dong, Likang Wu, Kai Zhang, Ye Liu, Yang-hai Zhang, Zhi Li, Hongke Zhao, and Enhong Chen. 2024. Fzr: Enhancing knowledge transfer via shared factors composition in zero-shot relational learning. In Proceedings of the 33rd ACM International Con-ference on Information and Knowledge Management ,pages 497–507. John Duchi, Elad Hazan, and Yoram Singer. 2011. Adaptive subgradient methods for online learning and stochastic optimization. Journal of machine learning research , 12(7). Zhiyi Fang, Hang Yu, Changhua Xu, Zhuofeng Li, Jie Ying, and Shaorong Xie. 2025. Contrastive zero-shot relational learning for knowledge graph completion. 
+
+Knowledge-Based Systems , page 113425. Mikhail Galkin, Xinyu Yuan, Hesham Mostafa, Jian Tang, and Zhaocheng Zhu. 2024. Towards founda-tion models for knowledge graph reasoning. In The Twelfth International Conference on Learning Repre-sentations .Xiou Ge, Yun Cheng Wang, Bin Wang, and C-C Jay Kuo. 2023. Compounding geometric operations for knowledge graph completion. In Proceedings of the 61st Annual Meeting of the Association for Compu-tational Linguistics (Volume 1: Long Papers) , pages 6947–6965. Yuxia Geng, Jiaoyan Chen, Zhuo Chen, Jeff Z Pan, Zhiquan Ye, Zonggang Yuan, Yantao Jia, and Huajun Chen. 2021. Ontozsl: Ontology-enhanced zero-shot learning. In Proceedings of the web conference 2021 ,pages 3325–3336. Yuxia Geng, Jiaoyan Chen, Wen Zhang, Yajing Xu, Zhuo Chen, Jeff Z. Pan, Yufeng Huang, Feiyu Xiong, 18863 and Huajun Chen. 2022. Disentangled ontology em-bedding for zero-shot learning. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining , pages 443–453. Xavier Glorot and Yoshua Bengio. 2010. Understanding the difficulty of training deep feedforward neural net-works. In Proceedings of the thirteenth international conference on artificial intelligence and statistics ,pages 249–256. JMLR Workshop and Conference Proceedings. Xavier Glorot, Antoine Bordes, and Yoshua Bengio. 2011. Deep sparse rectifier neural networks. In Pro-ceedings of the fourteenth international conference on artificial intelligence and statistics , pages 315– 323. JMLR Workshop and Conference Proceedings. Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley, Sherjil Ozair, Aaron Courville, and Yoshua Bengio. 2020. Generative adversarial networks. Communications of the ACM ,63(11):139–144. Thomas N Kipf and Max Welling. 2016. Semi-supervised classification with graph convolutional networks. arXiv preprint arXiv:1609.02907 .Xiaoyu Kou, Yankai Lin, Yuntao Li, Jiahao Xu, Peng Li, Jie Zhou, and Yan Zhang. 2020. Disene: Disentan-gling knowledge graph embeddings. arXiv preprint arXiv:2010.14730 .A Arun Kumar, Samarth Bhandary, Swathi Gopal Hegde, and Jhinuk Chatterjee. 2025. Knowledge graph applications and multi-relation learning for drug repurposing: A scoping review. Computational Biology and Chemistry , page 108364. Jaejun Lee, Chanyoung Chung, and Joyce Jiyoung Whang. 2023. Ingram: Inductive knowledge graph embedding via relation graphs. In International Con-ference on Machine Learning , pages 18796–18809. PMLR. Mingchen Li, Chen Ling, Rui Zhang, and Liang Zhao. 2024. Zero-shot link prediction in knowledge graphs with large language models. In 2024 IEEE Interna-tional Conference on Data Mining (ICDM) , pages 753–760. IEEE. Zhao Li, Xin Wang, Jun Zhao, Wenbin Guo, and Jianxin Li. 2025. Hycube: Efficient knowledge hypergraph 3d circular convolutional embedding. IEEE Transac-tions on Knowledge and Data Engineering .Andrew L Maas, Awni Y Hannun, Andrew Y Ng, and 1 others. 2013. Rectifier nonlinearities improve neural network acoustic models. In Proc. icml , volume 30, page 3. Atlanta, GA. Laurens van der Maaten and Geoffrey Hinton. 2008. Visualizing data using t-sne. Journal of machine learning research , 9(Nov):2579–2605. Christian Meilicke, Melisachew Wudage Chekol, Patrick Betz, Manuel Fink, and Heiner Stuck-eschmidt. 2024. Anytime bottom-up rule learning for large-scale knowledge graph completion. The VLDB Journal , 33(1):131–161. Pengda Qin, Xin Wang, Wenhu Chen, Chunyun Zhang, Weiran Xu, and William Yang Wang. 2020. Gen-erative adversarial zero-shot relational learning for knowledge graphs. In Proceedings of the AAAI Con-ference on Artificial Intelligence , volume 34, pages 8673–8680. Andrea Rossi, Denilson Barbosa, Donatella Firmani, Antonio Matinata, and Paolo Merialdo. 2021. Knowl-edge graph embedding for link prediction: A com-parative analysis. ACM Transactions on Knowledge Discovery from Data (TKDD) , 15(2):1–49. Kristina Toutanova and Danqi Chen. 2015. Observed versus latent features for knowledge base and text inference. In Proceedings of the 3rd workshop on continuous vector space models and their composi-tionality , pages 57–66. Junkang Wu, Wentao Shi, Xuezhi Cao, Jiawei Chen, Wenqiang Lei, Fuzheng Zhang, Wei Wu, and Xi-angnan He. 2021. Disenkgat: knowledge graph em-bedding with disentangled graph attention network. In Proceedings of the 30th ACM international con-ference on information & knowledge management ,pages 2140–2149. Kuan Xu, Kuo Yang, Jian Liu, Xiangkui Lu, Jun Wu, and Xuezhong Zhou. 2025. Kgcrr: An effective metric-driven knowledge graph completion frame-work by designing a novel upper bound function with adaptive approximation to reciprocal rank. In Pro-ceedings of the AAAI Conference on Artificial Intelli-gence , volume 39, pages 12927–12935. Bishan Yang, Wen-tau Yih, Xiaodong He, Jianfeng Gao, and Li Deng. 2014. Embedding entities and relations for learning and inference in knowledge bases. arXiv preprint arXiv:1412.6575 .Jing Yang, Xiaowen Jiang, Yuan Gao, Laurence T Yang, and Jieming Yang. 2024. Generalize to fully unseen graphs: Learn transferable hyper-relation structures for inductive link prediction. In Proceedings of the 32nd ACM International Conference on Multimedia ,pages 1274–1282. Hang Yu and Haoyi Yu. 2025. Enhancing zero-shot knowledge graph relation prediction through large language models and contrastive learning. In Com-panion Proceedings of the ACM on Web Conference 2025 , pages 1490–1494. 18864 A Differences between ZRL and fully inductive KGC. 
+
+A.1 Difference in Tasks 
+
+Although fully inductive KGC also involves rea-soning over unseen relations, its objective is to evaluate a model’s ability to generalize to unseen KGs, which is more appropriately characterized as a transfer learning problem across KGs (Galkin et al., 2024). From the perspective of benchmark construction, in addition to the training, validation, and test splits, an extra inference graph is provided. Inductive KGC methods are trained on the training set and evaluated on the inference graph to assess their generalization ability across KGs. All entities and relations appearing in the validation and test sets are observed in the inference graph, which serves as the basis for evaluating a model’s generalization performance (Lee et al., 2023). In contrast to inductive KGC, ZRL exhibits a fun-damentally different problem setting. ZRL bench-marks do not provide an inference graph, which implies that facts involving unseen relations ap-pear only in the validation and test sets and are entirely unobservable for models. Consequently, the research question in ZRL is how to predict facts involving unseen relations when triples containing those relations are unavailable. From the perspec-tive of handling unseen relations, ZRL is therefore better characterized as a problem of discovering and modeling unseen relations, rather than learn-ing to generalize across KGs containing unseen relations, as in inductive KGC. In short, inductive KGC assumes unseen rela-tions are observable through an inference graph at inference time, whereas ZRL assumes no such ob-servations are available. As a result, ZRL addresses the qualitatively different and more challenging problem of identifying and modeling entirely un-seen relations without any relational instances. For a more detailed and formal comparison between these task settings, we refer readers to prior studies (Goodfellow et al., 2020; Lee et al., 2023; Galkin et al., 2024). 
+
+A.2 Difference in Methods 
+
+As discussed in the previous subsection, inductive KGC and ZRL differ fundamentally in task formu-lation and benchmark construction. Our research on SAZRL is developed specifi-cally for the ZRL setting. It is inspired by the intu-ition from inductive KGC that semantically related relations tend to share similar entity sets (Ding et al., 2025; Galkin et al., 2024; Lee et al., 2023). Importantly, this intuition is adopted at a concep-tual level rather than by assuming access to rela-tional instances or an inference graph. Accordingly, SAZRL introduces a task-specific graph construc-tion and inference mechanism that is fundamentally different from those used in inductive KGC. Due to the absence of an inference graph and the complete lack of relational instances for un-seen relations in ZRL benchmarks, SAZRL can-not directly leverage structural information in the manner of inductive KGC methods. Consequently, despite the shared intuition, SAZRL differs funda-mentally from the aforementioned inductive KGC approaches in the following aspects. Specifically, inductive KGC methods typically construct a sin-gle global relation graph over the entire inference graph. Such a design introduces several limita-tions when considered under the ZRL setting: (1) it relies heavily on relational instances of unseen relations present in the inference graph ; (2) the construction and maintenance of a global rela-tion graph may not scale well to large-scale KGs; and (3) modeling all relations within a single re-lation graph increases the risk of overfitting. 
+
+In contrast, SAZRL constructs query-specific graphs based on query pairs and observable entity anchors, without assuming access to an inference graph or relational instances of unseen relations. This design makes SAZRL naturally applicable to the ZRL setting and helps mitigate overfitting by avoiding reliance on a single global relation graph. Moreover, by operating on local subgraphs rather than the entire KG, SAZRL remains efficient and scalable on large-scale KGs. 18865 B Algorithm 
+
+In this section, we present the detailed training 
+
+and testing (Take, for example, predicting the tail entity t given a head–relation pair (h, r ).) process of SAZRL in Algorithm 1 and Algorithm 2.To en-hance clarity, some inherently parallel operations are illustrated using sequential loop constructs. 
+
+Algorithm 1 Training Process of SAZRL 
+
+Require: Ts: training triplet set, num neg : number of negative samples, θ: learnable parameters of SAZRL, lr : learning rate  
+
+> 1:
+
+while not converged do  
+
+> 2:
+
+Shuffle the triplets in Ts. 
+
+> 3:
+
+for Ttr , Tg ⊂ T s do  
+
+> 4:
+
+Eq ← ∅ . 
+
+> 5:
+
+for each (ei, r su k , e j ) ∈ T tr do  
+
+> 6:
+
+Split (ei, r su k , e j ) into (ei, r su k ) and 
+
+(rsu k , e j ). Ersu k 
+
+> q
+
+← E rsu k 
+
+> q
+
+∪ { ei, e j }. 
+
+> 7:
+
+end for  
+
+> 8:
+
+Ersu k 
+
+> sub
+
+← ∅ . 
+
+> 9:
+
+for each ei ∈ E rsu k 
+
+> q
+
+do  
+
+> 10:
+
+Construct Ersu k 
+
+> 2−hop
+
+of ei from Tg. 
+
+> 11:
+
+Ersu k 
+
+> sub
+
+← E rsu k 
+
+> sub
+
+∪ E rsu k
+
+> 2−hop
+
+. 
+
+> 12:
+
+end for  
+
+> 13:
+
+Construct Srsu k 
+
+> sub
+
+using Eq. 1.  
+
+> 14:
+
+Construct Grsu k using Eq. 2-4.  
+
+> 15:
+
+Initialize xsu k and vt for rsu k and et in Grsu k .
+
+h0 
+
+> k
+
+← W ′xsu k . 
+
+> 16:
+
+for l = 0 , . . . , L − 1 do  
+
+> 17:
+
+Update hl+1  
+
+> k
+
+using Eq. 5.  
+
+> 18:
+
+end for  
+
+> 19:
+
+zsu k ← P h Lk . Lmean ← ∅ . 
+
+> 20:
+
+for (ei, r su k , e j ) ∈ T tr do  
+
+> 21:
+
+Sh ← ∅ , St ← ∅ . 
+
+> 22:
+
+for n = 1 to num neg do  
+
+> 23:
+
+if replace head entity then  
+
+> 24:
+
+Sh ← S h ∪ { (ei′ , r su k , e j )}. 
+
+> 25:
+
+end if  
+
+> 26:
+
+if replace tail entity then  
+
+> 27:
+
+St ← S t ∪ { (ei, r su k , e j′ )}. 
+
+> 28:
+
+end if  
+
+> 29:
+
+end for  
+
+> 30:
+
+Define L according to Eq. 9.  
+
+> 31:
+
+Lmean ← L mean ∪ {L} . 
+
+> 32:
+
+end for  
+
+> 33:
+
+Lmean ← mean (Lmean ). 
+
+> 34:
+
+θ ← Adagrad (∇θLmean , θ, lr ). 
+
+> 35:
+
+end for  
+
+> 36:
+
+end while Algorithm 2 Testing Process of SAZRL 
+
+Require: Ts: Background triplet set, Ttest : Test-ing triplet set  
+
+> 1:
+
+while not end do  
+
+> 2:
+
+for each query (ei, r uk , e t) ∈ T test do  
+
+> 3:
+
+Eruk 
+
+> q
+
+← ei, Eruk 
+
+> sub
+
+← ∅ . 
+
+> 4:
+
+for each ei ∈ E ruk 
+
+> q
+
+do  
+
+> 5:
+
+Construct Eruk 
+
+> 2−hop
+
+of ei from Ts. 
+
+> 6:
+
+Eruk 
+
+> sub
+
+← E ruk 
+
+> sub
+
+∪ E ruk
+
+> 2−hop
+
+. 
+
+> 7:
+
+end for  
+
+> 8:
+
+Construct Sruk 
+
+> sub
+
+through Eq. 1.  
+
+> 9:
+
+Construct Gruk using Sruk 
+
+> sub
+
+and (ei, r uk , ?) 
+
+through Eq. 2-4.  
+
+> 10:
+
+Get xuk as representation for relation ruk . 
+
+> 11:
+
+Set h0 
+
+> k
+
+← W ′xuk . 
+
+> 12:
+
+for l = 0 , . . . , L − 1 do  
+
+> 13:
+
+Get hl+1  
+
+> k
+
+using Eq. 5.  
+
+> 14:
+
+end for  
+
+> 15:
+
+zuk ← P h Lk . 
+
+> 16:
+
+Get score st of (ei, r uk , e t) through Eq. 8, 
+
+Scores ← { st} 
+
+> 17:
+
+for each candidate ej ∈ C (ei, r uk ) do  
+
+> 18:
+
+Get sj of (ei, r uk , e j ) through Eq. 8.  
+
+> 19:
+
+Scores ← Scores ∪ { sj } 
+
+> 20:
+
+end for  
+
+> 21:
+
+Get the rank of (ei, r uk , e t) from Scores . 
+
+> 22:
+
+end for  
+
+> 23:
+
+end while 18866 C Analysis on Different Conditions of The Constructed Query Graph 
+
+In this section, we investigate different config-urations of the constructed query graphs in the CQG module. Specifically, in addition to the co-occurrence-based similarity ( CS ) among relations described in section 4.1, we evaluate two alterna-tive measures: jaccard similarity ( JS ) and positive pointwise mutual information ( PPMI ) similarity. For clarity, we follow the notation introduced in section 4.1. The JS score between relations rk and 
+
+rk′ is then defined as: 
+
+sJS (rk, r k′ ) = sJS  
+
+> h
+
+(rk, r k′ ) + sJac  
+
+> t
+
+(rk, r k′ ), (12) 
+
+sJS  
+
+> h
+
+(rk, r k′ ) = |H(rk) ∩ H(rk′ )||H(rk) ∪ H(rk′ )| , (13) 
+
+sJS  
+
+> t
+
+(rk, r k′ ) = |T (rk) ∩ T (rk′ )||T (rk) ∪ T (rk′ )| , (14) 
+
+H(rk) = {ei | Mh[i, k ] > 0}, (15) 
+
+T (rk) = {ei | Mt[i, k ] > 0}, (16) where Mh[i, k ] and Mt[i, k ] denote the frequency matrices introduced in section 4.1, which record how often each entity appears as a head or tail entity, respectively. For PPMI, we first define joint and marginal probabilities for entities and relations at the head position as follows: 
+
+ph(ei, r k) = Mh[i, k ]
+
+∑ 
+
+> i′,k ′
+
+Mh[i′, k ′] , (17) 
+
+ph(ei) = ∑
+
+> k
+
+ph(ei, r k), (18) 
+
+ph(rk) = ∑
+
+> i
+
+ph(ei, r k). (19) The PPMI is then computed as: PPMI h(ei, r k) = max( PMI h(ei, r k), 0) , (20) PMI h(ei, r k) = log ph(ei, r k)
+
+ph(ei)ph(rk) . (21) Each relation rk is the represented as a head-based PPMI-weighted vector: 
+
+ϕh(rk) = [ PPMI h(e1, r k), ..., PPMI h(en, r k)] T .
+
+(22) The head-based PPMI similarity between two rela-tions is computed using cosine similarity: 
+
+sPPMI  
+
+> h
+
+(rk, r k′ ) = ϕh(rk)⊤ϕh(rk′ )
+
+∥ϕh(rk)∥2 ∥ϕh(rk′ )∥2
+
+. (23) The same procedure is applied to Mt to obtain 
+
+sPPMI  
+
+> t
+
+(rk, r k′ ). The final PPMI similarity score is then defined as: 
+
+sPPMI (rk, r k′ ) = sPPMI  
+
+> h
+
+(rk, r k′ ) + sPPMI  
+
+> t
+
+(rk, r k′ ).
+
+(24) For all similarity measures, the similarity scores are normalized to to sum to one. We conduct comparative experiments on the NELL-ZS and Wiki-ZS datasets using these three similarity measures (CS, JS and PPMI), and report the performance of SAZRL in terms of MRR and Hits@10. The results are presented in Table 4. 
+
+Table 4: The performance of SAZRL with various simi-larity measures on NELL-ZS and Wiki-ZS.                  
+
+> Similarity NELL-ZS Wiki-ZS MRR Hits@10 MRR Hits@10 CS 0.270 0.400 0.217 0.296 JS 0.266 0.394 0.213 0.291 PPMI 0.272 0.399 0.218 0.299
+
+Overall, the results indicate that SAZRL is ro-bust to the choice of relation similarity measure. All three similarity measures achieve compara-ble performance across both datasets, suggesting that the effectiveness of SAZRL primarily stems from its ability to exploit structural regularities in the knowledge graph rather than reliance on a specific similarity definition. Although PPMI slightly outperforms CS—consistent with the in-tuition that PPMI better suppresses the influence of high-frequency hub entities—the performance differences among similarity measures are minor. This may be partly because degree normalization already mitigates much of the frequency bias, and partly because the adaptive relation updating mech-anism effectively compensates for imperfections in the initial similarity estimation. In contrast, Jac-card similarity consistently yields slightly lower performance, likely due to its sensitivity to sparse co-occurrence patterns. 18867 D Implementation Details 
+
+D.1 Details For SAZRL 
+
+All experiments are conducted on a Linux server equipped with NVIDIA RTX 3090 GPUs (24GB RAM). For SAZRL, we adopt Adagrad (Duchi et al., 2011) as the optimizer, with the learning rate selected from {1e-4, 5e-4, 1e-3, 5e-3, 1e-2}. To en-sure a sufficient search space, the embedding di-mensions for both entities and relations are ex-plored within {100 , 200 , 300 , 400 , 500 }, and the hidden dimension of relations is set to twice the size of the initial relation embedding. For NELL-ZS and FB15K-ZS, the B is set to 5, and for Wiki-ZS, it is set to 10. During each training epoch, we randomly sample 500 triplets from Ts to con-struct Ttr , with the remaining triplets forming the background KG Tg. For negative sampling, we gen-erate 1, 000 negative triplets per positive example on NELL-ZS and 3, 000 on Wiki-ZS and FB15K-ZS by randomly corrupting the head or tail entity. To ensure reliability, we conduct five independent experiments with the optimized hyperparameters and report the mean results. 
+
+D.2 Details For Baselines 
+
+For ZS-TransE , ZS-DistMult , and ZS-ComplEx 
+
+proposed by (Qin et al., 2020), we report their re-sults as presented in the paper (Qin et al., 2020), due to the lack of publicly available code and de-tailed experimental settings. For ZSGAN (Qin et al., 2020) and OntoZSL (Geng et al., 2021), we adopt DistMult (Yang et al., 2014) as the pre-training method to encode entity embeddings. We re-ran the experiments in our environment using the optimal hyperparameters provided in the re-leased source code, to ensure fair and consistent evaluation. For RGAT (Busbridge et al., 2019), 
+
+DisenE (Kou et al., 2020) and DisenKGAT (Wu et al., 2021), we conduct experiments based on the source code provided by (Geng et al., 2022). Along with DOZSL (Geng et al., 2022), we report the results conducted with the optimal hyperparam-eters provided in the source codes. For FZR (Dong et al., 2024), since it was not originally evaluated on the standard dataset splits, we reimplemented the experiments using the provided source code 3
+
+on the standardized benchmarks. It is worth not-ing that we performed hyperparameter tuning for FZR to obtain the best possible results for a fair 
+
+> 3https://github.com/Junslow331/FZR
+
+comparison. Specifically, following the standard FZR setup, we use TransE and DistMult as the pre-training models to encode the embeddings of entity pairs. We tune learning rates {lr D, lr D, lr E } over 
+
+{5e-3, 1e-3, 5e-4, 1e-4, 5e-5}, respectively. In ad-dition, we search the dimension of f c 1dim within 
+
+{200 , 250 , 300 , 350 }. Other hyperparameters are set to the optimal values reported in paper. For 
+
+CZRL , since neither the official code nor the data split specifications are publicly available, we reim-plemented the method based on the detailed compu-tational descriptions provided in the original paper and its architectural similarity to ZSGAN (Qin et al., 2020). Experiments were conducted on datasets with standard splits. For shared hyper-parameters, we followed the settings used in ZS-GAN. In addition, we performed a grid search over the learning rate and λ1, with learning rates selected from {1e −4, 5e −4, 1e −3, 5e −3, 1e −2}
+
+and λ1 from {0.2, 0.4, 0.6, 0.8}.
+
+D.3 Baselines for FB15K-ZS 
+
+Since FB15K-ZS lacks external knowledge (e.g., textual descriptions, ontological schemas, or ex-pert annotations), existing ZRL methods that rely on such knowledge cannot be applied. Therefore, when comparing to baselines, we evaluate their performance in the absence of external knowledge. Given that many ZRL methods share similar base models in the absence of external knowledge, we focus on comparing the performance of these base models. The models include: TransE , DistMult ,
+
+ComplEx , DisenE , RGAT , and DisenKGAT . The corresponding results are shown at the respective ZRL variant positions. 18868 Table 5: Clustering effect of similar relations.                 
+
+> Query Realtion Query Entity Neighbor Relations Jaccard Index Overlap Index Wife of Female:Laura_bush Has spouse, Has family member 0.503 0.873
+> Ceo of Ceo:gregg_steinhafel Worker, Person leads organization, 0.355 0.748 Agent controls, Agent collaborates with agent, etc.
+> Team coach Sportsteam:titans Organization hired person, Team member, 0.445 0.815 Organization has agent, Worker, etc.
+
+E Why Structural Patterns Are Effective for ZRL? 
+
+In this work, we leverage the structural patterns inherent in KGs to infer unseen relations, using these patterns as a prior for ZRL. Below, we explain why structural patterns are effective for ZRL. KGs encode human knowledge through struc-tured relational interactions, rather than random connections. A key empirical observation is that semantically related relations tend to interact with similar sets of entities, leading to a clustering effect in the relational structure (Lee et al., 2023). This suggests that relation semantics are implicitly cap-tured in entity co-occurrence patterns. Thus, the structure of a KG serves as an observable surrogate for latent relation semantics, where shared entity distributions across relations indicate high mutual information. Analyzing the relational structure sig-nificantly reduces uncertainty about the meaning of relations. SAZRL makes this implicit signal explicit by constructing query graphs. As a re-sult, unseen relations can be inferred based on their proximity to structurally similar relations. In summary, when a KG exhibits sufficient non-random organization, its structural regularities pro-vide a strong inductive bias for generalizing from seen to unseen relations, eliminating the need for external semantic annotations. 
+
+F Clustering Effect of Similar Relations 
+
+In this section, we report the clustering effect of similar relations. Specially, semantically simi-lar relations in a KG tend to share common en-tities (Lee et al., 2023), resulting in a clustering effect. Since the NELL-ZS dataset provides re-lation semantics, we conduct related experiments on it for ease of observation and analysis. Specifi-cally, we take the query pairs (Female:laura_bush, Wife of, ?) , (Ceo:gregg_steinhafel, Ceo of, ?) ,and (Sportsteam:titans, Team coach, ?) as exam-ples, and examine the neighboring relations of their query relations in the background KG Ttr , based on their query entities respectively. As shown in Table 5, the neighboring relations exhibit seman-tic similarity to the corresponding query relations. Moreover, for each of the three query relations, we compute the Jaccard and Overlap indices of neighboring relations by considering all possible pairs of query entities in Ttest , and report their av-erage values. The Jaccard index and Overlap in-dex can be defined as: Jaccard (A, B ) = |A∩B||A∪B| ,Overlap (A, B ) = |A∩B| 
+
+> min( |A|,|B|)
+
+, where A and B de-note two sets of neighboring relations. The results indicate that, despite variations in query entities, majority of neighboring relations remain seman-tically similar to the query relation. We further extend this analysis to all query relations in Ttest ,and present the distributions of the Jaccard and Overlap indices. As illustrated in the Figure 5, the neighboring relation sets for most query relations exhibit high similarity, by considering all possible pairs of query entities. Although some cases show relatively low Jaccard indices, their Overlap indices remain high. This phenomenon is likely due to KG incompleteness, which results in neighbor sparsity as discussed in section 5.5. 0.0          
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> 8
+> 0.2 0.4 0.6 0.8 1.0
+> Probability Density
+> Jaccard Index
+> 10
+> 5
+> 15
+> 20
+> 25
+> 0
+> Overlap Index
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Probability Density
+
+Figure 5: Clustering effect of similar relations. 
+
+Collectively, these findings suggest that the clus-tering behavior of semantically similar relations is preserved across different entities. This observa-tion aligns with the phenomenon reported in (Lee et al., 2023), where semantically related relations in a KG tend to share common entities. 18869
