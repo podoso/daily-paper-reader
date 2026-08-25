@@ -1,0 +1,1137 @@
+Title: Federated Continual Learning as a Distributed Drift-Plus-Penalty Control Problem
+
+URL Source: https://arxiv.org/pdf/2608.21539v1
+
+Published Time: Tue, 25 Aug 2026 00:07:32 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 
+
+# FEDERATED CONTINUAL LEARNING AS A DISTRIBUTED 
+
+# DRIFT -P LUS -P ENALTY CONTROL PROBLEM 
+
+Nazreen Shah 
+
+IIIT Delhi India 
+
+nazreens@iiitd.ac.in 
+
+Naveen Kumar Reddy Somireddy 
+
+IIIT Delhi India 
+
+naveens@iiitd.ac.in 
+
+Zubair Shaban 
+
+IIIT Delhi India 
+
+zubairs@iiitd.ac.in 
+
+Ranjitha Prasad 
+
+IIIT Delhi India 
+
+ranjitha@iiitd.ac.in 
+
+B. N. Bharath 
+
+IIT Dharwad India 
+
+bharathbn@iitdh.ac.in 
+
+ABSTRACT 
+
+Federated Continual Learning (FCL) is fundamental to real-world distributed learning systems, re-quiring models to adapt to sequential, non-IID data across clients while mitigating catastrophic forgetting and client drift. Existing approaches formulate continual learning (CL) as a sequence of per-task optimization problems, applied locally at each client and coupled through aggregation, us-ing heuristic mechanisms such as replay, regularization, or projection-based constraints. However, forgetting in FCL is inherently a long-term, distributed phenomenon, arising from the interaction of temporal task evolution and cross-client heterogeneity, which is not explicitly regulated. In this work, we cast FCL as a stochastic control problem and propose Federated Queue-regulated Contin-ual Learning ( FED QCL ), a framework based on Lyapunov drift-plus-penalty (DPP) optimization. FED QCL introduces virtual queues to track the accumulation of forgetting across tasks and clients, enabling explicit control of the stability-plasticity trade-off. By optimizing a DPP objective, the method jointly improves current-task performance while the queue-based formulation provides an interpretable and tunable mechanism to balance adaptation and retention through a single parameter, without requiring gradient projection or additional communication overhead. Empirical evaluations on standard benchmarks, including Split-CIFAR-10, Split-CIFAR-100, and Split-TinyImageNet, demonstrate that F ED QCL outperforms state-of-the-art baselines with respect to accuracy while significantly reducing forgetting under heterogeneous data distributions. 
+
+1 INTRODUCTION 
+
+In many real-world scenarios, such as mobile and wearable systems, data arrives sequentially, and it is essential to learn from streaming, non-IID (non-independent and identically distributed) data generated across decentralized and privacy-constrained devices. Federated Learning (FL) McMahan et al. (2017) has emerged as a privacy-preserving paradigm for training machine learning (ML) models across distributed clients without sharing raw data. However, most existing FL approaches assume static local datasets and a single task per client. In real-world applications, tasks evolve over time, requiring models to be continually updated. This necessitates a Continual Learning (CL) framework, where models must adapt to new streaming tasks while retaining knowledge of previously learned ones. In distributed settings, this gives rise to Federated Continual Learning (FCL), which combines the privacy-preserving properties of FL with the sequential adaptation requirements of CL. A central challenge in this setting is catastrophic forgetting, defined as the phenomenon where a model rapidly loses previously acquired knowledge when trained on new tasks McCloskey & Cohen (1989). This issue is further exacerbated in federated environments due to statistical heterogeneity across clients where non-IID data distributions induce divergent local updates, leading to instability in the global learning dynamics and amplifying the forgetting of past tasks Dupuy et al. (2023). Regularization-based methods in FCL mitigate catastrophic forgetting by constraining parameter updates, without requiring raw data storage, thus adhering to federated privacy constraints Yoon et al. (2021); Li et al. (2024b); Lee et al. (2024). However, this reliance on parameter-level constraints introduces inherent limitations as constraints com-pound over tasks and progressively restrict the feasible update space, limiting plasticity in dynamic environments. Generation-based methods provide a data-free way to approximate past distributions, i.e., instead of storing or sharing 1arXiv:2608.21539v1 [cs.LG] 21 Aug 2026 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 real data, each client learns a generative model that can recreate past samples Qi et al. (2023); Zhang et al. (2023); Liang et al. (2024). However, these methods incur significant computational and communication overheads. Gradient projection–based FCL methods Saha et al. (2021), such as FOT Bakman et al. (2023), attempt to alleviate these limita-tions by projecting current-task gradients onto subspaces that preserve previously learned knowledge, often facilitated through the exchange of high-dimensional embeddings across clients; however, this incurs significant communication overhead and introduces additional privacy concerns. Replay-based methods in FCL mitigate forgetting by augment-ing current-task updates with samples drawn from a replay buffer that stores past data. In centralized settings, this buffer is shared across all data and is highly effective at stabilizing training and preserving prior knowledge Rolnick et al. (2019). However, such centralized replay violates federated privacy constraints, and therefore FCL methods rely on local replay, where each client maintains its own private replay buffer constructed from its historical data Dong et al. (2022); Liu et al. (2023); Li et al. (2024a). In FCL, ensuring the stability of the global learning dynamics becomes as critical as achieving strong instantaneous performance in each round. One of the key limitations of all existing formulations is that while FCL is inherently a dy-namic, distributed process with temporally and cross-client coupled objectives, most approaches optimize it through myopic, round-wise updates that do not explicitly account for the accumulation of forgetting over time. This mo-tivates a control-theoretic formulation of FCL where instead of a purely optimization-based view, we adopt tools from stochastic control, in particular Lyapunov analysis and the Drift-Plus-Penalty (DPP) framework Neely (2006), to model and regulate the dynamics of forgetting under communication and resource constraints. The DPP framework enables a principled treatment of FCL by jointly accounting for instantaneous learning performance (plasticity) and the accumulation of forgetting (stability) across clients and rounds. By explicitly incorporating both short-term objec-tives and long-term stability considerations, it provides a systematic mechanism to balance plasticity and stability in distributed, non-IID environments. 
+
+Contributions: We cast FCL as a long-term constrained stochastic control problem, where catastrophic forgetting manifests as the accumulation of constraint violations over time and across clients. We propose Federated Queue-regulated Continual Learning ( FED QCL ), a principled framework based on Lyapunov optimization. The novel ap-proach in F ED QCL is the introduction of a virtual queue that tracks the evolution of constraint violations, enabling explicit monitoring of forgetting across communication rounds and clients. At each round, clients compute local up-dates guided by both the immediate learning objective and the state of this queue. These updates are aggregated by the server, leading to the balancing of plasticity with global stability. The key features of our framework is as follows: • Single-parameter control of stability–plasticity trade-off: FED QCL achieves a principled trade-off be-tween adaptation to new tasks and retention of past knowledge through a single hyperparameter, which bal-ances the current task learning objective against accumulated forgetting. • Fine-grained and communication-efficient regulation: We show that tracking and updating virtual queues at the level of communication rounds instead of task boundaries is critical, as forgetting evolves continuously due to iterative updates and partial participation. Importantly, these queues are maintained locally at each client, preserving privacy and no additional communication overhead. • Empirical evaluation: We demonstrate that F ED QCL outperforms state-of-the-art baselines with respect to average accuracy and forgetting under heterogeneous and non-stationary data distributions. The remainder of the paper is organized as follows: we first review related work, then present the problem formulation, followed by the proposed method, and finally provide experimental results and discussion. 
+
+2 RELATED WORKS 
+
+Classical FL and Replay-based CL methods : FL aims to train a global model across distributed clients without sharing raw data. The FedAvg algorithm McMahan et al. (2017) performs iterative rounds of local stochastic gradient descent (SGD) at clients followed by weighted averaging at the server. While simple and communication-efficient, FedAvg suffers under statistical heterogeneity, leading to client drift and degraded convergence. To address this, FedProx Li et al. (2020) introduces a proximal term to limit deviation from the global model, while SCAFFOLD Karimireddy et al. (2020) uses control variates to correct client drift, both improving stability under heterogeneity. Recent works continue to build upon these classical foundations by addressing scalability, heterogeneity, and robust-ness challenges Kairouz et al. (2021); Li et al. (2023); Wang et al. (2024b). Despite these advances, classical FL methods are primarily designed for static data distributions and single-task settings, and they are not suitable when data and tasks evolve over time. Rehearsal-based CL approaches mitigate catastrophic forgetting by maintaining a  
+
+> Code available at: https://github.com/Naveensomireddy4/FedQCL_Task
+
+2Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 limited memory buffer of past samples and augmenting current updates with replayed data. Experience Replay (ER) Rolnick et al. (2019) forms the canonical baseline, with extensions such as DER/DER++ Buzzega et al. (2020) (output distillation), MER Riemer et al. (2019) (meta-learning), and ER-ACE (asymmetric losses) improving stability. Other methods include GDumb Prabhu et al. (2020), which relies on buffer-based retraining, CBA Wang et al. (2023a), which mitigates recency bias, and REFRESH Wang et al. (2024c), which adopts an unlearn–relearn strategy. Recent works refine buffer construction and allocation strategies Zhang et al. (2024). Despite their effectiveness, these meth-ods primarily regularize updates implicitly through replay and do not explicitly model the temporal accumulation of forgetting. 
+
+Federated Continual Learning Methods: FCL extends federated learning to non-stationary environments where client data evolves over time, requiring models to retain prior knowledge while adapting to new tasks. Existing approaches combine continual learning strategies with federated optimization. Replay-based methods leverage local buffers to revisit past data and mitigate forgetting Dong et al. (2022); Liu et al. (2023); Li et al. (2024a), while regularization and distillation-based techniques constrain updates to preserve previously acquired knowledge Lee et al. (2024). More recent methods explicitly account for both data heterogeneity and sequential task learning. For instance, 
+
+BI Serra & Buettner (2025) employs uncertainty-aware memory management to prioritize informative samples for replay, whereas FOT Bakman et al. (2023) mitigates global catastrophic forgetting by projecting local updates onto the orthogonal complement of subspaces spanned by past-task gradients. In the federated setting, Keshri et al. (2025) proposes C-FLAG, a replay-based CFL strategy with convergence guarantees. Despite these advances, most existing FCL methods optimize per-round objectives and do not explicitly model the accumulation of forgetting over time. Other recent works address specific systems-level challenges in FCL: Shenaj et al. (2023) tackle asynchronous client participation, Wang et al. (2024a) focus on traceability of task contributions, Wuerkaixi et al. (2024) address accurate forgetting under heterogeneous distributions, and Li et al. (2026) consider resource-constrained settings. 
+
+Drift-Plus-Penalty in Machine Learning: The DPP technique, first introduced in the context of stochastic net-work optimization Neely (2010), is a powerful framework to design stochastic control algorithms. DPP is based on Lyapunov optimization that balances two competing objectives: minimizing a time-averaged penalty and ensur-ing constraint satisfaction through the control of virtual queues that are based on time-averaged constraint violations. The DPP framework has found broad applications across domains such as wireless resource allocation Neely et al. (2010), energy-efficient communications Samarakoon et al. (2015), and dynamic scheduling, where it ensures on-line decision-making with provable convergence bounds. Recently, DPP has been used for constrained reinforcement learning, where the algorithm balances reward maximization with long-term constraint satisfaction Huang et al. (2021); Xu et al. (2025). The authors in Wang et al. (2023b) apply the drift-plus-penalty framework to stationary federated learning settings for communication scheduling, where a single queue tracks gradient divergence. In online learning settings, it enables dynamic regularization and adaptive constraint enforcement, leading to the best known static regret bounds Sinha & Vaze (2024); Sarkar et al. (2025); Vaze & Sinha (2025). Recently, Shah et al. (2026) applies DPP to replay-based CL via virtual queues, but in a centralized single-learner setting that ignores client drift and partial participation. 
+
+Novelty: Overall, prior work addresses either forgetting (CL) or heterogeneity (FL), but optimizes per-round objectives and does not explicitly model the accumulation of forgetting over time. This is a gap that F ED QCL aims to fill. As compared to many existing algorithms, F ED QCL avoids gradient projection or dual-update mechanisms. Instead, constraints are enforced implicitly through virtual queue dynamics at the client level, enabling projection-free local updates, preserving plasticity and retaining privacy. Further, the proposed approach works under a fixed learning rate across clients and rounds, simplifying implementation and distinguishing F ED QCL from approaches that rely on adaptive or client-specific step sizes. To the best of the authors’ knowledge, F ED QCL is the first to cast FCL as a queue-stabilization problem and explicitly model forgetting as a controllable, accumulative process across time and clients, leading to explicit control on the stability–plasticity trade-off in distributed non-IID settings. 
+
+3 PROBLEM FORMULATION 
+
+We consider the problem of continually fine-tuning a global model on distributed streaming data, where the model exhibits task-specific adaptations over time. Towards this, we assume a federated learning system which consists of 
+
+N clients. In a FCL setting, each client i ∈ [N ] observes a sequence of tasks {D (t) 
+
+> i
+
+}Tt=1 and at each task t, the goal is to learn a global model w(t) by aggregating contributions from all clients. If one solves each task in isolation, the corresponding standard per-task federated objective for the t-th task is given as: 
+
+min 
+
+> w(t)∈Rd
+
+Φ( w(t)) := 
+
+> N
+
+X
+
+> i=1
+
+p(t) 
+
+> i
+
+Φi
+
+ w(t); D(t)
+
+> i
+
+, (1) 3Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 where Φi
+
+ w(t); D(t)
+
+> i
+
+ denotes the local loss at client i for task t, and p(t) 
+
+> i
+
+are client-specific per-task weights. While the per-task formulation captures the objective at a fixed time step, it treats each task independently and does not account for the temporal evolution of data across tasks. In realistic federated settings, however, data distributions are non-stationary, and models must continually adapt to new tasks while retaining knowledge from previous ones. Solving each task in isolation can therefore lead to suboptimal performance due to issues such as catastrophic forgetting and lack of knowledge transfer. To address these challenges, we move beyond independent per-task optimization and consider a FCL formulation where the clients collaboratively solve the sequential distributed optimization problem given as: 
+
+min 
+
+> w(1) ,..., w(t)
+
+PTt=1 
+
+PNi=1 p(t) 
+
+> i
+
+Φi(w(t); D(t) 
+
+> i
+
+). (2) An important limitation in CL when learning a new task is that data from earlier tasks is inaccessible. As a conse-quence, although the objective is written over all tasks, in practice the optimization is performed sequentially, with w(t)
+
+updated using the current task data D(t) 
+
+> i
+
+and relies on surrogate mechanisms to preserve previously acquired knowl-edge. We assume synchronous task boundaries across clients, i.e., all clients transition between tasks simultaneously, while their data distributions differs. The non-IID nature of client data induces statistical heterogeneity, leading to conflicting updates and exacerbating the stability–plasticity trade-off during FCL. The goal is to continually adapt the global model to new tasks while retaining past knowledge, and to effectively aggregate non-IID client updates to learn a stable and consistent global direction. To mitigate catastrophic forgetting in FCL, replay buffers are commonly employed to retain a subset of data from previously observed tasks. To maintain the privacy constraints in federated settings, each client maintains a local buffer that stores representative samples from past tasks, which are used to approximate the loss on past data. These buffers enable the evaluation of past-task performance during current updates, thereby providing a mechanism to regulate forgetting. In particular, in our framework ˆΦ(k) 
+
+> i
+
+(·) denotes the replay loss evaluated at client i on task 
+
+k < t . Here, the subscript i indexes the client, while k indexes the past task. Thus, ˆΦ(k) 
+
+> i
+
+captures the performance of a model on the data corresponding to the k-th task as approximated using the local replay buffer at client i. With the replay-mechanism in place, we consider the following problem where, at task t, the goal is to minimize the average loss across tasks while constraining the average forgetting across clients: 
+
+min 
+
+> w(1) ,..., w(t)
+
+1
+
+t
+
+> t
+
+X 
+
+> τ=1
+> N
+
+X
+
+> i=1
+
+p(τ ) 
+
+> i
+
+Φi(w(τ ); D(τ ) 
+
+> i
+
+)
+
+subject to 1
+
+t − 1
+
+> t−1
+
+X
+
+> k=1
+> N
+
+X
+
+> i=1
+
+p(k)
+
+> i
+
+ ˆΦ(k) 
+
+> i
+
+(w(t)) − ˆΦ(k) 
+
+> i
+
+(w(t−1) )
+
+
+
+≤ δ, (3) where w(t−1) denotes the global model obtained at the previous task and serves as a reference for measuring forgetting. The constraint enforces that the average increase in replay loss across past tasks and clients remains bounded by a tolerance δ, ensuring controlled forgetting under non-IID data distributions. 
+
+4 PROPOSED METHOD : D RIFT -P LUS -P ENALTY FORMULATION 
+
+To handle the constraints in the federated optimization problem formulated in equation 3, we adopt a Lyapunov optimization framework, a technique widely used for controlling constraint violations in stochastic and distributed systems Neely (2013). In this setting, each client locally minimizes a drift-plus-penalty (DPP) objective that combines the loss on the current task with a drift term capturing violations of forgetting constraints across past tasks. While the constraint in equation 3 is defined as a global average over clients and tasks, directly enforcing such a coupled constraint is impractical in federated settings due to partial participation and decentralized data access. To obtain a tractable and distributed implementation, we decompose the global constraint into per-client, per-task components and track their evolution locally. Specifically, inspired by Lyapunov drift-plus-penalty method, we introduce a virtual queue Q(k) 
+
+> i
+
+[t] at each client i for every past task k < t , which accumulates the violation of the corresponding forgetting constraint over time. This yields the following update: 
+
+Q(k) 
+
+> i
+
+[t] = max 
+
+n
+
+Q(k) 
+
+> i
+
+[t − 1] + 
+
+h ˆΦ(k) 
+
+> i
+
+(w(t) 
+
+> i
+
+) − ˆΦ(k) 
+
+> i
+
+(w(t−1) ) − δ
+
+i
+
+, 0
+
+o
+
+, (4) where ˆΦ(k) 
+
+> i
+
+(·) denotes the local replay loss at client i on task k, and δ is the allowable forgetting threshold. In the above expression, the queue evolves based on the instantaneous increase in replay loss at client i, which is a localized measure 4Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 of forgetting. This decomposition enables distributed tracking of constraint violations under partial participation, while remaining consistent with the global objective in expectation. For each client i, the local Lyapunov function is defined as: 
+
+Li[t] = 12
+
+> t−1
+
+X
+
+> k=1
+
+(Q(k) 
+
+> i
+
+[t]) 2, (5) with drift given by ∆Li[t] = Li[t] − Li[t − 1] . At task t, each client minimizes a DPP objective, where V > 0 is a scaling parameter that governs the stability-plasticity trade-off by controlling the relative weight of the current-task loss relative to the accumulated forgetting penalty.: 
+
+DPP (t) 
+
+> V,i
+
+:= min 
+
+> w(t)
+
+h
+
+V Φi
+
+ w(t); D(t)
+
+> i
+
+ + ∆ Li[t]
+
+i
+
+. (6) The following lemma provides an upper bound on the per-client Lyapunov drift in terms of the deviation in replay losses across past tasks. 
+
+Lemma 1 For each client i ∈ [N ], the Lyapunov drift at task t satisfies the following upper bound for any model 
+
+w ∈ Rd:
+
+∆Li[t] ≤ 12
+
+> t−1
+
+X
+
+> k=1
+
+
+
+∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) )
+
+2
+
++
+
+> t−1
+
+X
+
+> k=1
+
+Q(k) 
+
+> i
+
+[t − 1] ∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) ), (7) 
+
+where 
+
+∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) ) := ˆΦ(k) 
+
+> i
+
+(w) − ˆΦ(k) 
+
+> i
+
+(w(t−1) ) − δ. (8) This bound decomposes the drift into a quadratic term capturing the magnitude of forgetting and a linear term weighted by the virtual queues. The first term in the drift upper bound, is non-negative and does not depend on the queue values. Under standard smoothness assumptions on the loss functions, this term can be uniformly bounded by a finite constant, and hence, it does not affect the stability of the virtual queues and can be omitted from the per-round optimization without altering the drift minimization objective up to an additive constant. Hence, using the second term of the upper bound derived in the Lemma above, the expression for DPP (t) 
+
+> V,i
+
+in equation 6 can be rewritten as 
+
+DPP (t) 
+
+> V,i
+
+= V Φi(w; D(t) 
+
+> i
+
+) + 
+
+> t−1
+
+X
+
+> k=1
+
+Q(k) 
+
+> i
+
+[t − 1]∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) ). (9) The first term encourages learning from the current task via the local loss, scaled by a control parameter V that governs plasticity. 1 The second term incorporates the accumulated virtual queues, penalizing an increase in replay loss on past tasks, promoting stability. Collectively, this objective adaptively weighs past and present tasks, enabling the model to learn from client data. While the above objective operates locally at each client, the queue-weighted regularization constrains client updates as compared to the previous global update, and this leads to more consistent and stable global updates upon aggregation. 
+
+Algorithm: At each task t, the optimization proceeds over C communication rounds. At the beginning of round c, the server broadcasts the global model w(t,c −1) to all clients. Each client i initializes its local model as w(t,c, 0)  
+
+> i
+
+= w(t,c −1) 
+
+and performs R steps of stochastic gradient descent. The local updates are given by: 
+
+w(t,c,r +1)  
+
+> i
+
+= w(t,c,r ) 
+
+> i
+
+− ηt V ∇Φi(w(t,c,r ) 
+
+> i
+
+; B(t,c,r ) 
+
+> i
+
+) + 
+
+> t−1
+
+X
+
+> k=1
+
+Q(k) 
+
+> i
+
+[t − 1] ∇ ˆΦ(k) 
+
+> i
+
+(w(t,c,r ) 
+
+> i
+
+)
+
+!
+
+, (10) for r = 0 , . . . , R − 1, where B(t,c,r ) 
+
+> i
+
+denotes a mini-batch sampled from D(t) 
+
+> i
+
+.A subtle but critical design choice in F ED QCL is on what the virtual queues measure forgetting relative to, and when 
+
+they are updated. These choices jointly determine whether the queues capture task-level forgetting, client drift, or both. In single-client CL, queues can be updated once per task using the previous model w(t−1) as reference. In 
+
+> 1
+
+It is possible to use different V across different clients leading to more flexibility to achieve better performance. However, for the sake of simplicity, we use a fixed V across all clients. 
+
+5Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 federated settings, model updates are performed iteratively within each task through multiple rounds of local training and aggregation. Hence, we propose to update the virtual queue in every communication round as the underlying learning dynamics evolve continuously across rounds. Updating the queue per round allows for fine-grained tracking of these incremental violations, enabling timely correction through the drift-plus-penalty mechanism. In contrast, updating the queue only at task boundaries would aggregate these effects, leading to delayed feedback and weaker control over the accumulation of forgetting. After completing local updates, each client sends w(t,c ) 
+
+> i
+
+:= w(t,c,R ) 
+
+> i
+
+to the server. The server aggregates the local models to obtain: 
+
+w(t,c ) =
+
+> N
+
+X
+
+> i=1
+
+p(t) 
+
+> i
+
+w(t,c ) 
+
+> i
+
+, (11) where p(t) 
+
+> i
+
+= ni,t  
+
+> PNj=1 nj,t
+
+. After C communication rounds, the final global model for task t is given by w(t) = w(t,C ).The updated global model w(t) is then broadcast to all clients and serves as the initialization for the next task. The complete algorithm is provided in Algorithm 1 in the supplementary. 
+
+5 EMPIRICAL RESULTS 
+
+We evaluate the proposed F ED QCL framework in an FCL setting, where data distributions evolve over time, and clients participate across communication rounds. Unlike task-bound formulations, our method operates at the granu-larity of communication rounds, enabling fine-grained control of forgetting through per-round queue updates. In the sequel, we compare the proposed framework against representative FCL baselines spanning replay, regularization, and gradient projection methods under non-IID and streaming data regimes. We also provide ablation studies with respect to varying levels of heterogeneity, hyperparameters and memory buffer size. 5.1 EXPERIMENTAL SETTINGS 
+
+We evaluate the proposed method on three widely used image classification benchmarks: CIFAR-10, CIFAR-100 Krizhevsky & Hinton (2009), and TinyImageNet Le & Yang (2015). CIFAR-10 consists of 10 classes with 60,000 images, while CIFAR-100 contains 100 classes with the same number of images as CIFAR-10. TinyImageNet is a more challenging dataset with 200 classes and higher visual diversity. To simulate the continual learning setting, each dataset is divided into a sequence of disjoint tasks, where each task contains a subset of classes. Specifically, Split-CIFAR-10 is divided into 5 disjoint tasks with 2 classes each, Split-CIFAR-100 into 5 tasks with 20 classes each, and Split-TinyImageNet into 10 tasks with 20 classes each by default. The full set of classes is partitioned into T tasks with an equal number of classes per task, and the model is trained sequentially on these tasks. During training, the model has access only to the data of the current task, while data from previous tasks is available only through a limited memory buffer. Unless specified otherwise, we use a federated setting with N =5 clients, where data is distributed across clients using a Dirichlet distribution with concentration parameter 
+
+α=10 .0. Each task is trained for C=10 communication rounds, with R=5 local epochs per client per round. Afixed total memory budget of M =500 samples per client is maintained across all methods for fair comparison. All experiments are conducted under the task-incremental continual learning setting, where task identity is available during both training and inference, allowing the model to select the appropriate task-specific output head. We use ResNet-18 as the backbone architecture for all experiments due to its widespread adoption in CL literature. The model is trained with SGD using standard data augmentation. Detailed hyperparameters are provided in the supplementary material. 
+
+Metrics: We assess the performance of the proposed algorithm using the server model’s test accuracy on a sequence of 
+
+T tasks, and the forgetting, which are defined below: (a) Average Accuracy (Acc): The average accuracy is computed using Acc := 1
+
+> T
+
+PTj=1 aT,j , where at,j is the accuracy of the model obtained after observing task t on task j < t . (b) 
+
+Forgetting (Forget ∈ [−1, 1] ): We capture the forgetting factor using Forg := 1 
+
+> T−1
+
+PT −1
+
+> j=1
+
+max l∈[T −1] (al,j − aT,j ),where the difference max l∈[T −1] (al,j −aT,j ) captures the extent to which previously learned knowledge is overwritten by subsequent learning. 5.2 BASELINES 
+
+We compare our approach against a diverse set of representative baselines spanning rehearsal-based, regularization-based, and generative replay methods, along with FCL approaches. 6Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 Table 1: Task Incremental Learning Results (Mean ± Std over 3 seeds) under non-IID data distribution with Dirichlet parameter α = 10 .0, 5 clients, and a total memory buffer size of 500 samples per client.                                                                                                                                                                                                                     
+
+> Method Split-CIFAR-10 Split-CIFAR-100 Split-TinyImageNet
+> Acc (%) ↑Forget ↓Acc (%) ↑Forget ↓Acc (%) ↑Forget ↓
+> FedAvg (2017) 70.21 ±0.75 0.12 ±0.006 29.10 ±0.29 0.12 ±0.001 10.09 ±0.36 0.20 ±0.002 FedProto (2022) 73.03 ±0.01 0.23 ±0.018 35.07 ±0.01 0.27 ±0.009 19.14 ±0.01 0.31 ±0.01 EWC-FL (2017) 73.51 ±0.01 0.23 ±0.01 37.54 ±0.01 0.24 ±0.03 21.43 ±0.01 0.29 ±0.003 LwF-FL (2017) 73.42 ±0.01 0.23 ±0.008 36.76 ±0.01 0.31 ±0.01 19.38 ±0.01 0.38 ±0.01 ER-FL (2019) 73.37 ±0.02 0.23 ±0.01 37.74 ±0.01 0.24 ±0.007 20.99 ±0.01 0.23 ±0.01 DER-FL (2020) 83.82 ±0.52 0.07 ±0.008 48.07 ±0.55 0.08 ±0.008 30.62 ±1.32 0.18 ±0.006 DER++-FL (2020) 83.89 ±1.29 0.07 ±0.01 51.04 ±0.85 0.06 ±0.01 31.02 ±1.01 0.17 ±0.007 CCVR (2021) 74.78 ±0.78 0.22 ±0.006 43.58 ±1.58 0.16 ±0.01 21.47 ±0.94 0.31 ±0.007 FOT (2023) 72.50 ±3.97 0.02 ±0.02 41.24 ±1.58 0.01 ±0.003 28.22 ±0.09 0.001 ±0.0007
+> BI (2025) 84.46 ±0.40 0.10 ±0.007 49.55 ±0.60 0.11 ±0.01 31.05 ±0.48 0.19 ±0.01 FED QCL(Ours) 85.71 ±1.12 0.05 ±0.004 54.52 ±0.84 0.05 ±0.004 33.37 ±0.76 0.13 ±0.005
+
+Centralized CL Methods Extended to Federated Learning: We evaluate federated extensions of standard continual learning approaches, where each client performs local continual updates and a central server aggregates the models using standard FedAvg protocols. Elastic Weight Consolidation (EWC) Kirkpatrick et al. (2017) regularizes training on new tasks by penalizing changes to parameters that are important for previously learned tasks, using a Fisher information–based importance estimate. Episodic Replay (ER) Rolnick et al. (2019) maintains a memory buffer of past samples and updates the model using both current data and replayed instances, while DER/DER++ Buzzega et al. (2020) extend this by storing past logits and enforcing consistency during replay, with DER++ additionally incorporating label supervision to further stabilize learning. Learning without Forgetting (LwF) Li & Hoiem (2017) is a regularization-based approach that uses knowledge distillation to constrain the current model’s predictions to remain close to those of a previously trained model. 
+
+FCL Methods: We further compare with methods specifically designed for federated continual learning (FCL). These approaches explicitly account for both data heterogeneity and sequential task learning. BI Serra & Buettner (2025) is an online FCL method which employs uncertainty-aware memory management to prioritize storing informative samples with high uncertainty for replay. Other representative approaches include FOT Bakman et al. (2023), which is a federated continual learning framework that mitigates global catastrophic forgetting by restricting local updates to the orthogonal complement of the space spanned by previously learned tasks’ gradients. We also compare with 
+
+Class-Conditional Variational Replay (CCVR) Luo et al. (2021) which is a classifier calibration-based method that models each class as a Gaussian distribution in the feature space. It generates synthetic features from these distributions to recalibrate the classifier, enabling effective replay with reduced memory while mitigating the effects of data heterogeneity and forgetting. Although not explicitly designed for FCL, its data-free replay mechanism makes it applicable to the FCL setting. 
+
+Standard Federated Learning Baselines: Finally, we include classical federated learning methods without an ex-plicit CL design. FedAvg McMahan et al. (2017) aggregates model parameters from multiple clients via weighted averaging and FedProto Tan et al. (2022) exchanges class prototypes instead of full model parameters to reduce communication overhead. 5.3 COMPARISON WITH BASELINES 
+
+We evaluate F ED QCL against all baselines on Split-CIFAR-10, Split-CIFAR-100, and Split-TinyImageNet under the non-IID setting. Results are reported in Table 1 and Figure 1. F ED QCL achieves the highest average accuracy across all three benchmark datasets, outperforming the strongest replay baseline DER++-FL. The accuracy curves in Figure 1 (Left) show that F ED QCL consistently leads throughout the task sequence, whereas most baselines exhibit a monotonic accuracy decline as the number of observed tasks grows. Regularization-based methods (EWC-FL, LwF-FL) perform on par with FedAvg, confirming that parameter-space constraints alone are insufficient under federated non-IID settings. ER-FL underperforms relative to other replay-based methods across all datasets, likely because it 7Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 1 2 3 4 5                   
+
+> Task Index
+> 30 35 40 45 50 55
+> Accuracy (%)
+> 12345
+> Task Index
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Forgetting
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours) 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Final Forgetting
+> 30 35 40 45 50 55
+> Final Accuracy (%)
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours) 0.0 0.1 0.2 0.3
+> Final Forgetting
+> 10 15 20 25 30
+> Final Accuracy (%)
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours)
+
+Figure 1: Left two: Comparison against baselines on Split-CIFAR-100. Right two: Plasticity-stability Pareto on Split-CIFAR-100 and Split-TinyImageNet. Each point represents the final average accuracy vs. average forgetting of a method. = 0.001 = 10 = 10 5        
+
+> Dirichlet Parameter
+> 010 20 30 40 50
+> Accuracy (%)
+> = 0.001 = 10 = 10 5
+> Dirichlet Parameter
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Forgetting
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours) M=200 M=500 M=1000
+> Memory Size M
+> 010 20 30 40 50
+> Accuracy (%)
+> M=200 M=500 M=1000
+> Memory Size M
+> 0.00 0.05 0.10 0.15 0.20
+> Forgetting
+> ER-FL DER-FL DER++-FL CCVR BI FedQCL (Ours)
+
+Figure 2: Ablation on Split-CIFAR-100. Left: Effect of data heterogeneity ( α), where accuracy (left) and forgetting (right) are shown for α ∈ { 0.001 , 10 , 10 5}. Right: Effect of memory buffer size ( M ), where accuracy (left) and forgetting (right) are reported for M ∈ { 200 , 500 , 1000 } exemplars per client. lacks logit-level regularization, making its replay less effective at preventing representation drift under heterogeneous local distributions. FED QCL achieves competitive forgetting scores across all benchmarks. FOT attains near-zero forgetting by projecting gradients orthogonally to past-task subspaces, but at the cost of substantially lower accuracy. The Pareto plots in Figure 1 (Right) present final average accuracy against average forgetting for all methods on Split-CIFAR-100 and Split-TinyImageNet. F ED QCL occupies the upper-left region of the Pareto front in both datasets, demonstrating the best balance between joint accuracy and forgetting. Methods that achieve low forgetting (FOT) do so by sacrificing plasticity, placing them in the lower portion of the Pareto front. F ED QCL’s queue-based penalty dynamically balances these objectives via a single control parameter V , avoiding the rigid trade-offs imposed by projection-based or highly conservative aggregation strategies. Additional results are provided in supplementary 7.2.2. 5.4 VARYING DATA HETEROGENEITY 
+
+To assess robustness under different levels of distributional shift, we vary the Dirichlet concentration parameter α ∈{0.001 , 10 , 10 5}, spanning highly heterogeneous to near-IID regimes. Results on Split-CIFAR-100 are shown in Figure 2 (Left). F ED QCL maintains stable accuracy across all three regimes, with only modest degradation under extreme heterogeneity ( α=0 .001 ). At this setting, most baselines suffer significant accuracy drops because highly imbalanced local data exacerbates client drift, making consistent global updates difficult. FED QCL’s robustness is attributed to the virtual queue mechanism, which anchors forgetting measurement to the shared global reference model w(t−1) throughout all C rounds of task t, implicitly discouraging inconsistent cross-client updates without explicit drift-correction overhead. F ED QCL maintains low and stable forgetting across all three settings, confirming that the queue-based regularization adapts effectively to varying degrees of data heterogeneity. 5.5 VARYING MEMORY BUFFER SIZE 
+
+We evaluate sensitivity to the replay buffer size M ∈ { 200 , 500 , 1000 } per client on Split-CIFAR-100. Results are shown in Figure 2 (Right). F ED QCL consistently outperforms baselines at all memory budgets, including the most constrained setting of M =200 . As expected, accuracy improves for all replay-based methods as M increases, since 8Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 10 20 50 100 200 500 1000               
+
+> Values of V
+> 40 45 50 55 60 65
+> Last-Task Accuracy (%) Split-CIFAR-100
+> V=10 V=20 V=50 V=100 V=200 V=500 V=1000 10 20 50 100 200 500 1000
+> Values of V
+> 25.0 27.5 30.0 32.5 35.0 37.5 40.0 42.5
+> Last-Task Accuracy (%) Split-TinyImageNet
+> V=10 V=20 V=50 V=100 V=200 V=500 V=1000 0.05 0.10 0.15 0.20
+> Final Forgetting
+> 76 78 80 82 84 86 88
+> Final Accuracy (%)
+> =-5.0
+> =-2.0
+> =-1.0
+> =-0.5
+> =0.0 =0.5
+> =1.0
+> =2.0
+> =5.0
+> =10.0
+> Split-CIFAR-10 0.04 0.05 0.06 0.07
+> Final Forgetting
+> 53.0 53.5 54.0 54.5 55.0
+> Final Accuracy (%)
+> =-5.0
+> =-2.0
+> =-1.0
+> =-0.5
+> =0.0
+> =0.5
+> =1.0
+> =2.0
+> =5.0
+> =10.0
+> Split-CIFAR-100
+
+Figure 3: Hyperparameter analysis of F ED QCL. Left: Effect of V on Split-CIFAR-100 and Split-TinyImageNet (accuracy and forgetting vs. V ). Right: Effect of δ shown via plasticity–stability Pareto trade-off on Split-CIFAR-10 and Split-CIFAR-100. a larger buffer provides better coverage of past-task distributions. Notably, the relative performance gap between FED QCL and DER++-FL remains roughly stable across memory sizes, indicating that F ED QCL’s advantage stems primarily from its principled queue-based regularization rather than solely from improved replay quality. 5.6 ABLATION STUDIES 
+
+5.6.1 EFFECT OF THE HYPERPARAMETER V
+
+The parameter V controls the balance between plasticity (current-task learning) and stability (forgetting regulariza-tion). We vary V ∈ { 10 , 20 , 50 , 100 , 200 , 500 , 1000 } on Split-CIFAR-100 and Split-TinyImageNet, with Last-Task-Accuracy (LTA) results in Figures 3 (Left). For very small V (e.g., V =10 ), the queue penalty dominates the optimization objective, excessively suppressing adaptation to new tasks and leading to low LTA. As V increases, LTA rises and peaks around V = 100 to V = 200 on Split-CIFAR-100, confirming that plasticity improves as the current-task loss gains relative weight. On Split-TinyImageNet, LTA increases monotonically across the full range, as the higher task difficulty requires a larger V to sufficiently relieve the queue penalty. LTA isolates the plasticity effect of V directly. This validates the theoretical design of F ED QCL: V acts as a single, interpretable control knob that smoothly interpolates between forgetting-averse and plasticity-focused regimes. 5.6.2 EFFECT OF THE HYPERPARAMETER δ
+
+The parameter δ defines the allowable per-round increase in replay loss before queues begin to accumulate. We vary 
+
+δ ∈ {− 5.0, −2.0, −1.0, −0.5, 0.0, 0.5, 1.0, 2.0, 5.0, 10 .0} on Split-CIFAR-10 and Split-CIFAR-100, with results in Figures 3 (Right). Negative δ imposes stricter constraints by requiring the replay loss to actively decrease relative to the reference model, leading to larger queue values and stronger regularization pressure. As δ increases toward positive values, the constraint becomes more lenient: forgetting increases while accuracy can benefit marginally from the additional plasticity. The Pareto plots reveal an optimal region around δ ∈ [−1.0, 1.0] , where both accuracy and forgetting are well-balanced. A sufficiently large positive δ renders the queue constraint inactive, effectively reducing the method to standard replay-based training. In contrast, highly negative values of δ impose overly restrictive con-T1 T2 T3 T4 T5                              
+
+> Past Task j
+> T1 T2 T3 T4 T5
+> Current Task  i 6.4 4.4 6.7 0.4 1.1 0.9 0.9 0.8 1.1 0.7
+> V = 10
+> T1 T2 T3 T4 T5
+> Past Task j
+> T1 T2 T3 T4 T5
+> Current Task  i 8.3 7.0 5.7 4.3 4.0 2.0 2.0 1.8 1.8 1.3
+> V = 100
+> T1 T2 T3 T4 T5
+> Past Task j
+> T1 T2 T3 T4 T5
+> Current Task  i 23.7 4.1 16.5 1.7 6.1 9.6 1.1 5.5 7.5 10.0
+> V = 1000
+> 0510 15 20
+> Mean Queue  Q(j) [i]
+
+Figure 4: Virtual queue matrix Q(j)[i] under varying penalty weight V on Split-CIFAR-100. Cell (i, j ) represents the queue value for past task j accumulated during training on task i, averaged across clients. 9Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 straints, limiting plasticity and consequently degrading predictive performance. These results confirm that δ provides an interpretable secondary control over the stability-plasticity trade-off, complementing V .5.6.3 QUEUE DYNAMICS 
+
+Figure 4 shows the virtual queue matrix Q(j)[i] under varying V on Split-CIFAR-100. Large V (e.g., V =1000 ) results in elevated queue values concentrated on early tasks, since the dominance of the current-task loss leaves less capacity for the queue penalty to suppress forgetting. At moderate V (e.g., V =100 ), the queue values are more uniformly distributed and smaller in magnitude, indicating that the algorithm more evenly manages forgetting pressure across all past tasks. Analysis of δ and α is provided in the supplementary. 
+
+6 CONCLUSIONS 
+
+We proposed F ED QCL, a control-theoretic framework that explicitly regulates forgetting in FCL. By formulating FCL as a stochastic control problem, we introduced virtual queues to track and constrain the accumulation of for-getting across clients and communication rounds, allowing a DPP-based algorithm. A key insight is that forgetting evolves continuously at the level of communication rounds in FCL, motivating per-round queue updates. Maintain-ing queues locally at each client enabled effective regulation without additional communication overhead while being privacy-preserving, making the approach scalable to realistic federated settings. Experimental results demonstrated that F ED QCL achieves competitive accuracy while significantly reducing forgetting under distributed, heterogeneous, and non-stationary data distributions. Overall, this work highlights the importance of treating FCL as a dynamic control problem, enabling principled and efficient regulation of the stability-plasticity trade-off. 
+
+ACKNOWLEDGMENTS 
+
+This work was supported in part by LightMetrics Pvt. Ltd., India, and by the Ministry of Electronics and Information Technology (MeitY), Government of India, through the IndiaAI Mission. 
+
+REFERENCES 
+
+Yavuz Faruk Bakman, Duygu Nur Yaldiz, Yahya H Ezzeldin, and Salman Avestimehr. Federated orthogonal training: Mitigating global catastrophic forgetting in continual federated learning. arXiv preprint arXiv:2309.01289 , 2023. Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, and Simone Calderara. Dark experience for general continual learning: a strong, simple baseline. Advances in neural information processing systems , 33:15920–15930, 2020. Jiahua Dong, Lixu Wang, Zhen Fang, Gan Sun, Shichao Xu, Xiao Wang, and Qi Zhu. Federated class-incremental learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 10164– 10173, 2022. Christophe Dupuy, Jimit Majmudar, Jixuan Wang, Tanya G Roosta, Rahul Gupta, Clement Chung, Jie Ding, and Salman Avestimehr. Quantifying catastrophic forgetting in continual federated learning. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pp. 1–5. IEEE, 2023. Xiaoyan Huang, Supeng Leng, Sabita Maharjan, and Yan Zhang. Multi-agent deep reinforcement learning for compu-tation offloading and interference coordination in small cell networks. IEEE Transactions on Vehicular Technology ,70(9):9282–9293, 2021. Peter Kairouz, H. Brendan McMahan, et al. Advances and open problems in federated learning. Foundations and Trends in Machine Learning , 2021. Sai Praneeth Karimireddy, Satyen Kale, Mehryar Mohri, Sashank J. Reddi, Sebastian U. Stich, and Ananda Theertha Suresh. Scaffold: Stochastic controlled averaging for federated learning. In ICML , 2020. Satish Kumar Keshri, Nazreen Shah, and Ranjitha Prasad. On the convergence of continual federated learn-ing using incrementally aggregated gradients. In Yingzhen Li, Stephan Mandt, Shipra Agrawal, and Emtiyaz Khan (eds.), Proceedings of The 28th International Conference on Artificial Intelligence and Statistics , volume 258 of Proceedings of Machine Learning Research , pp. 5068–5076. PMLR, 03–05 May 2025. URL https: //proceedings.mlr.press/v258/keshri25a.html .10 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz, Joel Veness, Guillaume Desjardins, Andrei A Rusu, Kieran Milan, John Quan, Tiago Ramalho, Agnieszka Grabska-Barwinska, et al. Overcoming catastrophic forgetting in neural networks. Proceedings of the national academy of sciences , 114(13):3521–3526, 2017. Alex Krizhevsky and Geoffrey Hinton. Learning multiple layers of features from tiny images. Technical Re-port 0, University of Toronto, Toronto, Ontario, 2009. URL https://www.cs.toronto.edu/˜kriz/ learning-features-2009-TR.pdf .Ya Le and Xuan S. Yang. Tiny imagenet visual recognition challenge. 2015. URL https://api. semanticscholar.org/CorpusID:16664790 .Gihun Lee, Minchan Jeong, Sangmook Kim, Jaehoon Oh, and Se-Young Yun. Fedsol: Stabilized orthogonal learning with proximal restrictions in federated learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 12512–12522, 2024. Qinbin Li et al. Federated learning: Challenges, methods, and future directions. IEEE Signal Processing Magazine ,2023. Tian Li, Anit Kumar Sahu, Ameet Talwalkar, and Virginia Smith. Federated optimization in heterogeneous networks. In MLSys , 2020. Yichen Li, Wenchao Xu, Yining Qi, Haozhao Wang, Ruixuan Li, and Song Guo. Sr-fdil: Synergistic replay for federated domain-incremental learning. IEEE Transactions on Parallel and Distributed Systems , 35(11):1879– 1890, 2024a. Yichen Li, Wenchao Xu, Haozhao Wang, Yining Qi, Jingcai Guo, and Ruixuan Li. Personalized federated domain-incremental learning based on adaptive knowledge matching. In European conference on computer vision , pp. 127–144. Springer, 2024b. Yichen Li, Yuying Wang, Jiahua Dong, Haozhao Wang, Yining Qi, Rui Zhang, and Ruixuan Li. Resource-constrained federated continual learning: What does matter? Advances in Neural Information Processing Systems , 38:79493– 79518, 2026. Zhizhong Li and Derek Hoiem. Learning without forgetting. IEEE transactions on pattern analysis and machine intelligence , 40(12):2935–2947, 2017. Jinglin Liang, Jin Zhong, Hanlin Gu, Zhongqi Lu, Xingxing Tang, Gang Dai, Shuangping Huang, Lixin Fan, and Qiang Yang. Diffusion-driven data replay: A novel approach to combat forgetting in federated class continual learning. In European Conference on Computer Vision , pp. 303–319. Springer, 2024. Chenghao Liu, Xiaoyang Qu, Jianzong Wang, and Jing Xiao. Fedet: a communication-efficient federated class-incremental learning framework based on enhanced transformer. In Proceedings of the Thirty-Second International Joint Conference on Artificial Intelligence , pp. 3984–3992, 2023. Mi Luo, Fei Chen, Dapeng Hu, Yifan Zhang, Jian Liang, and Jiashi Feng. No fear of heterogeneity: Classifier calibration for federated learning with non-iid data. Advances in Neural Information Processing Systems , 34:5972– 5984, 2021. Michael McCloskey and Neal J Cohen. Catastrophic interference in connectionist networks: The sequential learning problem. In Psychology of learning and motivation , volume 24, pp. 109–165. Elsevier, 1989. Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Aguera y Arcas. Communication-efficient learning of deep networks from decentralized data. In Artificial intelligence and statistics , pp. 1273–1282. Pmlr, 2017. Michael J Neely. Energy optimal control for time-varying wireless networks. IEEE Trans. on Inf. Theory , 52(7): 2915–2934, 2006. Michael J Neely. Stochastic network optimization with application to communication and queueing systems. Synthesis Lectures on Communication Networks , 3(1):1–211, 2010. Michael J Neely. Dynamic optimization and learning for renewal systems. IEEE Trans. on Automatic Control , 58(1): 32–46, 2013. 11 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 Michael J Neely, Arash Saber Tehrani, and Alexandros G Dimakis. Efficient algorithms for renewable energy alloca-tion to delay tolerant consumers. In First IEEE Int. Conf. on Smart Grid Commun., , pp. 549–554, 2010. Ameya Prabhu, Philip HS Torr, and Puneet K Dokania. Gdumb: A simple approach that questions our progress in continual learning. In European conference on computer vision , pp. 524–540. Springer, 2020. Daiqing Qi, Handong Zhao, and Sheng Li. Better generative replay for continual federated learning. In The Eleventh International Conference on Learning Representations , 2023. Matthew Riemer, Ignacio Cases, Robert Ajemian, Miao Liu, Irina Rish, Yuhai Tu, and Gerald Tesauro. Learning to learn without forgetting by maximizing transfer and minimizing interference. In International Conference on Learning Representations , 2019. David Rolnick, Arun Ahuja, Jonathan Schwarz, Timothy Lillicrap, and Gregory Wayne. Experience replay for con-tinual learning. Advances in neural information processing systems , 32, 2019. Gobinda Saha, Isha Garg, and Kaushik Roy. Gradient projection memory for continual learning. 2021. Riccardo Salami, Pietro Buzzega, Matteo Mosconi, Jacopo Bonato, Luigi Sabetta, and Simone Calderara. Closed-form merging of parameter-efficient modules for federated continual learning. arXiv preprint arXiv:2410.17961 ,2024. Sumudu Samarakoon, Mehdi Bennis, Walid Saad, M´ erouane Debbah, and Matti Latva-Aho. Energy-efficient re-source management in ultra dense small cell networks: A mean-field approach. In IEEE Global Communications Conference (GLOBECOM) , pp. 1–6. IEEE, 2015. Dhruv Sarkar, Aprameyo Chakrabartty, Subhamon Supantha, Palash Dey, and Abhishek Sinha. Projection-free algo-rithms for online convex optimization with adversarial constraints. arXiv preprint arXiv:2501.16919 , 2025. Giuseppe Serra and Florian Buettner. Federated continual learning goes online: Uncertainty-aware memory manage-ment for vision tasks and beyond. In The Thirteenth International Conference on Learning Representations , 2025. URL https://openreview.net/forum?id=f65RuQgVlp .Nazreen Shah, Govinda Arya, Bharath B N, and Ranjitha Prasad. Theoretical foundations of continual learning via drift-plus-penalty. Transactions on Machine Learning Research , 2026. ISSN 2835-8856. URL https: //openreview.net/forum?id=QhxNMdhhBy .Donald Shenaj, Marco Toldo, Alberto Rigon, and Pietro Zanuttigh. Asynchronous federated continual learning. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 5055–5063, 2023. Abhishek Sinha and Rahul Vaze. Optimal algorithms for online convex optimization with adversarial constraints. 
+
+Advances in Neural Information Processing Systems , 37:41274–41302, 2024. Yue Tan, Guodong Long, Lu Liu, Tianyi Zhou, Qinghua Lu, Jing Jiang, and Chengqi Zhang. Fedproto: Federated prototype learning across heterogeneous clients. In Proceedings of the AAAI conference on artificial intelligence ,volume 36, pp. 8432–8440, 2022. Rahul Vaze and Abhishek Sinha. o(√T ) static regret and instance dependent constraint violation for constrained online convex optimization. arXiv preprint arXiv:2502.05019 , 2025. Qiang Wang, Bingyan Liu, and Yawen Li. Traceable federated continual learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 12872–12881, 2024a. Quanziang Wang, Renzhen Wang, Yichen Wu, Xixi Jia, and Deyu Meng. Cba: Improving online continual learning via continual bias adaptor. In Proceedings of the IEEE/CVF international conference on computer vision , pp. 19082–19092, 2023a. Shiqiang Wang, Jake Perazzone, Mingyue Ji, and Kevin S Chan. Federated learning with flexible control. In IEEE INFOCOM 2023-IEEE Conference on Computer Communications , pp. 1–10. IEEE, 2023b. Shiqiang Wang et al. A survey on federated learning systems: Vision, hype and reality. ACM Computing Surveys ,2024b. Zhenyi Wang, Yan Li, Li Shen, and Heng Huang. A unified and general framework for continual learning. In The Twelfth International Conference on Learning Representations , 2024c. 12 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 Abudukelimu Wuerkaixi, Sen Cui, Jingfeng Zhang, Kunda Yan, Bo Han, Gang Niu, Lei Fang, Changshui Zhang, and Masashi Sugiyama. Accurate forgetting for heterogeneous federated continual learning. In International Conference on Learning Representations , volume 2024, pp. 50778–50796, 2024. Wenhan Xu, Jiashuo Jiang, Lei Deng, and Danny Hin-Kwok Tsang. A lyapunov drift-plus-penalty method tailored for reinforcement learning with queue stability. arXiv preprint arXiv:2506.04291 , 2025. Jaehong Yoon, Wonyong Jeong, Giwoong Lee, Eunho Yang, and Sung Ju Hwang. Federated continual learning with weighted inter-client transfer. In International Conference on Machine Learning , pp. 12073–12086. PMLR, 2021. Jianshu Zhang, Yankai Fu, Ziheng Peng, Dongyu Yao, and Kun He. Core: Mitigating catastrophic forgetting in continual learning through cognitive replay. In Proceedings of the Annual Meeting of the Cognitive Science Society ,volume 46, 2024. Jie Zhang, Chen Chen, Weiming Zhuang, and Lingjuan Lyu. Target: Federated class-continual learning via exemplar-free distillation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 4782–4793, 2023. 13 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 
+
+7 SUPPLEMENTARY SECTION 
+
+7.1 ADDITIONAL THEORETICAL DETAILS 
+
+7.1.1 PROOF OF LEMMA 1From equation 4, we know that the virtual queues evolve as: 
+
+Q(k) 
+
+> i
+
+[t] = max 
+
+n
+
+Q(k) 
+
+> i
+
+[t − 1] + ∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) ), 0
+
+o
+
+. (12) Using (max {x, 0})2 ≤ x2, we obtain: 
+
+
+
+Q(k) 
+
+> i
+
+[t]
+
+2
+
+≤
+
+
+
+Q(k) 
+
+> i
+
+[t − 1] + ∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) )
+
+2
+
+(13) 
+
+=
+
+
+
+Q(k) 
+
+> i
+
+[t − 1] 
+
+2
+
++
+
+
+
+∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) )
+
+2
+
++ 2 Q(k) 
+
+> i
+
+[t − 1] ∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) ). (14) Summing over k and multiplying by 12 :
+
+Li[t] ≤ Li[t − 1] + 12
+
+> t−1
+
+X
+
+> k=1
+
+
+
+∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) )
+
+2
+
++
+
+> t−1
+
+X
+
+> k=1
+
+Q(k) 
+
+> i
+
+[t − 1] ∆ ˆΦ(k) 
+
+> i
+
+(w, w(t−1) ). (15) Rearranging gives the desired bound. 7.1.2 ALGORITHM TABLE 
+
+Algorithm 1 Federated Queue regulated Continual Learning (F ED QCL) 
+
+1: Initialize: Q(k) 
+
+> i
+
+[0] = 0 , ∀i, k , initialize global model w(0) , δ ≥ 0, V > 0.
+
+2: for t = 1 , 2, . . . , T do ▷ Tasks 
+
+3: for c = 1 , 2, . . . , C do ▷ Communication Rounds 
+
+4: Server: Broadcast w(t,c −1) to all clients. 
+
+5: for each client i ∈ [N ] in parallel do 
+
+6: Initialize local model: w(t,c, 0)  
+
+> i
+
+= w(t,c −1) .
+
+7: for r = 0 , 1, . . . , R − 1 do ▷ Local Steps 
+
+8: Sample mini-batch B(t,c,r ) 
+
+> i
+
+from D(t) 
+
+> i
+
+.
+
+9: Local DPP SGD update: 
+
+w(t,c,r +1)  
+
+> i
+
+= w(t,c,r ) 
+
+> i
+
+− ηt V ∇Φi(w(t,c,r ) 
+
+> i
+
+; B(t,c,r ) 
+
+> i
+
+) + 
+
+> t−1
+
+X
+
+> k=1
+
+Q(k) 
+
+> i
+
+[t − 1] ∇ ˆΦ(k) 
+
+> i
+
+(w(t,c,r ) 
+
+> i
+
+)
+
+!
+
+.
+
+10: end for 
+
+11: Set w(t,c ) 
+
+> i
+
+= w(t,c,R ) 
+
+> i
+
+.
+
+12: Queue update (client-side): 
+
+Q(k) 
+
+> i
+
+[t] = max 
+
+n
+
+Q(k) 
+
+> i
+
+[t − 1] + ˆΦ(k) 
+
+> i
+
+(w(t,c ) 
+
+> i
+
+) − ˆΦ(k) 
+
+> i
+
+(w(t−1) ) − δ, 0
+
+o
+
+, ∀k < t. 
+
+13: end for 
+
+14: Server aggregation: 
+
+w(t,c ) =
+
+> N
+
+X
+
+> i=1
+
+p(t) 
+
+> i
+
+w(t,c ) 
+
+> i
+
+.
+
+15: end for 
+
+16: end for 
+
+w(t) = w(t,C )
+
+14 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 Table 2: Complexity comparison per communication round per client. N : total clients; C: communication rounds per task; T : tasks; M : replay buffer size; d: model parameter dimension; B: mini-batch size; Bm: memory replay batch size; K: number of past tasks (grows with T ); P : number of augmentation passes.                                                                                                                                                           
+
+> Method Client Storage Client Computation Communication (per round) Extra Cost at Task Boundary
+> FED QCL (Ours) O(M+K+d)per client O(( B+K·Bm)·d)per round O(d)O(C)queue updates per task
+> (buffer +prev. task model +Kscalar queues) (current-task grad +Kreplay grads) (same as FedAvg) queues updated in-place)
+> FOT O(0) client-side O(B·d)O(d)per round O(d·smax )upload +SVD O(d·s2max )at server
+> (server stores orthogonal subspace O(P
+> ℓdℓ·rℓ))(standard SGD; projection is server-side) (FedAvg; +O(d·smax )at task boundary) (one extra round per task; SVD cost at server.)
+> BI O(M)per client O(P·B·d)per round O(d)O(0)
+> (class-balanced buffer) (Pforward passes per round +replay grad) (same as FedAvg) (no extra round at task boundary)
+> DER-FL O(M·(1 + Cout )) O(( B+Bm)·d)O(d)O(0)
+> (buffer samples +stored logits per sample) (SGD +logit consistency on replayed samples) (FedAvg)
+> DER++-FL O(M·(1 + Cout )) O(( B+Bm)·d)O(d)O(0)
+> (buffer samples +stored logits per sample) (SGD +logit consistency +CE on replayed samples) (FedAvg)
+> ER-FL O(M)O(( B+Bm)·d)O(d)O(0)
+> (sample buffer) (SGD on current +replayed samples) (FedAvg)
+> LwF-FL O(d)O(B·d)O(d)O(d)
+> (prev. task model w(t−1) ; no buffer) (SGD +distillation forward pass on current batch) (FedAvg) (save model checkpoint at task end)
+> EWC-FL O(d)O(B·d)O(d)O(B·d)
+> (Fisher diagonal +prev. model; no buffer) (SGD +EWC penalty; no extra forward pass) (FedAvg) (Fisher diagonal computation over local data)
+
+7.1.3 COMPLEXITY ANALYSIS 
+
+We provide a complexity comparison between F ED QCL and baselines in Table 2. The replay-based federated ex-tensions (ER-FL, DER-FL, DER++-FL) and regularization-based methods (LwF-FL, EWC-FL) all follow standard FED AVG aggregation with no additional communication overhead, differing only in their client-side storage and per-round computation. FOT eliminates client storage entirely but introduces a dedicated subspace extraction round at each task boundary, during which clients transmit activation sketches and the server performs SVD, making it the most ex-pensive method at task boundaries. BI avoids task-boundary costs but incurs roughly 2.2× the per-round computation of plain ER due to P -fold test-time augmentation Serra & Buettner (2025). F ED QCL stores a replay buffer of size 
+
+M and the previous global model w(t−1) ∈ Rd, the latter serving as the reference point for forgetting measurement. Importantly, F ED QCL introduces no additional communication rounds, no server-side computation beyond standard aggregation, and no task-boundary overhead. Queue updates are performed in-place at the client within the existing round structure, making F ED QCL as communication-efficient as FedAvg. 7.2 ADDITIONAL EXPERIMENTAL DETAILS 
+
+7.2.1 IMPLEMENTATION DETAILS AND CODEBASES 
+
+All experiments are implemented in PyTorch. We use ResNet-18 as the backbone for all methods to ensure a fair comparison. We note that several baselines were originally proposed for class-incremental settings and have been adapted to the task-incremental setting used in this work. For all baselines, we use their recommended hyperparameters where available. The following codebases were used to reproduce the baselines: • EWC-FL, LwF-FL, DER-FL, DER++-FL, CCVR, FedAvg, FedProto: Adapted from Fed-Mammoth reposi-tory Salami et al. (2024) • FOT: Official implementation available at Bakman et al. (2023) • BI: Official implementation available at Serra & Buettner (2025) Table 3 lists the hyperparameters used in all F ED QCL experiments. We adopt a balanced reservoir sampling strategy to maintain a fixed-size replay buffer of M samples per client across the task sequence. The values of hyperparameters 
+
+V and δ are selected based on the sensitivity analysis presented in Section 5.6.1 and 5.6.2. 7.2.2 COMPARISON WITH BASELINES 
+
+Figure 5 shows the accuracy and forgetting curves over the task sequence for Split-CIFAR-10 and Split-TinyImageNet, complementing the Split-CIFAR-100 results presented in the main paper (Figure 1). F ED QCL consistently maintains the highest accuracy throughout the task sequence on both datasets, while most baselines exhibit progressive accuracy degradation. Forgetting trends are consistent with the main paper findings. 15 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 Table 3: Hyperparameters used in F ED QCL experiments. 
+
+Hyperparameter Split-CIFAR10 Split-CIFAR100 Split-TinyImageNet 
+
+Learning rate 0.005 0.005 0.005 Optimizer SGD SGD SGD Local epochs 5 5 5# Clients 5 5 5Communication rounds per task 10 10 10 # Tasks 5 5 10 
+
+V 20 200 220 Queue initialization 0 0 0
+
+δ-parameter 1 1 1Task batch size 13 13 13 Memory batch size 13 13 13 1 2 3 4 5                              
+
+> Task Index
+> 65 70 75 80 85 90 95
+> Accuracy (%)
+> 12345
+> Task Index
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35
+> Forgetting
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours) 12345678910
+> Task Index
+> 10 20 30 40 50
+> Accuracy (%)
+> 12345678910
+> Task Index
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40
+> Forgetting
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours)
+
+Figure 5: Left two: Comparison against baselines on Split-CIFAR-10. Right two: Comparison against baselines on Split-TinyImageNet. 7.2.3 CLASS -I NCREMENTAL LEARNING SETTING 
+
+While the main results consider the task-incremental setting with a task oracle at inference, we additionally evaluate FED QCL under the more challenging class-incremental learning (CIL) setting, where task identity is unavailable at test time and the model must discriminate among all classes seen so far. The F ED QCL queue mechanism operates directly on replay losses and is agnostic to the availability of task identity, so the drift-plus-penalty regularization objective in equation 9 is unchanged across both settings. The only modification required for CIL is at the output level: since a single shared classification head is used, we augment the local objective with a logit-matching term on replayed samples, analogous to Buzzega et al. (2020), to enforce output-level consistency across tasks. This term complements the queue-based penalty, which regulates forgetting at the level of task performance rather than individual logits. We evaluate on Split-CIFAR-100 under both a near-IID ( α = 10 5) and a heterogeneous non-IID ( α = 0 .1) client data distribution. Results are reported in Table 4. FED QCL outperforms all baselines in average accuracy under both the near-IID and non-IID regimes, confirming that the queue-based regularization remains effective even without task identity at inference. Forgetting is competitive with the strongest baselines in the near-IID setting, though under high heterogeneity ( α = 0 .1) the forgetting-accuracy trade-off shifts, with DER and DER++ achieving lower forgetting at the cost of substantially lower accuracy. These results indicate that F ED QCL’s queue mechanism generalizes beyond the task-incremental setting and remains a viable regularizer when combined with a shared-head, logit-matching objective. 7.2.4 VARYING NUMBER OF CLIENTS 
+
+We vary the number of participating clients N ∈ {5, 10 , 15 } on Split-CIFAR-100 to assess the scalability of FED QCL. Results are shown in Figure 6 (Left). FED QCL scales gracefully with increasing N , maintaining com-petitive accuracy and low forgetting even at N =15 . Most baselines exhibit some accuracy degradation as N increases, likely because a larger client participation increases data fragmentation per client and further amplifies non-IID ef-fects. F ED QCL’s queue-based regularization remains effective at larger federation sizes since the queues are main-16 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 Table 4: Class-incremental learning results on Split-CIFAR-100 under near-IID ( α = 10 5) and non-IID ( α = 0 .1)client distributions. Method α = 10 5 α = 0 .1
+
+Acc (%) ↑ Forget ↓ Acc (%) ↑ Forget ↓
+
+FedAvg 12.99 0.39 8.60 0.24 EWC 16.79 0.35 9.53 0.25 LwF 15.75 0.49 6.48 0.26 ER 13.93 0.37 11.69 0.26 DER 16.20 0.43 7.60 0.03 
+
+DER++ 24.32 0.13 14.02 0.06 
+
+FED QCL (Ours) 24.92 0.11 14.66 0.24 N=5 N=10 N=15         
+
+> Number of Clients N
+> 010 20 30 40 50
+> Accuracy (%)
+> N=5 N=10 N=15
+> Number of Clients N
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Forgetting
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours) 1510
+> Local Epochs
+> 010 20 30 40 50
+> Accuracy (%)
+> 1510
+> Local Epochs
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35
+> Forgetting
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FedQCL (Ours)
+
+Figure 6: System-level sensitivity on Split-CIFAR-100. Left: Effect of the number of clients ( N ). Right: Effect of local training epochs. tained locally and do not introduce any additional communication cost as N grows; each client continues to regulate its own forgetting independently, and the FedAvg aggregation step is unchanged. Forgetting behavior for most meth-ods remains broadly stable across N values, suggesting that federation size primarily affects accuracy rather than catastrophic forgetting in this setting. 7.2.5 VARYING CLIENT LOCAL EPOCHS 
+
+We vary the number of client local training epochs R ∈ { 1, 5, 10 } on Split-CIFAR-100, holding the total local update steps per task fixed at R × C = 50 . Results are shown in Figure 6 (Right). This isolates the effect of synchronization frequency: large R (small C) means clients train longer before aggregation, while small R (large C) means near-continuous synchronization. Results are shown in Figure 6 (Right). F ED QCL’s forgetting decreases monotonically as 
+
+R increases while accuracy remains stable, indicating the queue-based penalty compensates for reduced aggregation frequency. 7.2.6 ONLINE VS . O FFLINE SETTING 
+
+We compare the online ( C/T =1 , R =1 , B =10 , single-pass) and offline ( C/T =10 , R =5 , B> 10 , multi-pass) settings on Split-CIFAR-100. Results are shown in Figure 7 (Right). In the offline setting, F ED QCL achieves substantially higher accuracy than its online counterpart, as multiple local epochs allow better convergence on the current task while the queue mechanism simultaneously constrains forgetting. In the online setting, all methods generally suffer reduced accuracy due to limited per-task data exposure. F ED QCL retains its relative advantage over baselines in both settings, demonstrating that the queue-based objective is effective regardless of whether data is processed in a single or multiple passes. Forgetting is generally lower in the online setting across most methods, as fewer local gradient steps reduce local drift away from previously learned representations, a trend consistent with the findings in Section 7.2.5. 7.2.7 VARYING NUMBER OF TASKS 
+
+We evaluate F ED QCL on Split-CIFAR-100 with an increasing number of tasks T ∈ { 5, 10 , 20 }. Results are shown in Figure 7 (Left). Accuracy remains stable across task horizons. The slight improvement at T =10 relative to T =5 
+
+17 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 T=5 T=10 T=20      
+
+> Number of Tasks T
+> 010 20 30 40 50 60
+> Accuracy (%)
+> 54.1 57.6 56.6
+> Accuracy (%) Forgetting
+> 0.00 0.02 0.04 0.06 0.08 0.10
+> Forgetting
+> 0.053 0.064 0.092 FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FeEDQCL (Ours) 010 20 30 40 50
+> Accuracy (%)
+> FedAvg FedProto EWC-FL LwF-FL ER-FL DER-FL DER++-FL CCVR FOT BI FeEDQCL (Ours) 0.05
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Forgetting
+> Offline ( R= 5 )Online ( R= 1 )
+
+Figure 7: Scalability and training paradigm analysis on Split-CIFAR-100. Left: Effect of increasing the number of tasks ( T ∈ { 5, 10 , 20 }). Right: Comparison between online and offline training settings. can be attributed to the finer task granularity: with more but smaller tasks, each task contains fewer classes, which may reduce within-task interference and allow the model to specialize more effectively per task. Forgetting increases modestly from T =5 to T =20 , as more tasks expand the queue state that must be jointly managed. Critically, this growth is sublinear, and forgetting remains well-controlled across all settings, demonstrating that F ED QCL scales gracefully with the continual learning horizon. -5.0 -2.0 -1.0 -0.5 0.0 0.5 1.0 2.0 5.0 10.0              
+
+> 76 78 80 82 84 86 88
+> Accuracy (%) Split-CIFAR-10
+> Accuracy (solid) Forgetting (hollow)
+> 0.025 0.050 0.075 0.100 0.125 0.150 0.175 0.200
+> Forgetting -5.0 -2.0 -1.0 -0.5 0.0 0.5 1.0 2.0 5.0 10.0
+> 53.0 53.5 54.0 54.5 55.0
+> Accuracy (%) Split-CIFAR-100
+> Accuracy (solid) Forgetting (hollow)
+> 0.040 0.045 0.050 0.055 0.060 0.065 0.070 0.075
+> Forgetting 0.06 0.08 0.10 0.12 0.14
+> Final Forgetting
+> 67.5 70.0 72.5 75.0 77.5 80.0 82.5 85.0 87.5
+> Final Accuracy (%)
+> V=10 V=20 V=50 V=100 V=200 V=500 V=1000
+> Split-CIFAR-10 0.06 0.07 0.08 0.09 0.10 0.11 0.12 0.13
+> Final Forgetting
+> 37.5 40.0 42.5 45.0 47.5 50.0 52.5
+> Final Accuracy (%)  V=10 V=20 V=50 V=100 V=200 V=500 V=1000
+> Split-CIFAR-100
+
+Figure 8: Additional hyperparameter analysis. Left: Effect of δ. Right: Effect of V shown through plasticity–stability Pareto trade-offs. 7.2.8 EXTENDED HYPERPARAMETER ANALYSIS 
+
+Figure 8 provides additional results of the hyperparameter sensitivity analysis presented in Section 5.6.2 and 5.6.1. The left panels show δ sweep plots across both datasets. Negative δ imposes stricter constraints by requiring the replay loss to actively decrease relative to the reference model, leading to larger queue values and stronger regularization pressure. As δ increases toward positive values, the constraint becomes more lenient: forgetting increases while accuracy can benefit marginally from the additional plasticity. The right panels show plasticity–stability Pareto plots under varying 
+
+V , confirming that moderate V values occupy the upper-left frontier, while very small or very large V push the method toward the lower-left (stability without plasticity) or lower-right (plasticity without stability) corners, respectively. 7.2.9 QUEUE DYNAMICS : E FFECT OF δ AND α
+
+Figure 9 and 10 complements the main-paper analysis (4) by showing how the virtual queue matrix Q(j)[i] responds to varying forgetting tolerance δ (top row) and data heterogeneity α (bottom row) on Split-CIFAR-100. 
+
+Effect of δ (Figure 9): Tighter constraints (smaller δ) produce substantially larger queue values throughout the task sequence, particularly for early task pairs. As δ increases toward more lenient values, queue magnitudes decrease uni-formly, confirming that the forgetting constraint is rarely violated when the tolerance is loose. This directly reflects the expected behavior: a tighter budget forces the queue to grow aggressively whenever forgetting exceeds the threshold. 
+
+Effect of heterogeneity α (Figure 10): Queue magnitude does not follow a simple monotonic trend with hetero-geneity. This is because the queues reflect the reliability of each client’s local replay-loss estimate rather than the 18 Published at 5th Conference on Lifelong Learning Agents (CoLLAs), 2026 T1 T2 T3 T4 T5 
+
+Past Task j      
+
+> T1 T2 T3 T4 T5
+> Current Task  i 7.3 15.3 14.5 21.4 25.9 9.1 31.5 36.0 19.9 8.0
+
+= -1.0     
+
+> T1 T2 T3 T4 T5
+
+Past Task j      
+
+> T1 T2 T3 T4 T5
+> Current Task  i 6.3 14.6 8.8 9.4 10.0 3.6 8.6 9.1 4.6 2.7
+
+= 0.0     
+
+> T1 T2 T3 T4 T5
+
+Past Task j      
+
+> T1 T2 T3 T4 T5
+> Current Task  i 6.1 5.4 2.4 2.8 2.2 1.0 1.3 1.4 0.9 0.3
+
+= 2.0 
+
+> 0510 15 20 25 30 35
+> Mean Queue  Q(j) [i]
+
+Figure 9: Virtual queue dynamics under varying δ. Each cell (i, j ) represents the queue value Q(j)[i] for past task 
+
+j accumulated during training on task i, averaged across clients. Smaller δ leads to larger queue values, indicating stronger penalization of forgetting. T1 T2 T3 T4 T5 
+
+Past Task j      
+
+> T1 T2 T3 T4 T5
+> Current Task  i 7.0 1.9 3.6 2.5 2.1 2.2 2.2 2.4 1.5 1.9
+
+= 0.001     
+
+> T1 T2 T3 T4 T5
+
+Past Task j      
+
+> T1 T2 T3 T4 T5
+> Current Task  i 6.4 4.7 3.6 4.4 2.3 1.5 2.1 1.9 1.6 1.0
+
+= 10.0     
+
+> T1 T2 T3 T4 T5
+
+Past Task j      
+
+> T1 T2 T3 T4 T5
+> Current Task  i 6.9 7.3 5.7 2.6 1.5 1.0 2.2 2.3 1.5 1.0
+
+= 100000.0 
+
+> 01234567
+> Mean Queue  Q(j) [i]
+
+Figure 10: Virtual queue dynamics under varying data heterogeneity α. Each cell (i, j ) represents the queue value 
+
+Q(j)[i] for past task j accumulated during training on task i, averaged across clients. severity of global forgetting. Notably, the structural pattern of decreasing queue values along the diagonal is consis-tent across all α values, suggesting that the queue mechanism reliably captures the forgetting dynamics irrespective of the heterogeneity level. 19

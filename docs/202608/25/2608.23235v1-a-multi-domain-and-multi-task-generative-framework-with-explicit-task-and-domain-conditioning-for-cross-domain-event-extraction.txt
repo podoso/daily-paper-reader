@@ -1,0 +1,284 @@
+Title: A Multi-Domain and Multi-Task Generative Framework with Explicit Task and Domain Conditioning for Cross-Domain Event Extraction
+
+URL Source: https://arxiv.org/pdf/2608.23235v1
+
+Published Time: Tue, 25 Aug 2026 02:27:16 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+## A Multi-Domain and Multi-Task Generative Framework with Explicit Task and Domain Conditioning for Cross-Domain Event Extraction 
+
+Siting Liang 1,2 and Omar Adjali 1 and Daniel Sonntag 1,21German Research Center for Artificial Intelligence 
+
+> 2
+
+Carl von Ossietzky University of Oldenburg {siting.liang, omar.adjali, omair_shahzad.bhatti, daniel.sonntag}@dfki.de 
+
+Abstract 
+
+Event extraction aims to identify event triggers, classify event types, and extract arguments to construct structured event representations. De-spite strong in-domain performance, develop-ing models that generalize robustly across do-mains remains challenging due to variations in contextual expressions and event schemas. Prior unified and multi-task approaches im-prove in-domain accuracy but exhibit limited flexibility when applied to unseen domains. Even large language model–based methods that provide full event ontologies at inference time often underperform compared to smaller, task-specific fine-tuned models. We propose a unified multi-domain and multi-task training framework that models heterogeneous event schemas within a single model. Our approach introduces domain conditioning signals, jointly with task-specific prompts, enabling dynamic adaptation to dataset-specific schemas without requiring complete event label sets at inference time. The framework supports both pipeline and end-to-end extraction settings, facilitating efficient task- and domain-level transfer. Ex-periments on diverse event extraction bench-marks demonstrate that our method achieves competitive performance, strong cross-domain generalization, and practical scalability, while preserving domain-specific precision. 
+
+1 Introduction 
+
+Event extraction (EE) is a fundamental task in information extraction that aims to identify and structure mentions of events from unstructured text. A typical event extraction pipeline involves two core tasks (Yang et al., 2019): (i) Event Detection (ED) , which detects spans of text that evoke the occurrence of an event and assigns the detected trig-ger word to a predefined event type; and (ii) Event Argument Extraction (EAE) , which identifies and labels the participants or entities that fulfill specific roles in the event. Together, these tasks enable the 
+
+Figure 1: Illustration of cross-domain event extraction, where a single unified model generates domain-specific predictions for the same input text by conditioning on the target domain at inference time. 
+
+construction of structured representations of events that support downstream applications such as event-centric knowledge graph construction (Gottschalk and Demidova, 2019). Prior work on event extraction predominantly relies on discriminative models that decompose the task into separate modules, or on unified generative models that jointly encode event structures within a single framework (Huang et al., 2023; Wang et al., 2023). Building on the latter paradigm, we extend unified event extraction to a fully multi-domain and multi-task setting, training a single model to handle all domains and event subtasks in a scalable and efficient manner. Figure 1 illustrates cross-domain event extraction at inference time, where our uni-fied multi-domain fine-tuned model leverages do-main indicators (e.g., WikiEvents , Geneva , RAMS )to generate domain-specific predictions given the identical input text. We adopt a text-to-text multi-task framework that reformulates core event extraction subtasks into a unified generation paradigm, enabling a single encoder–decoder model to jointly perform event detection (ED) and event argument extrac-tion (EAE) (Lu et al., 2022). This formulation builds on prior work in prefix-based condition-ing, controllable generation, and unified informa-tion extraction, where task-specific tokens serve as lightweight prompts to guide generation across different subtasks (Hsu et al., 2023a,b). Extend-arXiv:2608.23235v1 [cs.CL] 24 Aug 2026 Figure 2: The unified framework is built on a text-to-text architecture, allowing a single model to learn multiple tasks simultaneously through task-specific prompts while training on multiple datasets. During training, domain-conditioned signals (e.g., Domain: Geneva.) enable robust cross-domain transfer while maintaining strong domain-specific precision. 
+
+ing this paradigm, we further generalize the frame-work to a multi-domain setting by incorporating additional domain-level conditioning. Specifically, lightweight domain indicators are prepended to the input sequence (e.g., Domain: Geneva. ), allow-ing the model to adapt its generation behavior to diverse domain-specific event patterns without re-quiring explicit schema definitions or full event ontologies at inference time. As illustrated in Fig-ure 2, the resulting framework unifies multi-task and multi-domain learning under a single genera-tive model guided by both task-specific prompts and domain indicators. The unified framework al-lows a single model to operate flexibly in either a pipeline setting, detecting and classifying trig-gers and arguments extraction in successive steps: 
+
+Pipeline of ED ⇒ EAE , or in an End-to-End 
+
+manner that jointly generates structured event rep-resentations ( ED+EAE ). Detailed descriptions of the unified framework and both operating modes are provided in the Section 3. Our experiments demonstrate that a single T5-base model (Chung et al., 2024) can effectively han-dle all event extraction subtasks, operating either sequentially in a pipeline setting or jointly through end-to-end prediction. The key contributions of our work are: (1) proposing a single generative model capable of flexible event extraction in multi-ple paradigms, (2) demonstrating mutual benefits of joint multi-task and multi-domain training, and (3) showing effective cross-domain generalization with a single model. We will publish our code and T5-based event extraction models of this work. 
+
+2 Related Work 
+
+Event extraction systems have traditionally re-lied on discriminative sequence-labeling ap-proaches, where classifiers are fine-tuned on human-annotated label sets, often resulting in domain-specific models trained separately for each dataset (Wadden et al., 2019; Yang et al., 2019). Re-cent mainstream event extraction systems are typi-cally built on joint or unified modeling paradigms, where entities, relations, and events are learned together through multi-task training to boost in-domain performance, especially under limited train-ing resources (Lin et al., 2020; Lu et al., 2022; Hsu et al., 2022, 2023a). However, these approaches remain tightly coupled to fixed label sets and pre-defined schemas, which limits their scalability and transferability across domains. Moreover, they are often evaluated on only a small number of event extraction datasets, leaving their generalization to diverse domains and heterogeneous event schemas largely unvalidated (Huang et al., 2024). Zero-shot prompting with large language mod-els (LLMs) suggests the promise of generalized event extraction, but in practice yields consistently low performance and relies heavily on explicitly provided schemas, labels, and output constraints, and still exhibit weak schema adherence. Instruc-tion fine-tuning can improve schema adherence and reduce format inconsistency and invalid out-puts (Wang et al., 2023; Zuo et al., 2025). However, these approaches scale poorly to evolving schemas and provide limited domain transferability. While constraint-aware instructions and optimization im-prove output validity, they focus on generation cor-rectness rather than representation transfer, leaving LLM-based methods behind fine-tuned non-LLM models in F1 performance (Srivastava et al., 2025; Adjali et al., 2026). 
+
+3 Approach 
+
+We propose a unified event extraction framework that balances performance, efficiency, and flexi-bility across tasks while scaling seamlessly to a number of diverse domains. As illustrated in Fig-ure 2, our approach formulates event extraction as a prompt-conditioned text-to-text generation prob-lem, where each input S is prefixed with a domain indicator [Domain: d] and a task-specific prompt 
+
+πt. The domain indicator d is a simple string (e.g., 
+
+Geneva , RAMS ) that provides lightweight contex-tual signals about domain-specific event semantics. The task prompt πt is defined using fixed natural language templates, each corresponding to a dis-tinct subtask (e.g., trigger identification, trigger classification, argument extraction), enabling a uni-fied model to handle multiple tasks within a shared framework. 
+
+Multi-domain Multi-task Learning. Our frame-work extends prior unified formulations by jointly addressing multiple tasks and domains, enabling a single model to learn shared structures while adapt-ing to heterogeneous event semantics. Training minimizes the negative log-likelihood (1)jointly across tasks and domains, enabling a unified model to perform multi-task, multi-domain event extrac-tion. 
+
+pθ(y | d, π t, S ) = Q|y| 
+
+> i=1
+
+pθ(yi | y<i , d, π t, S )
+
+(1) 
+
+Multi-task Formulation. Table 1 summarizes the input–target patterns used in our unified multi-task learning framework. We design structured target sequences to support different modeling con-figurations, including pipeline and end-to-end set-tings. This diverse multi-task formulation, on the one hand, supports flexible operation modes by uni-fying pipeline and end-to-end configurations within a single framework. On the other hand, it augments training data through heterogeneous input–target patterns, enabling the model to capture a broader range of structural dependencies, from span-level trigger prediction and type classification to schema-guided argument extraction and fully structured                                             
+
+> Task(Mode) Task-Specific Input Pattern Target Pattern
+> ED (P1) [Domain: d][Task: TI] SS+ <trigger> w>
+> ED (P2) [Domain: d][Task: TC] S+ <trigger> w=t
+> ED (E2E) [Domain: d][Task: TI+TC] S<trigger> w>= t
+> EAE (P) [Domain: d][Task: EAE] S+ ( w,t)a1=r1;a2=r2
+> ED+EAE (E2E) [Domain: d][Task: EE] Sw=t|a1=r1;a2=r2
+
+Table 1: Abstract input–output patterns for multi-task event extraction under pipeline (P) and end-to-end (E2E) settings. Symbols denote: w (trigger word), t (event type), a (argument text), and r (role type). 
+
+event generation, thereby improving generalization and robustness across domains and tasks. 
+
+Pipeline Event Generation. In pipeline mode, event detection is decomposed into sequential sub-tasks: trigger identification (ED–P1), type classifi-cation (ED–P2), and argument extraction (EAE–P). Concretely, the model first predicts triggers us-ing [Domain: d][Task: TI] S, then classifies their types via [Domain: d][Task: TC] S +<trigger> 
+
+, and finally performs argument extraction with 
+
+[Domain: d][Task: EAE] S + ( w, t). A key ad-vantage of this formulation is that each input cor-responds to a single event instance , condition-ing argument extraction on a specific trigger and event type . This allows EAE to leverage schema-constrained prompts instantiated from the predicted type and domain, explicitly encoding valid argu-ment roles and guiding the model to extract event-specific arguments with higher precision. However, this design is sensitive to error propagation: incor-rect trigger or type predictions can lead to entirely incorrect downstream arguments. To mitigate this, trigger identification and type classification can also be performed jointly in an end-to-end formu-lation (ED–E2E) using [Domain: d][Task: TI+TC] 
+
+S, which serves as an additional subtask during multitask training, increases training diversity, and provides greater flexibility at inference time. Argu-ment extraction is executed based on the results of either ED–pipeline or ED–E2E .
+
+End-to-End Event Generation. The model also supports a fully end-to-end event extraction mode (ED+EAE–E2E) with [Domain: d][Task: EE] 
+
+S, directly generating complete event structures in a single pass without intermediate predictions, thereby reducing cascading errors. However, this approach does not explicitly incorporate schema constraints for EAE, requiring the model to im-plicitly capture role structures and dependencies, which poses additional challenges for accurate and consistent generation. 4 Experiments 
+
+Datasets. We conduct our main experiments on publicly accessible event extraction datasets. For standardized evaluation, we adopt the preprocessed versions provided by Huang et al. (2024), exclud-ing other information extraction datasets that lack event argument annotations and firstly focusing on English-only datasets. The datasets employed in this study are as follows: • CASIE (Satyapanich et al., 2020): A cyber-security event extraction dataset. It defines event subtypes (e.g., Vulnerability Disclosure, Attack) focusing on the critical domain of cy-bersecurity intelligence. • Geneva (Parekh et al., 2023): A large-scale benchmark for event extraction aligned to FrameNet (Fillmore et al., 2002) structures. It specifies hundreds of event types and roles across diverse textual sources, includ-ing books, articles, journals, and Wikipedia. • Genia2013 (Kim et al., 2013): A widely used biomedical event extraction dataset, it centers on molecular-level events (e.g., Gene Expres-sion, Phosphorylation) in scientific literature, representing a challenging domain character-ized by specialized terminology. • M2E2 (Li et al., 2020): A multimedia news-domain event extraction dataset. It defines events and arguments from annotated news ar-ticles and images, bridging textual and visual modalities. Only the text-based annotations for events and arguments are applied in our experiments. • RAMS (Ebner et al., 2020): A news-domain event extraction dataset. It defines argument roles across multiple sentences, emphasizing cross-sentence argument linking in news arti-cles. • WikiEvents (Li et al., 2021a): A Wikipedia current-events domain event extraction dataset. It defines event triggers and argu-ments at the document level. It requires identifying event triggers and their arguments throughout an entire document. Examples of event and argument roles are shown in Table 2.                                 
+
+> Dataset Example Event Type Example Argument Roles
+> CASIE (Cybersecurity) Attack_Databreach Attacker ,Target ,Malware ,Vulnerability ,Compromised Data ,Instrument
+> Geneva (General) Protest Protester ,Target ,Place ,Time ,Reason ,Organizer
+> Genia2013 (Biomedical) Gene_expression Theme (Gene/Protein) ,Agent (Cause) ,Site (Location) ,
+> Resulting Entity
+> M2E2 (Geopolitical) Conflict_attack Location ,Victims ,Casualties ,Time
+> RAMS (Newswire) Contact_negotiate_meet Participant ,Location ,Time ,Topic ,Outcome
+> WikiEvents (Wikipedia) Personnel_EndPosition Entity ,Organization ,Position ,Place ,Time ,Reason
+
+Table 2: Representative event-type examples and their domain-specific argument roles across diverse event-extraction datasets. 
+
+Table 3 summarizes the dataset splits, number of samples, annotated event types, argument roles, and annotation instances. These datasets exhibit substantial variation in both scale and semantic complexity. For instance, Geneva and RAMS con-tain large and diverse event ontologies with over 100 event types and tens to hundreds of role types, while CASIE and M2E2 involve fewer event types but differ significantly in data density and annota-tion sparsity.                                                                                    
+
+> Dataset Split Event Types Event Mentions Role Types Arguments
+> CASIE Train(1047) 55980 26 15869 Dev(218) 51221 26 3175 Test (218) 51268 26 3531 Geneva Train (2582) 115 5290 220 8618 Dev (509) 115 1016 159 1683 Test (593) 115 1199 171 2013 Genia2013 Train (420) 13 4077 73921 Dev (105) 10 950 7858 Test(139) 11 974 7881 M2E2 Train (4211) 8748 15 1120 Dev (901) 8183 15 280 Test (901) 8174 15 259 RAMS Train (7827) 139 7287 65 16951 Dev (910) 136 910 64 2132 Test (910) 135 910 63 2123 WikiEvents Train (450) 50 3131 57 4393 Dev (53) 39 422 43 592 Test (62) 38 379 46 516
+
+Table 3: Statistics of six event extraction datasets ap-plied in our experiments. 
+
+In addition, the number of event mentions and ar-guments also varies widely across datasets: RAMS 
+
+and CASIE include dense annotations with thou-sands of event instances and arguments, whereas 
+
+M2E2 contains relatively sparse event mentions de-spite a larger number of training samples. Addition-ally, Genenia2013 focuses on specialized biomedi-cal events with a limited role schema (7 role types), in contrast to the more complex role structures ob-served in Geneva (more than 200 role types). Over-all, this collection reflects a wide spectrum of do-main shifts in event semantics, label distributions, and structural complexity, making it well-suited for evaluating cross-domain event extraction. Dataset #Samples Mean #Tokens Mean #Annotated Tokens CASIE 1047 295.2 46.77 Geneva 2582 26.6 14.08 Genia2013 420 225.2 20.92 M2E2 4211 28.2 0.520 RAMS 7287 132.9 5.416 WikiEvents 450 329.0 18.92 
+
+Table 4: Overview of token annotation statistics. The first column shows the number of annotated samples, the second column indicates the average number of tokens per sample, and the third column reports the average number of tokens with assigned labels. 
+
+The datasets exhibit substantial variation in se-quence length and annotation density across do-mains. WikiEvents and CASIE contain long arti-cles as input, with average lengths of 329.0 and 295.2 tokens, respectively, followed by Genia2013 (225.2) and RAMS (132.9). In contrast, Geneva and M2E2 consist of sentence input, averaging only 26.6 and 28.2 tokens per sample. However, the number of annotated tokens does not scale propor-tionally with input length, revealing notable spar-sity in several datasets. Geneva has the highest annotation density, nearly half of the input tokens are labeled per sample. Genia2013 also exhibit moderate annotation coverage (14.08 and 20.92, respectively). In contrast, datasets such as RAMS (5.416), WikiEvents (18.92), and especially M2E2 (0.520) show significantly fewer annotated tokens relative to their input length. This indicates that, for these datasets, only a small fraction of the text is la-beled, resulting in highly sparse supervision. Over-all, while some datasets provide relatively dense annotations, M2E2 and RAMS are characterized by sparse labeling. These pose additional challenges for cross-domain learning and evaluation. 
+
+Models. We conducted preliminary experiments (see Appedix B) to identify a suitable base model in our experiments. Similar to Chanin (2023), we found that T5-Base (Chung et al., 2024) demon-strated the best balance between performance and computational efficiency. Scaling up to T5-Large 
+
+provided negligible improvement in performance relative to the increased computational cost. While 
+
+BART-base (Lewis et al., 2020) and GPT-2 (Rad-ford et al., 2019) achieved competitive results in trigger identification task, they exhibited instability in argument extraction, consistent with prior obser-vations in related studies (Li et al., 2021b; Chanin, 2023). Hence, T5-Base is selected as the primary architecture in the multi-domain experiments. 
+
+Training. We train six single-domain models and one multi-domain joint model. Each model is trained for 40 epochs, en-abling a controlled comparison between in-domain specialization and cross-domain generalization. All models are based on 
+
+T5ForConditionalGeneration , optimized with a learning rate of 5e-05 . We apply gradient accumu-lation with gradient_accumulation_steps=4 
+
+and clip gradients with a maximum norm (max_grad_norm=1.0 ) to ensure stable training. 
+
+Post-processing. Given the generative nature of our framework, the model outputs linearized text sequences encoding triggers, event types, and argu-ments. To recover structured event representations, we apply a deterministic post-processing procedure that parses these sequences into structured records. Specifically, we first extract trigger spans and their associated event types from patterns such as w >= t. Based on the identified triggers, we then parse argument tuples by matching patterns of the form 
+
+a=r, optionally conditioned on trigger-specific con-text in pipeline settings. Each event is represented by a trigger (with text span, type, and offset) and a set of associated arguments (with text, role, and offset). The final outputs are organized in a hierar-chical format grouped by inference mode (pipeline or end-to-end), as illustrated below:              
+
+> {" events ": {" pipeline ": [{" trigger ": {" text ": "{ w }" , " type ": "{ t }" , " offset ": [ int , int ] }, " arguments ": [{" text ": "{ a }" , " role ": "{ r }" , " offset ": [ int , int ] }]}], " ened -to - end ": [...] }}}
+
+This post-processing step is required to bridge the gap between free-form text generation and struc-tured event extraction, ensuring consistent and com-parable evaluation across different tasks and infer-ence modes. Evaluation. For event detection (ED), trigger identification (TI) evaluates the correctness of pre-dicted trigger offsets, while trigger classification (TC) additionally requires correct event types. For event argument extraction (EAE), following Huang et al. (2023), argument identification (AI) evalu-ates correct argument spans linked to triggers, and argument classification (AC) further requires cor-rect argument roles. Both AI and AC enforce cor-rect argument–trigger associations, enabling faith-ful evaluation of complete event structures. We evaluate TI, TC, AI, and AC using preci-sion, recall, and F1 based on matching between predicted(p) and gold structures(g): • TI : match trigger spans (wp, w g).• TC : match trigger span and event type 
+
+(( wp, t p), (wg, t g)) .• AI : match argument–trigger pairs 
+
+(( ap, w p), (ag, w g)) .• AC : match argument, role, and trigger 
+
+(( ap, r p, w p), (ag, r g, w g)) .
+
+5 Results 
+
+We report the general results for TI, TC, AI and AC in Table 5 and Table 6 after 40 epochs of training. Models are evaluated in different modes, includ-ing ED-gold (gold triggers), ED-pipeline, ED-e2e followed by EAE in pipeline mode, and fully end-to-end generation. A clear performance gap be-tween ED-gold and all predicted-trigger settings confirms that trigger identification errors remain the primary bottleneck for event extraction. This is particularly evident in the consistent drop from TC to AI/AC under both pipeline and end-to-end settings, underscoring the critical role of accurate trigger localization. We also include comparisons with representative prior single-domain systems. 
+
+Benefit of Multi-domain Learning. jointly train-ing on all datasets achieves performance compara-ble to (and often exceeding) single-domain mod-els, while using a single unified model across all datasets. This provides a clear practical advantage, as it eliminates the need to maintain and deploy separate models for each domain, significantly im-proving scalability and efficiency. Empirically, the benefits are most evident on resource-limited or schema-diverse datasets such as Genia2013 and WikiEvents. For example, multi-domain training leads to substantial gains in TC, AI, and espe-cially AC on Genia2013, where argument classi-fication improves markedly compared to single-domain training. Similarly, on WikiEvents, both trigger and argument metrics consistently increase under the multi-domain setting. These results in-dicate that knowledge learned from high-resource domains (e.g., CASIE, M2E2, Geneva) transfers effectively to lower-resource or structurally differ-ent domains. Moreover, the gains are more pro-nounced for argument-level metrics (AI, AC) than for trigger-level metrics (TI, TC). This suggests that argument extraction benefits more from shared cross-domain representations, as argument roles and semantic patterns generalize across datasets, even when trigger vocabularies differ. In contrast, trigger identification remains more domain-specific and thus shows smaller improvements. As shown in Figures 3a–4c from Appendix D, joint multi-domain training consistently yields sta-ble improvement across epochs. Precision stabi-lizes early and remains largely unchanged, while recall improves progressively with training, with the most substantial gains observed in most do-mains. These observations indicate that shared representation primarily enhances coverage rather than classification confidence. This trend is espe-cially pronounced for end-to-end (E2E) mode. 
+
+ED-pipeline, ED-e2e vs. fully End-to-End. 
+
+Both ED-pipeline and ED-e2e consistently outper-form the fully generative end-to-end setting, par-ticularly on AI and AC. While the gap on TI and TC is relatively small, the difference becomes sub-stantial for argument extraction. Moreover, ED-e2e achieves comparable or slightly better trigger performance than ED-pipeline, while maintaining strong argument scores, demonstrating the advan-tage of jointly modeling TI and TC under structured supervision. While ED-e2e jointly predicts TI and TC, it still leverages schema-constrained decoding 
+
+for downstream arguments prediction, where valid argument roles are conditioned on the predicted event type. In contrast, the fully end-to-end set-ting must generate triggers, arguments, and roles simultaneously without explicit constraints. The fully end-to-end mode often fails to predict valid or consistent argument roles, leading to significant degradation in AC. This trend highlights the advan-tage of the pipeline mode to incorporate structured schema knowledge during argument prediction. CASIE M2E2 Genia2013 Metrics TI TC AI AC TI TC AI AC TI TC AI AC 
+
+Single-Domain Multi-Task Training 
+
+ED-gold – 95.1 65.1 61.6 – 88.8 58.4 51.5 – 67.9 66.7 51.9 ED-pipeline 67.7 66.2 56.4 52.9 68.2 62.4 53.8 40.4 41.6 33.4 43.8 31.5 ED-e2e 66.2 65.3 57.7 54.2 69.1 65.5 53.2 43.6 45.6 40.5 56.7 43.9 End-to-End 62.7 61.1 39.9 37.3 64.6 59.7 28.0 23.6 41.2 36.3 21.8 19.5 
+
+Multi-Domain Multi-Task Training 
+
+ED-gold – 95.0 65.2 62.5 – 89.7 58.7 55.6 – 86.3 78.1 71.0 ED-pipeline 68.1 66.9 58.8 55.3 70.7 69.0 51.5 44.4 65.2 64.6 71.1 66.0 ED-e2e 68.1 67.4 58.1 55.4 72.2 69.3 53.4 46.0 64.6 61.0 68.9 60.4 End-to-End 63.9 62.7 41.7 39.8 68.6 65.7 36.0 32.3 65.2 60.7 53.4 50.2 
+
+Other Previous System (Single-Domain Training) 
+
+OneIE 70.8 70.6 57.2 54.2 52.4 50.6 37.8 36.1 78.0 74.3 52.3 51.0 DyGIE++ 44.9 44.7 37.5 36.4 53.1 51.0 34.6 33.4 76.3 72.9 62.7 60.5 DEGREE(e2e) 60.9 60.7 36.0 27.0 50.9 49.5 33.7 32.5 66.4 62.6 37.1 33.3 DEGREE(pipe) 57.4 57.1 49.7 48.0 50.4 48.3 34.0 33.1 64.9 61.0 51.0 49.4 TagPrime 69.5 69.3 63.3 61.0 71.7 71.1 60.9 51.7 75.7 73.0 61.8 60.8 
+
+> Table 5: Event extraction performance (F1 %) on CASIE, M2E2, and Genia2013 under single-domain and multi-domain multi-task training. The best scores are highlighted for each dataset. Multi-domain training consistently improves performance across datasets for the fully end-to-end mode. We also include comparisons with representa-tive prior single-domain systems.
+
+RAMS Geneva WikiEvents Metrics TI TC AI AC TI TC AI AC TI TC AI AC 
+
+Single-Domain Multi-Task Training 
+
+ED-gold – 37.0 53.5 46.9 – 93.4 83.1 76.8 – 72.3 64.1 58.0 ED-pipeline 79.6 30.7 46.8 34.9 84.6 81.4 72.7 63.7 45.3 38.9 39.8 31.3 ED-e2e 80.2 30.6 46.7 34.8 83.4 81.2 72.1 62.8 38.0 42.3 31.5 End-to-End 79.4 30.1 39.2 29.6 81.3 79.1 65.2 59.8 46.4 35.5 26.0 21.1 
+
+Multi-Domain Multi-Task Training 
+
+ED-gold – 38.9 53.0 45.8 – 93.5 82.3 75.9 – 79.6 64.9 59.9 ED-pipeline 79.1 28.9 45.7 34.4 84.6 81.4 71.8 61.6 46.6 41.4 39.8 32.4 ED-e2e 79.4 30.5 45.9 34.5 82.3 79.5 70.3 60.5 50.7 44.8 42.4 33.4 End-to-End 78.9 32.1 39.4 30.6 80.7 78.7 64.8 59.5 49.3 43.3 28.9 24.2 
+
+Other Previous Systems (Single-Domain Training) 
+
+OneIE(EAE) – – 48.0 40.7 – – 38.9 37.1 – – 17.5 15.0 DyGIE++(EAE) – – 44.3 35.3 – – 66.0 62.5 – – 39.8 35.3 DEGREE(EAE) – – 50.5 45.5 – – 67.2 64.1 – – 60.4 57.3 TagPrime-C – – 54.4 48.3 – – 83.0 79.2 – – 70.4 65.7 
+
+> Table 6: F1 Scores for Event Extraction Tasks on RAMS, Geneva, WIKIEVENTS Datasets. Scores reported for previous systems correspond only to argument extraction tasks using gold trigger words and types.
+
+Fine-grained Event Type Classification Chal-lenges. While coarse-grained, single-word types (e.g., "Attack" ) offer simpler learning targets and higher data density, fine-grained, canonical types (e.g., "Conflict_Attack_Detonate" ) introduce severe challenges of data sparsity. We plot the gran-ularity distribution in Figure 5 shown in Appen-dex E. CASIE, Geneva, and Genia2013 operate pri-marily with coarse-grained (Levels 1-2) and moder-ately fine-grained (Level 3) event types and exhibit relatively stable performance. RAMS features nu-merous fine-grained event types (Levels 4-8) that suffer from data sparsity and require more nuanced semantic distinctions in event classification. On the RAMS dataset, the F1 scores for predicted event types matching at Level 1 (77.42%) far exceed the event types matching at whole level (31.25%) as presented in Table 7. Both WikiEvents and M2E2 include fine-grained event types, as shown in Fig-ure 5; their annotations predominantly concentrate on the coarse-grained types. Analysis of granular-ity reveals that the complexity of multi-level event-type structures poses challenges that go beyond those caused by trigger word identification. The granularity of event types poses significant difficul-ties for proper annotation and model prediction. Dataset Level 1 Level 2 Whole M2E2 65.20 – 63.74 RAMS 77.42 64.23 31.25 WikiEvents 48.67 47.27 44.72 
+
+> Table 7: Trigger Classification F1 (%) decline by in-creasing granularity levels.
+
+Misaligned in AI/AC Metrics. EAE -related scores AI and AC of our systema and other pre-vious systems presented in Table 5 and Table 6 demonstrate significant underperformance com-pared to ED -related scores. We observe system-atic mismatches in evaluating the matching be-tween the predicted argument text and gold an-notation that reduce performance scores. For in-stance: the model correctly identifies the core ar-gument element Place=Boston , but misses the possessive marker "’s" in the gold annotation 
+
+"Boston’s" . Similarly, the model correctly iden-tifies the victms=members , but omits the deter-miner ’the’ , which is present in the gold span 
+
+"the members" . This highlights a critical lim-itation of the metric: it prioritizes surface-form precision over semantic accuracy. Consequently, the reported scores for argument extraction, par-ticularly for argument identification, are likely to significantly underestimate the model’s true seman-tic understanding and extraction capability. There-fore, methods that improve the performance of the current system on EAE tasks, as well as a more appropriate evaluation metric in this field, require further exploration. 
+
+Summary. These results demonstrate that a uni-fied multi-domain model achieves strong and competitive performance across datasets while significantly improving efficiency by removing the need for domain-specific models. Multi-domain training consistently benefits recall and generalization, particularly for resource-limited or schema-diverse datasets, highlighting effective cross-domain knowledge transfer. Moreover, fine-grained event type classification poses a signifi-cant challenge. Comparisons across ED-pipeline, ED-e2e, and fully end-to-end settings reveal that precise trigger identification remains critical. End-to-end modes offer more flexibility but tend to intro-duce additional spurious events and arguments. No-tably, pipeline-based AI+AC benefits from explicit schema constraints, leading to more structurally consistent and controlled argument extraction com-pared to fully end-to-end approaches (see example predictions in Table 12). 
+
+6 Conclusion 
+
+In this work, we demonstrate that a single T5-based Seq2Seq model based on unified multi-domain multi-task learning can effectively per-form all event extraction subtasks across diverse domain datasets. Our results show that a uni-fied model trained on consolidated multi-domain data achieves competitive performance compared to domain-specific models, while significantly im-proving efficiency by eliminating the need for mul-tiple specialized systems. Notably, multi-domain training yields clear gains on resource-limited or schema-diverse datasets (e.g., Genia2013 and WIKIEVENTS), highlighting the benefits of cross-domain knowledge transfer for improved general-ization. However, fully end-to-end inference lacks ex-plicit control over structural and role constraints, and is further limited by the relatively scarce and less diverse supervision signals available for such formulations. Additionally, the fine-grained granu-larity of event types poses challenges for both an-notation consistency and model prediction. While the proposed unified framework provides a prac-tical and scalable solution for multi-domain infor-mation extraction, maintaining sufficient domain similarity remains important to ensure stable per-formance. Overall, our unified framework offers a strong balance between performance and efficiency, providing a streamlined and adaptable framework for real-world deployment across heterogeneous domains. Future work will focus on improving ro-bustness to fine-grained event structures, as well as exploring more flexible learning strategies to better accommodate domain-specific linguistic variations. Limitations 
+
+Our work has several limitations that present oppor-tunities for future research. Firstly, the scope of our cross-domain evaluation was limited by the avail-ability of event extraction datasets from various domains, which may impact the broader generaliz-ability of our findings. Secondly, we deliberately restricted our focus to event extraction tasks. Al-though the unified model architecture is extensible in principle to broader information extraction tasks, such as entity and relation extraction, a system-atic investigation of this extension remains a focus for future work. Thirdly, the emergence of pow-erful large language models (LLMs) introduces a compelling alternative paradigm for generative in-formation extraction, particularly in multi-domain settings where unified training can leverage broad contextual knowledge. A systematic comparison between unified multi-domain models and LLM-based approaches, especially in terms of efficiency and scalability, remains an important direction for future work. 
+
+Acknowledgment 
+
+We greatly appreciate the foundational work of 
+
+TEXTEE (Huang et al., 2023), which undertook the significant effort to benchmark existing event extraction systems and standardize the preprocess-ing of diverse datasets. 
+
+Declaration on the Use of AI Assistants 
+
+During the preparation of this work, we acknowl-edge the use of GPT-4o-mini for only spell check-ing, paraphrasing, and latex formatting purposes; Copilot for reviewing coding errors. After the use of the AI tools, We systematically reviewed and edited the all content as needed and take full re-sponsibility for the publication’s content. 
+
+References 
+
+Omar Adjali, Siting Liang, Omair Shahzad Bhatti, and Daniel Sonntag. 2026. Aligning instruction-tuned llms for event extraction with multi-objective rein-forcement learning. In European Conference on In-formation Retrieval , pages 586–595. David Chanin. 2023. Open-source frame semantic pars-ing. arXiv preprint arXiv:2303.12788 .Hyung Won Chung, Le Hou, Shayne Longpre, Barret Zoph, Yi Tay, William Fedus, Yunxuan Li, Xuezhi Wang, Mostafa Dehghani, Siddhartha Brahma, Al-bert Webson, Shixiang Shane Gu, Zhuyun Dai, Mirac Suzgun, Xinyun Chen, Aakanksha Chowdhery, Alex Castro-Ros, Marie Pellat, Kevin Robinson, and 16 others. 2024. Scaling instruction-finetuned language models. Journal of Machine Learning Research ,25(70):1–53. Seth Ebner, Patrick Xia, Ryan Culkin, Kyle Rawlins, and Benjamin Van Durme. 2020. Multi-sentence argument linking. In Proceedings of the 58th An-nual Meeting of the Association for Computational Linguistics , pages 8057–8077. Charles J. Fillmore, Collin F. Baker, and Hiroaki Sato. 2002. The FrameNet database and software tools. In 
+
+Proceedings of the Third International Conference on Language Resources and Evaluation (LREC’02) , Las Palmas, Canary Islands - Spain. European Language Resources Association (ELRA). Simon Gottschalk and Elena Demidova. 2019. Eventkg– the hub of event knowledge on the web–and biograph-ical timeline generation. Semantic Web , 10(6):1039– 1070. I-Hung Hsu, Kuan-Hao Huang, Elizabeth Boschee, Scott Miller, Prem Natarajan, Kai-Wei Chang, and Nanyun Peng. 2022. DEGREE: A data-efficient generation-based event extraction model. In Proceed-ings of the 2022 Conference of the North American Chapter of the Association for Computational Lin-guistics: Human Language Technologies (NAACL) .I-Hung Hsu, Kuan-Hao Huang, Shuning Zhang, Wenxin Cheng, Prem Natarajan, Kai-Wei Chang, and Nanyun Peng. 2023a. TAGPRIME: A unified framework for relational structure extraction. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (ACL) .I-Hung Hsu, Zhiyu Xie, Kuan-Hao Huang, Prem Natara-jan, and Nanyun Peng. 2023b. AMPERE: amr-aware prefix for generation-based event argument extraction model. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (ACL) .Kuan-Hao Huang, I-Hung Hsu, Tanmay Parekh, Zhiyu Xie, Zixuan Zhang, Prem Natarajan, Kai-Wei Chang, Nanyun Peng, and Heng Ji. 2024. Textee: Bench-mark, reevaluation, reflections, and future challenges in event extraction. In Findings of the Association for Computational Linguistics ACL 2024 , pages 12804– 12825. Kuan-Hao Huang, I-Hung Hsu, Tanmay Parekh, Zhiyu Xie, Zixuan Zhang, Premkumar Natarajan, Kai-Wei Chang, Nanyun Peng, and Heng Ji. 2023. Tex-tee: Benchmark, reevaluation, reflections, and fu-ture challenges in event extraction. arXiv preprint arXiv:2311.09562 .Jin-Dong Kim, Yue Wang, and Yamamoto Yasunori. 2013. The Genia event extraction shared task, 2013 edition - overview. In Proceedings of the BioNLP Shared Task 2013 Workshop , pages 8–15, Sofia, Bul-garia. Association for Computational Linguistics. Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Veselin Stoyanov, and Luke Zettlemoyer. 2020. Bart: Denoising sequence-to-sequence pre-training for nat-ural language generation, translation, and comprehen-sion. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 7871–7880. Manling Li, Alireza Zareian, Qi Zeng, Spencer White-head, Di Lu, Heng Ji, and Shih-Fu Chang. 2020. Cross-media structured common space for multime-dia event extraction. In Proceedings of the 58th An-nual Meeting of the Association for Computational Linguistics , pages 2557–2568. Sha Li, Heng Ji, and Jiawei Han. 2021a. Document-level event argument extraction by conditional gen-eration. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies , pages 894–908. Sha Li, Heng Ji, and Jiawei Han. 2021b. Document-level event argument extraction by conditional gen-eration. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies (NAACL-HLT) .Ying Lin, Heng Ji, Fei Huang, and Lingfei Wu. 2020. A joint neural model for information extraction with global features. In Proceedings of the 58th Annual Meeting of the Association for Computational Lin-guistics (ACL) .Yaojie Lu, Qing Liu, Dai Dai, Xinyan Xiao, Hongyu Lin, Xianpei Han, Le Sun, and Hua Wu. 2022. Uni-fied structure generation for universal information extraction. In Proceedings of the 60th Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 5755–5772, Dublin, Ireland. Association for Computational Linguistics. Tanmay Parekh, I-Hung Hsu, Kuan-Hao Huang, Kai-Wei Chang, and Nanyun Peng. 2023. Geneva: Bench-marking generalizability for event argument extrac-tion with hundreds of event types and argument roles. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 3664–3686. Alec Radford, Jeff Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. 2019. Language models are unsupervised multitask learners. Taneeya Satyapanich, Francis Ferraro, and Tim Finin. 2020. Casie: Extracting cybersecurity event informa-tion from text. Proceedings of the AAAI Conference on Artificial Intelligence , 34(05):8749–8757. Saurabh Srivastava, Sweta Pati, and Ziyu Yao. 2025. Instruction-tuning llms for event extraction with an-notation guidelines. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 13055–13071. David Wadden, Ulme Wennberg, Yi Luan, and Han-naneh Hajishirzi. 2019. Entity, relation, and event extraction with contextualized span representations. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) .Xiao Wang, Weikang Zhou, Can Zu, Han Xia, Tianze Chen, Yuansen Zhang, Rui Zheng, Junjie Ye, Qi Zhang, Tao Gui, and 1 others. 2023. Instructuie: Multi-task instruction tuning for unified information extraction. arXiv preprint arXiv:2304.08085 .Sen Yang, Dawei Feng, Linbo Qiao, Zhigang Kan, and Dongsheng Li. 2019. Exploring pre-trained language models for event extraction and generation. In Pro-ceedings of the 57th Annual Meeting of the Asso-ciation for Computational Linguistics , pages 5284– 5294, Florence, Italy. Association for Computational Linguistics. Yue Zuo, Yuxiao Fei, Wanting Ning, Jiayi Huang, Yubo Feng, and Lishuang Li. 2025. Rule-guided extrac-tion: A hierarchical rule optimization framework for document-level event argument extraction. In Find-ings of the Association for Computational Linguistics: EMNLP 2025 , pages 21155–21171. 
+
+A Comparison of capabilities of different existing EE systems 
+
+presents a comparative overview of representative event extraction (EE) systems across key sub-tasks, as well as their support for cross-domain general-ization. The systems span two main paradigms: classification-based approaches (e.g., DyGIE++, OneIE, TagPrime) and generation-based methods (e.g., DEGREE, BartGEN). Our approach extends the generation paradigm by adopting a unified sequence-to-sequence (Seq2Seq) framework that jointly models all EE components while explic-itly supporting cross-domain transfer. This enables consistent handling of diverse event schemas and improves scalability compared to prior systems. 
+
+B Comparisions of Different Model Architectures. 
+
+We compare the generation behaviors of T5-base, BART, and GPT-2 on event extraction in prelim-inary experiments. The results in Table 8 reveal clear performance gaps across model architectures, particularly between encoder–decoder models (T5, BART) and the decoder-only GPT-2. Trigger iden-tification indicates that trigger detection is rela-tively robust for encoder-decoder models. How-ever, substantial differences emerge in argument ex-traction quality. Given the example of successfully Model TI TC AI AC 
+
+## T5-base 84.6 81.4 72.7 63.7 GPT-2 58.1 48.2 44.8 27.4 BART 82.5 70.3 55.5 55.4 T5-large 85.1 81.9 70.7 59.3 
+
+> Table 8: F1 scores (%) on the Geneva dataset for trigger identification (TI), trigger classification (TC), argument identification (AI), and argument classification (AC).
+
+identifying the event trigger (“pressing”) shown in Table 11, GPT-2, as a decoder-only model, ex-hibits severe over-generation, including repeated structures, inconsistent argument-role assignments, and formatting errors, reflecting its weaker con-trol over structured outputs. BART, despite its en-coder–decoder architecture, shows improved coher-ence but still introduces minor inconsistencies in argument alignment and formatting, likely due to differences in pretraining objectives and less effec-tive conditioning on structured prompts compared to T5. In contrast, T5-base produces fully correct and well-structured predictions that closely match the gold reference. Its text-to-text formulation and strong prompt adherence enable precise argument identification and role assignment. Overall, while trigger prediction is consistent across models, argu-ment extraction highlights clear architectural differ-ences, with T5 demonstrating superior reliability and structural fidelity. 
+
+C Zero-shot prompting for ED-e2e. 
+
+We evaluate GPT-4o-mini under a zero-shot ED-e2e setting using a constrained prompting template. Given an input sentence and a set of candidate event types, the model is instructed to directly generate trigger-type pairs in a structured format: trigger > 
+
+⟨trigger_text ⟩ => ⟨EventType ⟩. The prompt explic-itly enumerates all valid event labels and enforces label selection from this predefined set. Despite this constraint, the results in Table 9 show that GPT-4o-mini struggles with accurate trigger localization and classification. This suggests that while label-constrained prompting can partially guide type pre-diction, it is insufficient to ensure precise span de-tection or consistent alignment with gold triggers. Consequently, the low TI/TC performance indi-cates that directly extending this setup to argument extraction would be unreliable.                   
+
+> F1 CASIE M2E2 Genia2013 RAMS Geneva WikiEvents
+> TI 5.96 40.79 11.57 6.28 5.64 17.58
+> TC 5.63 34.21 8.76 1.96 1.98 12.68
+> Table 9: Trigger identification (TI) and trigger clas-sification (TC) F1 (%) scores for GPT-4o-mini under zero-shot ED-e2e setting across six datasets.
+
+D Benefit of Multi-domain Learning. 
+
+Joint multi-domain training exhibits a consistent divergence between precision and recall dynamics across datasets. Precision tends to stabilize early and remains largely unchanged throughout training, particularly in high-resource or simpler domains such as Geneva. Recall improves progressively with training, with the most substantial gains ob-served in challenging and heterogeneous domains, indicating effective cross-domain knowledge trans-fer. 
+
+E Granularity Distribution of different Domains. 
+
+Figure 5 presents the granularity distribution of each dataset. The analysis of granularity distribu-tion reveals a fundamental divergence that directly impacts model performance in trigger classifica-tion (TC). Because granularity introduces signif-icant challenges, including data sparsity for rare event types and more complex semantic decision boundaries, which consequently lead to higher er-ror rates and explain the performance gap observed across the diverse datasets. In particular, datasets with deeper and more uneven granularity hierar-chies (such as RAMS and WikiEvents), where fine-grained event types account for a disproportion-ately small portion of the data, are more difficult to learn effectively. By contrast, datasets with shal-lower or more balanced granularity levels (e.g., CASIE and Genia2013) allow models to achieve more stable predictions, highlighting the impor-tance of granularity-aware modeling strategies for robust cross-domain generalization. Model TI TC EAE Cross-Domain Paradigm 
+
+DEGREE (Hsu et al., 2022) ✓ ✓ ✓ – Generation BartGEN(Li et al., 2021b) – – ✓ – Generation DyGIE++ (Wadden et al., 2019) ✓ ✓ ✓ – Classification OneIE(Lin et al., 2020) ✓ ✓ ✓ – Classification TagPrime(Hsu et al., 2023a) – ✓ ✓ – Classification (Seq Tagging) Ours ✓ ✓ ✓ ✓ Generation (Seq2Seq) 
+
+> Table 10: Coverage of event extraction tasks and paradigm for each model.
+
+Model Prediction Gold Reference trigger> pressing>: argument> Iran>=Addressee | argument> to give up its nuclear program altogether>=Content | argument> the US leader>=Speaker | None=Topic 
+
+T5 Base trigger> pressing>: argument> Iran>=Addressee | argument> to give up its nuclear program altogether>=Content | argument> the US leader>=Speaker | None=Topic 
+
+BART Base trigger> pressing>: argument> Iran>=Addressee | argument> to give up its nuclear program altogether>=Content | the US leader>=Speaker | None=Topic 
+
+GPT-2 trigger> pressing>: argument> Iran>=Addressee | argument> to give up its nuclear program altogether>=Content | argument> Sharon>=Speaker | None=Topic>=Topic for event Convincing of trigger> pressing>: None=Addressee | argument> the US leader>=Content | argument> to keep>=Speaker | None=Topic>=Topic for event Convincing of trigger> press-ing>: None=Addressee | argument> Iran>=Content | argument> to give up its nuclear program altogether>=Addressee | argument  
+
+> Table 11: Event Extraction Predictions: Event with Trigger pressing . GPT-2 struggles due to being decoder-only, producing over-generation, repetition, and label errors. BART is better but still less precise than T5, especially in formatting and alignment with prompts. T5’s encoder–decoder design and text-to-text pretraining allow accurate, structured, prompt-compliant generation, making it the most suitable base model for unified event extraction.
+
+(a) Training dynamics across epochs. Each row shows precision, recall, and F1-score curves over epochs for ED, EAE, and E2E paradigms on the CASIE dataset. 
+
+(b) Training dynamics across epochs. Each row shows precision, recall, and F1-score curves over epochs for ED, EAE, and E2E paradigms on the M2E2 dataset. 
+
+(c) Training dynamics across epochs. Each row shows precision, recall, and F1-score curves over epochs for ED, EAE, and E2E paradigms on the Genia2013 dataset. (a) Training dynamics across epochs. Each row shows precision, recall, and F1-score curves over epochs for ED, EAE, and E2E paradigms on the RAMS dataset. 
+
+(b) Training dynamics across epochs. Each row shows precision, recall, and F1-score curves over epochs for ED, EAE, and E2E paradigms on the Geneva dataset. 
+
+(c) Training dynamics across epochs. Each row shows precision, recall, and F1-score curves over epochs for ED, EAE, and E2E paradigms on the WikiEvents dataset. Figure 5: Comparison of event type granularity distributions of different datasets between annotation and predictions across training Epochs. Single-Domain Multi-Domain Sub-Task Reference Input (Single) Prediction (Single) Input (Multi) Prediction (Multi) 
+
+TI When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food trigger>acquisition>. Domain: geneva. Identify trigger words. When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food acquisition. When farmers trigger>became> capable of trigger>producing> food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food trigger>acquisition>. Domain: geneva. Identify trigger words. When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food acquisition. When farmers trigger>became> capable of trigger>producing> food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food trigger>acquisition>. ED-pipeline acquisition=Getting Domain: geneva. Classify trigger types. When farmers trigger>became> capable of trigger>producing> food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food trigger>acquisition>. became =Becoming | producing =Manufacturing |acquisition =Getting Domain: geneva. Classify trigger types. When farmers trigger>became> capable of trigger>producing> food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food trigger>acquisition>. became =Becoming | producing =Manufacturing |acquisition =Getting ED-e2e trigger>acquisition> =Getting Domain: geneva. Classify trigger types end-to-end. When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food acquisition. trigger>became> =Becoming | trigger>producing> =Manufacturing | trigger>freed> =Causation | trigger>acquisition> =Getting Domain: geneva. Classify trigger types end-to-end. When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food acquisition. trigger>became> =Becoming | trigger>producing> =Manufacturing | trigger>acquisition> =Getting EAE(ED-pipeline) trigger>acquisition> =Getting: None=Means | None=Recipient | None=Source | argument>food>=Theme Domain: geneva. Extract arguments for a specific event. argument> Entity | Final_category | Final_quality for trigger> became>=Becoming; argument> Factory | Instrument | Producer | Product | Resource for trigger> produc-ing>=Manufacturing; argument> Means | Recipient | Source | Theme for trigger>acquisition> =Getting: When farmers became capable of producing food beyond the needs of their own families... trigger> became>=Becoming: argument> farmers>=Entity | None=Final_category | argument> capable of producing food beyond the needs of their own families>=Final_quality; trigger> producing> =Manufacturing: None=Factory | None=Instrument | argument> farmers>=Producer | argument> food beyond the needs of their own families>=Product | None=Resource; trigger>acquisition> =Getting: None=Means | None=Recipient | None=Source | argument>food>=Theme Domain: geneva. Extract arguments for a specific event. argument> Entity | Final_category | Final_quality for trigger> became>=Becoming; argument> Factory | Instrument | Producer | Product | Resource for trigger> producing>= Manufacturing; argument> Means | Recipient | Source | Theme for trigger>acquisition> =Getting: When farmers became capable of producing food beyond the needs of their own families... trigger> became>=Becoming: argument> farmers>=Entity | None=Final_category | argument> capable of producing food beyond the needs of their own families>=Final_quality; trigger> produc-ing>=Manufacturing: None=Factory | None=Instrument | argument> farmers>=Producer | argument> food>=Product | None=Resource; trigger> acquisition>=Getting: None=Means | None=Recipient | None=Source | argument> food>=Theme End-to-End trigger>acquisition> =Getting | argument>food>=Theme Domain: geneva. Event trigger and argument extraction. When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food acquisition. trigger>became> =Becoming | argument>farmers> =Entity | argument>capable of producing food beyond the needs of their own families> =Final_category || 
+
+trigger>producing> =Manufacturing | argument>farmers> =Producer | argument>food> =Product || 
+
+trigger>freed>=Causation | argument>others in their society> =Affected | argument>to devote themselves to projects other than food acquisition> =Effect || 
+
+trigger>acquisition> =Getting | argument>food>=Theme Domain: geneva. Event trigger and argument extraction. When farmers became capable of producing food beyond the needs of their own families, others in their society were freed to devote themselves to projects other than food acquisition. trigger>became> =Becoming| argument>farmers> =Entity | argument>capable of producing food beyond the needs of their own families> =Final_quality || 
+
+trigger>producing> =Manufacturing | argument>farmers> =Producer| argument>food> =Product || 
+
+trigger>acquisition> =Getting|argument>food> =Theme 
+
+Table 12: Comparison of prediction per sub-task between single-domain and multi-domain models on Geneva.

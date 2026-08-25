@@ -1,0 +1,459 @@
+Title: Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering
+
+URL Source: https://arxiv.org/pdf/2608.21450v1
+
+Published Time: Tue, 25 Aug 2026 00:03:35 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering 
+
+# Hangrui Xu ∗
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China hangruixu666@gmail.com 
+
+# Zhengxian Wu ∗
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China zx-wu24@mails.tsinghua.edu.cn 
+
+# Yunyao Yu ∗
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China yuyy25@mails.tsinghua.edu.cn 
+
+# Zhuohong Chen 
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China zhuohong24@mails.tsinghua.edu.cn 
+
+# Rui Cong 
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China congr24@mails.tsinghua.edu.cn 
+
+# Xiangwen Deng 
+
+University of Arizona Tucson, USA xiangwendeng@arizona.edu 
+
+# Zhifang Liu 
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China liuzhifang@sz.tsinghua.edu.cn 
+
+# Peng Jiao 
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China jiaop21@mails.tsinghua.edu.cn 
+
+# Haoqian Wang †
+
+Shenzhen International Graduate School, Tsinghua University Shenzhen, China wanghaoqian@tsinghua.edu.cn 
+
+## Abstract 
+
+Knowledge-Based Visual Question Answering (KB-VQA) relies on retrieving external information to answer queries involving long-tail entities. However, existing retrieval pipelines predominantly employ CLIP-style dual encoders, which prioritize surface-level vi-sual similarity over entity-level semantic alignment. This paradigm often fails when semantically identical concepts exhibit large vi-sual variations or when distinct entities appear visually similar. To address this, we propose KBMR, the first MLLM-based embedding retriever tailored for KB-VQA. Leveraging the robust autoregressive capabilities of MLLMs, KBMR maps images into a semantic space that better preserves concept identity. To tackle the challenge of noisy supervision in Wikipedia-scale retrieval, we introduce an MLLM-based semantic discriminator that generates continuous entity-consistency weights. These weights guide a novel continu-ous semantic distillation objective, enabling effective hard negative sampling and soft supervision beyond rigid binary labels. Exten-sive experiments demonstrate that KBMR significantly outperforms CLIP baselines, yielding up to a 14.7% improvement in retrieval Recall@1 and a 9.4% gain in end-to-end VQA accuracy. Code is available at https://github.com/realHarryX/KBMR. 
+
+## CCS Concepts 
+
+• Information systems → Retrieval models and ranking .
+
+> ∗Equal contribution.
+> †Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3836227
+
+## Keywords 
+
+Knowledge-Based VQA, Retrieval Augmented Generation, Retrieval 
+
+ACM Reference Format: 
+
+Hangrui Xu, Zhengxian Wu, Yunyao Yu, Zhuohong Chen, Rui Cong, Xiang-wen Deng, Zhifang Liu, Peng Jiao, and Haoqian Wang. 2026. Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering. In Proceedings of the 34th ACM International Conference on Mul-timedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3767308.3836227 
+
+## 1 Introduction 
+
+Multimodal large language models (MLLMs) have recently made remarkable progress in vision–language understanding and genera-tion [64], enabling instruction following, multi-step reasoning [21], and open-ended responses over images. However, many practical visual questions depend on external knowledge that is long-tailed and constantly evolving, where an MLLM’s parametric knowledge alone is unreliable and frequently leads to factual errors and hal-lucinated content [32–34, 57]. Knowledge-based visual question answering (KB-VQA) [6, 52, 61] addresses this limitation by aug-menting MLLMs with Wikipedia-scale knowledge sources, retriev-ing relevant evidence and generating answers conditioned on it. Most KB-VQA systems [7] follow a retrieval-augmented gen-eration (RAG) pipeline that first retrieves candidate knowledge entries, then reranks or filters them, and finally generates an an-swer grounded in the most relevant evidence [30, 31]. This de-sign makes first-stage retrieval a critical bottleneck. In practice, existing KB-VQA systems [61] almost universally adopt CLIP-style dual encoders as retrievers, mainly for their robust fine-grained visual representations and their vision–language alignment in a shared embedding space. However, KB-VQA places greater em-phasis on aligning entities under large appearance variations. In arXiv:2608.21450v1 [cs.CV] 19 Aug 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Hangrui Xu et al. Who owns this hotel currently? EVA-CLIP Top-k (a)traditional retrieval paradigm 
+
+> Martin Murphy family
+> Who owns this hotel currently?
+> Multimodal Large Language model  Top-k
+> Strategic Hotels & Resorts
+> (b)Our Method
+> Surface similarity Entity confusion
+> Semantic relevance Entity-aware
+> Knowledge Knowledge
+> Better address the issue of view inconsistency Preferentially retrieve visually consistent samples.
+
+Figure 1: Motivation and overview of KBMR for KB-VQA re-trieval. Traditional CLIP retrieval prioritizes surface-level visual similarity, which is fragile to view inconsistency and often leads to entity confusion, recalling semantically mis-matched evidence and producing incorrect answers. Our method leverages MLLM to retrieve entity-aware semantic knowledge entries, providing a higher-fidelity candidate pool and improving downstream answer grounding. 
+
+Wikipedia corpora, the same concept can appear with substan-tial visual differences across viewpoints, time periods, and styles, while different entities can look highly similar (see Fig. 1). Robustly matching the same subject across such viewpoint and appearance changes has long been a challenge for visual matching and recogni-tion [8, 54, 60, 67–70]. Retrieval in KB-VQA is therefore inherently semantics-driven, and surface-level visual similarity does not nec-essarily align with actual relevance. Prior work [63] has explored external strategies such as multi-stage retrieval and query process-ing, but the candidate pool is still produced by a CLIP-style retriever, leaving the overall pipeline constrained by the CLIP paradigm. In contrast, semantic autoregressive encoding in MLLMs [15] pro-vides a more expressive representation for modeling fine-grained re-lations at the entity and concept levels. Recent studies[24–26, 71, 79] have begun to use MLLM embeddings as retrieval vectors for gen-eral cross-modal retrieval, targeting broad semantic relevance or cross-modal matching [62]. Since their objectives align paired data across modalities, such as images and texts, the encoder mainly learns high-level semantics shared across modalities, such as object categories or scene concepts. In KB-VQA, however, the goal is not to bridge modality gaps or return roughly relevant content, but to identify the knowledge evidence that precisely corresponds to the queried entity. This requires the MLLM encoder to represent global semantics while also preserving fine-grained discriminative cues that separate visually similar entities. To address these challenges, we propose KBMR , an MLLM-based retriever tailored for KB-VQA and, to the best of our knowledge, the 
+
+first work to employ an MLLM as the retriever for this task. KBMR trains an MLLM retriever whose image similarity is consistent with entity-level semantic relevance in knowledge retrieval. Concretely, at the representation level, we prompt the MLLM to encode images into a shared semantic space and take the final-token hidden state as the retrieval embedding. At the training sample level, we intro-duce an MLLM-based semantic discriminator that judges whether each query–candidate pair refers to the target entity, producing continuous entity-consistency weights. These weights guide hard negative sampling to select high-quality and diverse negatives, and further serve as soft labels that relax the strict one-to-one mapping assumption. Finally, we propose a continuous semantic distilla-tion training strategy that aligns the retriever’s similarity distribu-tion with the discriminator-induced weight distribution, encour-aging finer-grained, entity-centric discrimination under long-tail knowledge and strong visual ambiguity. Experiments on multiple benchmarks show that KBMR consistently improves retrieval recall over CLIP-family retrievers with a maximum gain of +14.7% R@1, achieving state-of-the-art retrieval performance in KB-VQA. The contributions of this work can be summarized as: 
+
+• We propose KBMR , the first MLLM-based retriever for KB-VQA, which aligns retrieval similarity with entity-level se-mantic relevance under large appearance variations. 
+
+• We introduce an MLLM-based semantic discriminator 
+
+to produce continuous entity consistency weights , and leverage them to enable robust hard-negative mining and soft supervision. 
+
+• We develop a continuous semantic distillation objective that aligns the retriever similarity distribution with weight distribution, encouraging entity-centric discrimination in highly confusing neighborhoods. 
+
+• Extensive experiments on multiple benchmarks show that KBMR achieves the best retrieval performance and delivers the strongest end-to-end KB-VQA accuracy. 
+
+## 2 Related Work 2.1 Multimodal Large Language Models 
+
+In recent years, multimodal large language models (MLLMs) have made substantial progress in both model architecture and capa-bility [1, 5, 11, 51, 53]. Most existing approaches couple visual encoders with large language models through cross-modal align-ment modules [59], thereby preserving strong language genera-tion ability while significantly improving the understanding of complex visual content. For instance, Qwen2.5-VL [1] strength-ens high-resolution visual perception and multimodal reasoning, showing robust performance in challenging scenarios such as doc-ument understanding, chart analysis, and long-video modeling. Benefiting from such perception and reasoning, MLLMs have been widely adapted to downstream tasks, ranging from fine-grained perception and quality assessment [75–77] to higher-level seman-tic understanding such as sarcasm interpretation [47], emotion understanding [9], consistency-based forgery reasoning [45], and human motion–language grounding [35]. Architecturally, recent re-search has moved from loosely connected multimodal components Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil In what cuisine is this vegetable used?          
+
+> Entity centric
+> Knowledge Base
+> Momordica charantia ...
+> Stage1 Prefilter
+> Image Encoder Query Embedding ... ... Candidate Embedding ... ... ... ...
+> Frozen ... ... Hard Negative P
+> Stage2 Semantic Relevance Scoring
+> Input Query Image
+> P
+> Hard Negative MLLM Semantic Discriminator
+> Instruction
+> Token logits :Yes Token logits :No
+> PFilter by
+> yZnZ
+> Consistency weight :i
+
+w
+
+> 
+> ///
+> iniyiy
+> ZZZi
+
+eeew
+
+  
+
+> Stage3 Hard Negative Sampling high-score sample positive sample hard negative sample
+> unstable training no sampling
+> (a) (b) Top-P
+
+ (a) sample k hard negative samples (b) hard negative samples    
+
+> Batch
+> Training
+> Query Image Instruction
+> Multimodal Large Language model
+> Last Token Normalize  0.80 0.75 0.50 0.35 0.20 0.15
+> ... ... ...
+> h
+> Candidate
+> ... ... ...
+> Batch
+> KL Loss
+> h
+> h
+> Sample by i
+
+w
+
+Figure 2: KBMR with hard negative sampling and continuous semantic distillation. Given an entity-centric KB-VQA query, Stage-1 uses a frozen encoder to retrieve a candidate pool. Stage-2 applies an MLLM-based Semantic Discriminator to score each query–candidate pair and produce entity consistency weights. Stage-3 samples hard negatives via weights to form training data. We train the retriever via continuous semantic distillation by aligning its similarity distribution with the discriminator-induced soft prior using a KL-based loss. Right: training data construction. Left: continuous semantic distillation training. 
+
+toward deeper cross-modal fusion with joint pretraining [56, 58]. On the one hand, native multimodal Transformers let different modalities interact directly within a shared representation space, echoing the benefit of structured and fine-grained representation learning observed in dense visual understanding tasks [49]. On the other hand, multimodal pretraining now goes beyond image–text alignment to include cross-modal generation [40, 65], temporal understanding, and multimodal instruction following. In parallel, multimodal generative models have advanced in controllable image and video synthesis and editing [36, 48, 78], with growing attention to physical plausibility [38, 39] and inference efficiency [72–74]. 
+
+## 2.2 Knowledge-based Visual Question Answering 
+
+KB-VQA focuses on questions that require external knowledge to answer [6, 12], where the needed information is often long-tailed and fine-grained and cannot be inferred from the image alone. To bridge this gap, recent work [52, 61] commonly formulates KB-VQA as a multimodal retrieval-augmented generation (RAG) problem: the system first retrieves relevant evidence from large-scale knowl-edge sources, such as Wikipedia articles and associated images, and then conditions a vision–language model on the retrieved content to better handle knowledge-sparse and long-tail queries [17]. Existing KB-VQA systems follow the CLIP paradigm in first-stage retrieval [29, 63, 66], encoding the query image and each candidate knowledge-item image separately and constructing a candidate set by vector similarity [62]. Building upon this paradigm, prior work has mainly improved retrieval quality through external en-hancements rather than fundamentally revisiting the retriever itself. One line of research learns stronger multimodal representations [18] via improved image–text alignment or better joint embedding spaces [24–26], to retrieve more relevant entities and evidence. An-other uses post-retrieval re-ranking, filtering, or query refinement [3, 7, 12, 30]. For example, Wiki-LLaVA [3] employs a hierarchical pipeline that first retrieves entities/documents then drills down to passages; ReflectiVA [7] uses self-reflective tokens for an MLLM to judge retrieval necessity and assess passage relevance for filtering; and Wiki-PRF [12] refines search via tool-driven query augmenta-tion (e.g., flipping) and aggregation, with filtering to boost evidence quality. Beyond retrieval itself, another line improves how retrieved evidence is exploited during answer generation, either by reason-ing more faithfully over it [21, 31] or by suppressing hallucinated statements inconsistent with it [32, 33]. While these methods help, they still operate on candidate sets generated by a CLIP-style retriever. Consequently, retrieval remains constrained by CLIP’s representation space and similarity metric [55], which emphasize visual similarity and often miss the fine-grained, entity-centric semantic relevance required for KB-VQA, especially under long-tail settings [20, 22, 23]. In contrast, rather than stacking refinement modules on top of the CLIP paradigm, we 
+
+break this limitation at the retriever level by employing an MLLM as the retriever, leveraging autoregressive semantic representations to model concept-level alignment for KB-VQA. 
+
+## 3 Methodology 3.1 Overview 
+
+Knowledge-Based Visual Question Answering (KB-VQA) requires models to answer questions about input images, often involving MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Hangrui Xu et al. 
+
+long-tail entities, by leveraging an external knowledge base. The standard pipeline leverages the input image to query a massive corpus for images of the same entity, thereby accessing its associ-ated knowledge. However, this process is fundamentally limited by the gap between superficial visual similarity and genuine se-mantic relevance. We propose KBMR , an MLLM-based embedding retriever (§3.2) that changes the embedding space from pixel-based matching to an entity-aligned semantic space (see Fig. 2). At its core is a Semantic Discriminator (SD) (§3.3) that scores each query– candidate pair and yields Entity Consistency Weights , which in turn guide hard negative sampling (§3.4) to pick high-quality and diverse hard negatives for training. KBMR is then trained with 
+
+Continuous Semantic Distillation (§3.5), which pulls the re-triever’s similarity distribution toward the SD-based semantic prior by minimizing the discrepancy between the two distributions. At inference, the trained retriever performs fast similarity search in this refined space to recall high-quality candidates. Since we rely on distribution alignment instead of hard binary labels, KBMR builds an entity-level structure in the latent space and improves retrieval precision under long-tail knowledge and strong visual ambiguity. 
+
+## 3.2 MLLM-based Embedding Retriever 
+
+Unlike the dual-tower structure of CLIP, MLLM incorporates three components: a vision tower, a projection layer, and an LLM back-bone. While preserving fine-grained visual details, MLLMs unify image content with language instructions into an autoregressive semantic space, producing context-aware, concept-level represen-tations. Inspired by the field of embedding [14], we employ the prompt: “ <Image> Summary above image in one word:\n ” to in-struct the MLLM to summarize image into a shared semantic space, and take the last-token hidden state as the embedding, which yields image embeddings with a low modality gap and rich semantics. 
+
+## 3.3 Semantic Discriminator as Soft Supervision 
+
+To begin with, we detail the construction of the training data for the embedding retriever. Since KB-VQA retrieval targets entity-level relevance rather than surface visual similarity, we introduce an MLLM as Semantic Discriminator (SD) to produce an en-tity consistency weight that guides hard negatives sampling and yields reliable, diverse hard evidence. Given the input query and the candidate sample set (defined in Section 3.4), the SD computes the entity consistency weight for each query-candidate pair under the following instruction: “ You need to determine whether the given Candidate and the Query refer to the same entity. If they do, answer "Yes"; otherwise, answer "No". Query: < 𝑄𝑢𝑒𝑟𝑦 >, Candidates: <
+
+𝐶𝑎𝑛𝑑𝑖𝑑𝑎𝑡𝑒 >.” We then compute the entity consistency weight W = {𝑤 1, 𝑤 2, . . . , 𝑤 𝑚 } from the logits of the Yes (𝑧 𝑦 ) and No (𝑧 𝑛 )tokens using calibrated logit scaling: 
+
+𝑤 𝑖 = 𝑒𝑥𝑝 (𝑧 𝑖 𝑦 /𝛾 )
+
+𝑒𝑥𝑝 (𝑧 𝑖 𝑦 /𝛾 ) + 𝑒𝑥𝑝 (𝑧 𝑖 𝑛 /𝛾 ) = 𝜎 𝑧 𝑖 𝑦 − 𝑧 𝑖 𝑛 
+
+𝛾 
+
+!
+
+(1) where 𝜎 (·) denotes the sigmoid function and 𝛾 > 0 is a seman-tic sharpness coefficient controlling weight smoothness (larger 𝛾 
+
+produces softer weights). Here, W ∈ R𝑛 𝑞 ×50 and 𝑛 𝑞 denotes the number of queries. Leveraging MLLMs’ advanced understanding capabilities, the entity consistency weight W effectively captures the degree of semantic alignment between queries and candidates. 
+
+## 3.4 Hard Negative Sampling 
+
+This section describes how we mine hard negative samples suitable for training from the large-scale retrieval corpus. Potential Hard Negative Set. We first use EVA-CLIP to generate embeddings for the query image and all database images. After excluding all positive samples, we retrieve the top-50 most similar candidates for each query to form a potential hard negative set Ω𝑝 :
+
+Ω𝑝 = Rank 50 (𝑐𝑜𝑠 (𝑒 𝑞 , 𝑒 𝑐 )) , where 𝑒 𝑐 ≠ 𝑒 + 
+
+> 𝑐
+
+, (2) where 𝑒 + 
+
+> 𝑐
+
+denote positive candidate, 𝑒 𝑞 is the query embedding, and 𝑒 𝑐 represents all candidate embeddings. The function 𝑐𝑜𝑠 (·) 
+
+computes pairwise similarity scores, and Rank 𝑘 selects the top-𝑘 
+
+highest-scoring candidates as potential hard negatives. To improve the quality of hard negatives, we use the Semantic Discriminator described in 3.3 to compute the entity consistency weight W between the query and each candidate, as well as between the query and the positive sample. Based on the query–positive weight 𝑤 𝑞,𝑐 𝑡 , we define a threshold 𝛼 = 𝑤 𝑞,𝑐 𝑡 − 𝛽 , where 𝛽 is a hyper-parameter controlling the margin. We then remove from Ω𝑝 
+
+all candidates whose entity consistency weight exceeds 𝛼 , filtering out samples that remain semantically highly relevant to the query and could cause confusion. It is worth emphasizing that candidates with high embedding similarity but low entity consistency are particularly informative: they lie close to the query in the current representation space but are semantically mismatched. To ensure diversity in difficulty, we perform stratified sampling according to the entity consistency weights: the remaining candi-dates are divided into four difficulty strata based on their weights, and two samples are randomly drawn from each stratum to form a fixed-size hard negative set. If the resulting set contains fewer than eight samples, we duplicate selections to guarantee a minimum of eight; in the rare case where no candidate meets the criteria, the training sample is discarded. Finally, for each query 𝑞 , we obtain a hard negative set Ωℎ = 𝑐 1, . . . , 𝑐 𝑘 together with the corresponding entity consistency weights W h = {𝑤 𝑞,𝑐 1 , ..., 𝑤 𝑞,𝑐 𝑘 }.
+
+## 3.5 Continuous Semantic Distillation Training 
+
+Standard contrastive learning enforces a rigid one-to-one matching objective, treating the target candidate as the only positive and all remaining candidates uniformly as negatives. Although effective for generic visual-text alignment, this formulation is suboptimal for KB-VQA retrieval, where hard negatives are not equally irrelevant: some candidates are visually similar yet semantically mismatched, while others still share partial semantic relevance with the query entity. One-hot supervision therefore cannot adequately reflect the fine-grained semantic structure within a highly confusable candidate neighborhood. To address this issue, we cast training as a semantic distribution distillation problem. Instead of separating positives from negatives using discrete labels, we encourage the retriever to match a soft entity-aware target distribution induced by the SD, so that it not only favors the target candidate but also respects the semantic re-lationships among candidates in the neighborhood. This provides Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 1: VQA accuracy on E-VQA and InfoSeek. † indicates the EchoSight model without reranking, and ‡ indicates the EchoSight model with reranking. ⋄ indicates that MMKB-RAG is not open source, so we obtained the results by replicating the paper. Rows in blue correspond to replacing the retriever with KBMR. Red values denote absolute performance improvements. Method w/ KBMR E-VQA InfoSeek 
+
+Single-Hop All Unseen-Q Unseen-E All EchoSight † [61] 
+
+✗ 19 .1 19 .4 27 .1 27 .9 27 .7
+
+✓ 26 .7 27 .6 35 .1 36 .3 36 .0
+
+Δ +7.6 +8.2 +8.0 +8.4 +8.3 
+
+EchoSight ‡ [61] 
+
+✗ 42 .0 41 .8 30 .7 31 .5 31 .3
+
+✓ 51 .3 51 .0 38 .7 39 .6 39 .2
+
+Δ +9.3 +9.2 +8.0 +8.1 +7.9 
+
+ReflectiVA [7] 
+
+✗ 28 .0 29 .2 40 .4 39 .8 40 .1
+
+✓ 34 .7 35 .2 48 .5 48 .9 48 .6
+
+Δ +6.7 +6.0 +8.5 +8.1 +8.5 
+
+MMKB-RAG ⋄ [29] 
+
+✗ 39 .7 35 .9 36 .4 36 .3 36 .4
+
+✓ 47 .3 43 .1 45 .6 45 .7 45 .7
+
+Δ +7.6 +7.2 +9.2 +9.4 +9.3 
+
+OMGM [63] 
+
+✗ 49 .7 50 .2 43 .5 43 .5 43 .5
+
+✓ 55.0 54.7 50.9 50.8 50.8 
+
+Δ +5.3 +4.5 +7.4 +7.3 +7.3 
+
+richer supervision than standard contrastive learning and is benefi-cial for entity-centric retrieval under strong visual ambiguity. Given a query 𝑞 and its candidate set Ω𝑐 = {𝑐 𝑡 , 𝑐 1, . . . , 𝑐 𝑘 }, where 
+
+𝑐 𝑡 denotes the target candidate and {𝑐 1, . . . , 𝑐 𝑘 } are the hard nega-tives, we feed the query and all candidates into the trainable MLLM retriever and extract the last-token hidden states as embeddings. Let 𝑒 𝑞 denote the query embedding, and let 𝐸 𝑐 = {𝑒 + 
+
+> 𝑐
+
+, 𝑒 − 
+
+> 𝑐 1
+
+, . . . , 𝑒 − 
+
+> 𝑐 𝑘
+
+}
+
+denote the candidate embeddings, where 𝑒 + 
+
+> 𝑐
+
+corresponds to the target candidate and 𝑒 − 
+
+> 𝑐 𝑖
+
+corresponds to the 𝑖 -th hard negative. We first define a query-conditioned retriever posterior over the candidate set by normalizing the retrieval similarities with a temperature-scaled softmax: 
+
+p𝑞 ( 𝑗 ) = exp  sim (𝑒 𝑞 , 𝑒 𝑗 )/ 𝜏 Í 
+
+> 𝑒 ∈𝐸 𝑐
+
+exp  sim (𝑒 𝑞 , 𝑒 )/ 𝜏  , 𝑒 𝑗 ∈ 𝐸 𝑐 , (3) where sim (· , ·) denotes cosine similarity and 𝜏 is the retrieval tem-perature. Intuitively, p𝑞 ( 𝑗 ) measures how much probability mass the current retriever assigns to the 𝑗 -th candidate under the query-conditioned retrieval space, and collectively p𝑞 = {p𝑞 ( 𝑗 )} 𝑗 ∈ { 𝑡, 1,...,𝑘 }
+
+reflects the retriever’s current belief about candidate relevance. Meanwhile, the semantic discriminator provides entity consis-tency weights 𝑊 𝑐 = {𝑤 𝑞,𝑐 𝑡 , 𝑤 𝑞,𝑐 1 , . . . , 𝑤 𝑞,𝑐 𝑘 }, where each weight indicates the degree of semantic alignment between the query and a candidate at the entity level. Rather than treating these weights as independent scalar scores, we further transform them into a normalized soft semantic prior over the same candidate set: 
+
+s𝑞 ( 𝑗 ) =
+
+exp 
+
+
+
+𝑤 𝑞,𝑐 𝑗 /𝜏 
+
+Í 
+
+> 𝑐 ∈Ω𝑐
+
+exp  𝑤 𝑞,𝑐 /𝜏  , 𝑐 𝑗 ∈ Ω𝑐 , (4) where 𝜏 controls the sharpness of the semantic prior. Compared with a one-hot target, s𝑞 preserves the relative semantic structure among candidates: those with higher semantic consistency receive larger prior mass, while semantically mismatched ones are sup-pressed. s𝑞 can thus be interpreted as a soft teacher distribution that provides richer supervision for retrieval learning. Based on the two distributions defined on the same candidate set, we train the retriever by minimizing the discrepancy between the retriever posterior p𝑞 and the semantic prior s𝑞 via symmetric KL divergence: 
+
+LCSD = E𝑞 ∼D 
+
+ 12
+
+
+
+𝐷 KL (p𝑞 ∥ s𝑞 ) + 𝐷 KL (s𝑞 ∥ p𝑞 )
+
+
+
+. (5) This objective serves two purposes. The term 𝐷 KL (p𝑞 ∥ s𝑞 ) en-courages the retriever to move its probability mass toward seman-tically correct candidates, while the reverse term 𝐷 KL (s𝑞 ∥ p𝑞 ) pre-vents the learned distribution from collapsing into an overly sharp or biased posterior and improves optimization stability. The re-triever thus learns a candidate distribution that is both discrimina-tive with respect to the target candidate and consistent with the semantic structure estimated by the discriminator. In essence, our continuous semantic distillation replaces rigid discrete supervision with distribution-level semantic supervision over the entire hard-negative neighborhood. By matching the re-triever posterior with the entity-aware semantic prior, the model learns a more structured and semantically calibrated embedding space, leading to stronger entity discrimination and more reliable retrieval for KB-VQA. 
+
+## 4 Experiments 4.1 Experiment Setup 
+
+Datasets and Metrics. We evaluate on three KB-VQA benchmarks: Encyclopedic VQA (E-VQA) [41], InfoSeek [4] and Outside Knowl-edge VQA (OK-VQA) [37]. E-VQA asks fine-grained questions about MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Hangrui Xu et al. 
+
+Table 2: Retrieval performance on E-VQA and InfoSeek. ▲ denotes the universal retrieval methods. Retriever E-VQA InfoSeek 
+
+R@1 R@5 R@10 R@20 R@1 R@5 R@10 R@20 
+
+CLIPs 
+
+CLIP I-T [42] 3.3 7.7 12.1 16.5 32.0 54.0 61.6 68.2 CLIP ViT-L/14 [42] 9.9 22.0 27.8 31.7 22.5 40.4 42.7 44.1 EVA-CLIP-8B [43] 13.3 31.3 41.0 48.8 45.6 67.1 73.0 77.9 
+
+MLLM Retriever 
+
+BLIP-2 [19] 4.9 9.7 15.7 20.6 10.8 18.7 21.4 23.9 Qwen2-VL-7B [46] 6.1 14.7 18.5 21.9 17.5 31.4 35.1 37.6 LLaVA-OneVision [16] 7.4 15.1 23.9 29.5 21.8 42.6 44.7 47.2 GME ▲ [71] 10.7 24.1 33.4 44.6 38.7 59.9 63.7 67.8 MM-Ret ▲ [79] 11.9 26.4 37.1 49.6 41.3 63.3 67.5 71.8 
+
+MLLMs with Continuous Semantic Distillation Training 
+
+KBMR (Qwen2-VL-7B) 22.6 43.1 50.2 53.5 55.8 71.1 77.4 83.2 
+
+KBMR (LLaVA-OV-7B) 24.7 48.7 52.4 55.0 60.3 74.7 79.6 84.4 
+
+natural species and landmarks [44, 50]; InfoSeek poses information-seeking questions over Wikipedia entities from OVEN [13], with its validation split disjoint from training in both entities and questions; OK-VQA requires knowledge beyond MS COCO images [27] across diverse domains. Following previous setting, we report results on the E-VQA test set and on the entire InfoSeek validation split with a knowledge base of 100K Wikipedia entries. For each benchmark we assess both retrieval and QA quality: retrieval is measured by recall, i.e., whether the correct article appears among the top-k retrieved results, while QA follows the original dataset protocol, using BEM score [2] for E-VQA and VQA accuracy [10] for InfoSeek. 
+
+Baselines. We benchmark three retriever types: standard CLIPs visual encoder, MLLMs that directly output embeddings for similar-ity matching, and our trained MLLM retriever (KBMR). To verify end-to-end impact, we plug KBMR into a state-of-the-art KB-VQA pipeline by replacing only the retriever and keeping all other set-tings fixed, so improvements are solely due to better retrieval. 
+
+Implementation Details. We first employ EVA-CLIP-8B to extract query and candidate embeddings, from which we construct a pool of potential hard negatives, and then utilize Qwen2.5-VL-7B to produce soft entity consistency weights for query–candidate pairs. We train KBMR using two MLLMs, Qwen2-VL [46] and LLaVA-OneVision [16], respectively. To improve training efficiency and reduce GPU memory consumption, we adopt LoRA with rank 16 in conjunction with DeepSpeed ZeRO stage-2. All experiments are conducted on 8 × NVIDIA A100 (80GB) GPUs. We resize all images to a resolution of 336 ×336 and set the accumulated batch size to 1024. The learning rates are 1e-4 for Qwen2-VL and 2e-5 for LLaVA-OneVision. The model is trained for 5,000 steps on 600k samples drawn from the training sets of E-VQA, InfoSeek, and OK-VQA, with the hard negative count 𝑘 set to 8. 
+
+## 4.2 Main Results 
+
+VQA Results. Tab. 1 reports end-to-end KB-VQA accuracy on E-VQA and InfoSeek, where the blue rows replace the original retriever with KBMR while keeping the pipeline unchanged (for OMGM, we replace its first-stage retrieval results with ours). On E-VQA, KBMR brings gains of up to +9.2 , which remain substantial even with a reranker (e.g., EchoSight‡), showing that upstream candidates complement later-stage refinement. On InfoSeek, KBMR improves performance by up to +9.3 , demonstrating robustness to unseen questions/entities at Wikipedia scale. Our method estab-lishes new SOTA VQA accuracy of 54.7 on E-VQA and 50.8 on InfoSeek . These improvements are consistent across methods, indicating that KBMR benefits diverse downstream architectures by improving the retrieved candidate pool. Moreover, substantial gains for systems with reranking or stronger reasoning modules confirm that better first-stage retrieval complements rather than duplicates later-stage refinement. Overall, KBMR translates improved retrieval into reliable end-to-end VQA gains across diverse pipelines. 
+
+Retrieval Results. Tab. 2 reports retrieval performance on E-VQA and InfoSeek. CLIP-style retrievers provide strong visual base-lines, but are limited by the mismatch between visual similarity and entity-level semantic relevance. Although MLLMs are in principle better suited to entity-aware semantic matching, existing zero-shot MLLM embeddings often underperform strong CLIP retrievers, showing that general multimodal understanding does not directly yield an effective KB-VQA retrieval space. Similarly, state-of-the-art universal retrievers focus on broad multimodal alignment and may fail to capture the fine-grained entity-centric relations required by KB-VQA. On E-VQA, KBMR (LLaVA-OV-7B) outperforms the best MLLM retriever baseline by +12.8 points at R@1 and the strongest CLIP retriever (EVA-CLIP-8B) by +11.4 . On InfoSeek, KBMR sur-passes the strongest CLIP retriever by +14.7 points at R@1 and the best MLLM retriever by +19.0 . These consistent gains show that KBMR effectively converts MLLMs into high-recall KB-VQA retrievers by modeling entity-aware semantic relations, alleviating the candidate-set bottleneck and providing stronger evidence for downstream reasoning and answer grounding. 
+
+Results on more benchmarks. As shown in Tab. 3, we evalu-ate our model on the widely used OK-VQA benchmark. The two columns in the table report the retrieval accuracy and VQA accuracy of each method, respectively. The VQA accuracy of our method was tested by plugging our first-stage retrieval results into the OMGM Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 3: Comparison of the retrieval and VQA results on OK-VQA. *Results obtained by replacing OMGM’s retriever. 
+
+Method Pseudo Recall@5 VQA score PreFLMR [28] 70.9 61.9 OMGM [63] 73.4 66.6 Wiki-PRF-7B [12] - 77.8 KBMR(Qwen2-VL-7B) 78.1 76.3 *
+
+KBMR(LLaVA-OV-7B) 80.4 79.3 *
+
+pipeline while keeping other components unchanged. Compared to the original OMGM, our approach improves the answer accuracy by 
+
++12.7 points. As shown in the table, KBMR significantly enhances retrieval performance and translates this gain into a substantial improvement in final answer accuracy, establishing a new SOTA score of 79.3 on OK-VQA .
+
+## 4.3 Ablation Studies 
+
+Are SD supervision signals truly effective for retrieval learn-ing? To evaluate the effectiveness of SD supervision, we vary both the hard-negative construction strategy and training weights while fixing the number of hard negatives to 8. Results are shown in Tab. 4. We compare six settings: (1) random hard-negative sampling with hard one-hot weights 𝑊 𝑐 = {1, 0, . . . , 0}; (2) EVA-CLIP-based hard-negative sampling with hard one-hot weights; (3) SD-guided hard-negative sampling with hard one-hot weights; (4) SD-guided sampling with 30% inverted SD weights, where 𝑊 𝑐 𝑖 ← 1 − 𝑊 𝑐 𝑖 
+
+for 30% of sampled negatives; (5) SD-guided sampling with 10% inverted SD weights; and (6) our full method using SD-guided sam-pling with the original SD weights. Tab. 4 yields several observations. First, the full SD-based set-ting performs best across benchmarks, showing that combining SD-guided hard-negative construction with soft supervision is most effective. Second, under identical hard one-hot supervision, perfor-mance improves from random to CLIP-based and then SD-guided sampling, demonstrating that SD better identifies informative and semantically confusable negatives. Third, replacing SD weights with hard one-hot targets causes a drop even with the same SD-based negatives, confirming that the gains stem not only from better negative construction but also from soft supervision. Finally, cor-rupting SD weights consistently degrades performance: the 10% inverted setting underperforms the full method, while the 30% set-ting drops further and even falls below the SD hard-one-hot variant. This indicates that SD supervision is effective because it captures semantic relations among candidates. Overall, these results validate the effectiveness of SD supervision for retrieval learning. 
+
+Do SD supervision signals faithfully capture entity-aware semantics? To examine whether SD supervision faithfully captures entity-aware semantics, we construct a pairwise evaluation set using entity labels from the dataset, including 10,000 positive pairs (two images of the same entity) and 10,000 negative pairs (two images of different entities). For each pair, we compute two scores: (1) EVA-CLIP cosine similarity, linearly rescaled from [− 1, 1] to 
+
+[0, 1] via ˆ 𝑠 = (𝑠 + 1)/ 2, and (2) the SD semantic consistency weight. We use AUC as the primary measure of discriminability. 
+
+Table 4: Analysis of different hard-negative construction and supervision strategies for studying the effectiveness of SD signals. All settings use 8 hard negatives per query. Negative Sampling Training Weights E-VQA InfoSeek                                  
+
+> R@1 R@5 R@1 R@5 Random Hard one-hot weights 9.1 18.7 20.3 36.8 CLIP similarity Hard one-hot weights 14.7 34.9 47.1 70.3 SD Hard one-hot weights 16.4 40.1 53.1 71.6 SD 30% inverted SD weights 12.1 30.4 43.3 62.1 SD 10% inverted SD weights 19.9 38.2 54.4 68.8 SD SD weights (ours) 24.7 48.7 60.3 74.7
+
+The results show that both CLIP similarity and SD weight assign higher scores to positive pairs than to negative pairs, indicating that both carry useful entity-related information. However, SD shows a substantially larger positive–negative separation and achieves a clearly higher AUC than CLIP similarity (0.91 vs. 0.79). This suggests that SD is more faithful to true entity identity, while CLIP similarity mainly reflects surface-level visual resemblance. Overall, these results provide direct evidence that SD supervision signals faithfully capture entity-aware semantics by encoding semantic relations that are more closely aligned with true entity identity. 
+
+Table 5: Ablation study on different Semantic Discriminator. 
+
+SD E-VQA InfoSeek 
+
+R@1 R@5 R@1 R@5 InternVL3-8B 20.7 44.3 54.4 67.9 InternVL3-14B 24.4 49.1 59.1 73.4 Qwen2.5-VL-7B 24.7 48.7 60.3 74.7 Ablation on Different Semantic Discriminator. Since the se-mantic discriminator is responsible for producing entity consistency weights, its comprehension capability directly affects the supervi-sion quality and thus the final retrieval performance. Therefore, we compare two influential MLLMs in the current open-source com-munity: Qwen2.5-VL-7B, InternVL3-8B, and InternVL3-14B. Tab. 5 shows that Qwen2.5-VL-7B yields the strongest results, substan-tially outperforming InternVL3-8B on both E-VQA and InfoSeek. Scaling InternVL3 from 8B to 14B brings clear gains, yet it remains slightly behind Qwen2.5-VL-7B. 
+
+Table 6: Ablation study on the number of hard negatives. 
+
+#Negatives E-VQA InfoSeek 
+
+R@1 R@5 R@1 R@5 4 22.5 45.1 57.7 69.8 6 23.3 46.8 59.1 72.4 8 24.7 48.7 60.3 74.7 10 24.2 48.7 60.2 74.8 Ablation on the Number of Hard Negatives. Tab. 6 analyzes how the number of mined hard negatives affects retrieval perfor-mance based on KBMR(LLaVA-OV-7B). Increasing Negatives from 4 to 8 consistently boosts results on both E-VQA and InfoSeek, suggesting that richer hard-negative supervision strengthens the MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Hangrui Xu et al. 
+
+Table 7: Ablation on the semantic sharpness coefficient 𝛾 .
+
+Model 𝛾 E-VQA InfoSeek 
+
+R@1 R@5 R@1 R@5 KBMR (LLaVA-OV-7B) 0.9 23.3 46.0 57.6 71.2 1.0 24.1 47.8 59.1 72.4 1.1 24.7 48.7 60.3 74.7 
+
+1.2 24.4 48.0 59.4 73.2 model’s ability to separate highly confusable candidates. Mean-while, increasing the number further to 10 does not lead to a signif-icant performance gain. 
+
+Effect of the semantic sharpness coefficient 𝛾 . Tab. 7 studies the semantic sharpness coefficient 𝛾 , which controls the tempera-ture for converting semantic discriminator logits into continuous consistency weights. On both E-VQA and InfoSeek, performance improves from 𝛾 =0.9 to 𝛾 =1.1, where the best results are achieved. Small 𝛾 makes the weights overly sharp and close to hard binary labels, while large 𝛾 over-smooths the distribution and weakens the contrast among candidates. These results suggest that 𝛾 =1.1provides a better balance between discrimination and smoothness, so we use it in all experiments. 
+
+Figure 3: Global distribution of semantic consistency weights across the Top-50 highest-similarity negative candidates. Weight Distribution Analysis. We analyze the global distri-bution of semantic consistency weights 𝑤 by randomly sampling 10,000 training queries and collecting the Top-50 most similar can-didates (the potential hard negative set) for each query. Although these candidates are retrieved by a CLIP-style similarity metric and are thus visually competitive, many receive low weights, as shown in Fig. 3, indicating that the MLLM evaluation can identify semantic mismatch even within confusing neighborhoods. This confirms that 
+
+MLLM-based semantic supervision offers stronger discrimi-nation than CLIP’s visual similarity alone . At the same time, the existence of high-weight candidates reflects challenging or am-biguous cases that remain difficult even for MLLMs. Importantly, the weight distribution is not purely binary: a considerable mass lies in the intermediate range, reflecting graded difficulty among hard negatives and providing continuous soft supervision with more stable learning signals than 0/1 labels. 
+
+Visualization Analysis Results. Fig. 4 provides a qualitative comparison of KB-VQA retrieval. We visualize the top-5 retrieved How do these birds forage in gardens? Document title: Corvus albicollis          
+
+> ... and human food are also readily taken, and the bird forages in back yards and
+> gardens quite openly . Like all or most raven species, ... Top-5 Retrieved Documents
+> Grey-crowned babbler Chough Blue rock-thrush Chihuahuan raven Corvus albicollis
+> Corvus albicollis Chough Chihuahuan raven Raven Alpine chough
+> (a) Query (b) Ground Truth
+> (c) EVA -CLIP (d)  KBMR
+
+Figure 4: Qualitative analysis on KB-VQA retrieval. (a) shows the query with an image of a Corvus albicollis; (b) shows the GT document of Corvus albicollis; (c) and (d) show the top-5 retrieved images from EVA-CLIP and our proposed KBMR, respectively. The answer is highlighted in green. 
+
+results from EVA-CLIP and our KBMR. EVA-CLIP returns several visually similar but semantically mismatched bird species and ranks the correct entity (Corvus albicollis) only at the 5th position. In contrast, KBMR places the ground-truth document at rank-1 and retrieves a more semantically coherent neighborhood. This example suggests that KBMR better aligns retrieval with entity-level seman-tics rather than surface-level visual similarity, leading to stronger evidence recall for downstream KB-VQA. 
+
+## 5 Conclusion 
+
+We introduced KBMR, the first MLLM-based retriever for knowledge-based visual question answering. KBMR addresses the fundamental mismatch in CLIP-style retrieval, where surface-level visual similar-ity is often an unreliable proxy for entity-level semantic relevance under large appearance variations. By leveraging autoregressive semantic embeddings from MLLMs and an MLLM-based semantic discriminator that provides continuous entity-consistency weights, KBMR enables reliable hard-negative construction and semantically informed soft supervision for Wikipedia-scale retrieval. We further proposed a continuous semantic distillation objective that aligns the retriever-induced similarity distribution with a discriminator-induced semantic prior, encouraging fine-grained, entity-centric discrimination in highly confusable neighborhoods. Extensive ex-periments on E-VQA, InfoSeek, and OK-VQA demonstrate that KBMR consistently improves retrieval recall and delivers substan-tial gains in end-to-end KB-VQA performance. More importantly, our work shows that KB-VQA retrieval should not be limited to surface-level visual matching, but should explicitly model entity-aware semantic relations. By doing so, KBMR alleviates a key bot-tleneck in KB-VQA pipelines, providing both a stronger retriever and a higher-quality candidate pool for downstream reasoning and answer grounding in practical KB-VQA systems. Beyond Visual Similarity: Entity-Aligned Retrieval for Knowledge-Based Visual Question Answering MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## 6 Acknowledgements 
+
+This work is supported by the NSFC fund (62576190), in part by the Shenzhen Science and Technology Project under Grant (KJZD2024 0903103210014) 
+
+## References 
+
+[1] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al. 2025. Qwen2.5-VL Technical Report. arXiv:2502.13923 [cs.CV] https://arxiv.org/abs/2502.13923 [2] Jannis Bulian, Christian Buck, Wojciech Gajewski, Benjamin Börschinger, and Tal Schuster. 2022. Tomayto, tomahto. beyond token-level answer equivalence for question answering evaluation. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing . 291–305. [3] Davide Caffagni, Federico Cocchi, Nicholas Moratelli, Sara Sarto, Marcella Cornia, Lorenzo Baraldi, and Rita Cucchiara. 2024. Wiki-llava: Hierarchical retrieval-augmented generation for multimodal llms. In Proceedings of the IEEE/CVF Con-ference on Computer Vision and Pattern Recognition . 1818–1826. [4] Yang Chen, Hexiang Hu, Yi Luan, Haitian Sun, Soravit Changpinyo, Alan Ritter, and Ming-Wei Chang. 2023. Can pre-trained vision and language models answer visual information-seeking questions? arXiv preprint arXiv:2302.11713 (2023). [5] Zhuohong Chen, Zhengxian Wu, Zirui Liao, Shenao Jiang, Hangrui Xu, Yang Chen, Chaokui Su, Xiaoyu Liu, and Haoqian Wang. 2026. R3G: A Reasoning-Retrieval-Reranking Framework for Vision-Centric Answer Generation. In 
+
+ICASSP 2026 - 2026 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . 8602–8606. doi:10.1109/ICASSP55912.2026.11463453 [6] Zhuohong Chen, Zhenxian Wu, Yunyao Yu, Hangrui Xu, Zirui Liao, Zhifang Liu, Xiangwen Deng, Pen Jiao, and Haoqian Wang. 2026. Learning to Search: A Decision-Based Agent for Knowledge-Based Visual Question Answering. arXiv preprint arXiv:2604.07146 (2026). [7] Federico Cocchi, Nicholas Moratelli, Marcella Cornia, Lorenzo Baraldi, and Rita Cucchiara. 2025. Augmenting multimodal llms with self-reflective tokens for knowledge-based visual question answering. In Proceedings of the Computer Vision and Pattern Recognition Conference . 9199–9209. [8] Lihuang Fang, Xiao Hu, Yuchen Zou, and Hong Zhang. 2025. Cog-Stereo: Neural Stereo Matching with Implicit Spatial Cognition Embedding. arXiv:2510.22119 [cs.CV] https://arxiv.org/abs/2510.22119 [9] Lihuang Fang, Yuchen Zou, kebin Jin, and Jinghui Qin. 2026. EmoAgent-R1: Towards Multimodal Emotion Understanding with Reinforcement Learning-based Dynamic Agent Specialization. arXiv:2607.21013 [cs.AI] https://arxiv.org/ abs/2607.21013 [10] Yash Goyal, Tejas Khot, Douglas Summers-Stay, Dhruv Batra, and Devi Parikh. 2017. Making the v in vqa matter: Elevating the role of image understanding in visual question answering. In Proceedings of the IEEE conference on computer vision and pattern recognition . 6904–6913. [11] Tiancheng Gu, Kaicheng Yang, Kaichen Zhang, Xiang An, Ziyong Feng, Yueyi Zhang, Weidong Cai, Jiankang Deng, and Lidong Bing. 2025. UniME-V2: MLLM-as-a-Judge for Universal Multimodal Embedding Learning. arXiv:2510.13515 [cs.CV] https://arxiv.org/abs/2510.13515 [12] Yuyang Hong, Jiaqi Gu, Qi Yang, Lubin Fan, Yue Wu, Ying Wang, Kun Ding, Shim-ing Xiang, and Jieping Ye. 2025. Knowledge-based Visual Question Answer with Multimodal Processing, Retrieval and Filtering. arXiv preprint arXiv:2510.14605 
+
+(2025). [13] Hexiang Hu, Yi Luan, Yang Chen, Urvashi Khandelwal, Mandar Joshi, Kenton Lee, Kristina Toutanova, and Ming-Wei Chang. 2023. Open-domain visual entity recognition: Towards recognizing millions of wikipedia entities. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 12065–12075. [14] Ting Jiang, Minghui Song, Zihan Zhang, Haizhen Huang, Weiwei Deng, Feng Sun, Qi Zhang, Deqing Wang, and Fuzhen Zhuang. 2024. E5-v: Universal embeddings with multimodal large language models. arXiv preprint arXiv:2407.12580 (2024). [15] Ziyan Jiang, Rui Meng, Xinyi Yang, Semih Yavuz, Yingbo Zhou, and Wenhu Chen. 2025. VLM2Vec: Training Vision-Language Models for Massive Multimodal Embedding Tasks. arXiv:2410.05160 [cs.CV] https://arxiv.org/abs/2410.05160 [16] Bo Li, Yuanhan Zhang, Dong Guo, Renrui Zhang, Feng Li, Hao Zhang, Kaichen Zhang, Peiyuan Zhang, Yanwei Li, Ziwei Liu, et al. 2024. Llava-onevision: Easy visual task transfer. arXiv preprint arXiv:2408.03326 (2024). [17] Hao Li, Yuhao Wang, Wenning Hao, Pingping Zhang, Dong Wang, and Huchuan Lu. 2026. RAGTrack: Language-aware RGBT Tracking with Retrieval-Augmented Generation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 28179–28189. [18] Hao Li, Yuhao Wang, Xiantao Hu, Wenning Hao, Pingping Zhang, Dong Wang, and Huchuan Lu. 2026. Cadtrack: Learning contextual aggregation with de-formable alignment for robust rgbt tracking. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 6109–6117. [19] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. 2023. Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In International conference on machine learning . PMLR, 19730–19742. [20] Xiping Li, Xiangyu Dong, Xingyi Zhang, Kun Xie, Yuanhao Feng, Bo Wang, Guilin Li, Wuxiong Zeng, Xiujun Shu, and Sibo Wang. 2025. Chi-square wavelet graph neural networks for heterogeneous graph anomaly detection. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 .1565–1576. [21] Xiping Li and Jianghong Ma. 2026. AIM-CoT: Active Information-driven Multi-modal Chain-of-Thought for Vision-Language Reasoning. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 26656–26681. [22] Xiping Li, Jianghong Ma, Kangzhe Liu, Shanshan Feng, Haijun Zhang, and Yutong Wang. 2024. Category-based and popularity-guided video game recommendation: a balance-oriented framework. In Proceedings of the ACM Web Conference 2024 .3734–3744. [23] Xiping Li, Aier Yang, Jianghong Ma, Kangzhe Liu, Shanshan Feng, Haijun Zhang, and Yi Zhao. 2026. Cpgrec+: A balance-oriented framework for personalized video game recommendations. ACM Transactions on Information Systems 44, 3 (2026), 1–44. [24] Zixu Li, Zhiwei Chen, Haokun Wen, Zhiheng Fu, Yupeng Hu, and Weili Guan. 2025. Encoder: Entity mining and modification relation binding for composed image retrieval. In AAAI , Vol. 39. 5101–5109. [25] Zixu Li, Yupeng Hu, Zhiwei Chen, Haokun Wen, Xuemeng Song, and Liqiang Nie. 2026. COMBINER: Composed Image Retrieval Guided by Attribute-based Neighbor Relations. IEEE TIP (2026). [26] Zixu Li, Yupeng Hu, Zhiwei Chen, Mingyu Zhang, Zhiheng Fu, and Liqiang Nie. 2026. Conesep: Cone-based robust noise-unlearning compositional network for composed image retrieval. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 16897–16909. [27] Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C Lawrence Zitnick. 2014. Microsoft coco: Common objects in context. In European conference on computer vision . Springer, 740–755. [28] Weizhe Lin, Jingbiao Mei, Jinghong Chen, and Bill Byrne. 2024. Preflmr: Scal-ing up fine-grained late-interaction multi-modal retrievers. arXiv preprint arXiv:2402.08327 (2024). [29] Zihan Ling, Zhiyao Guo, Yixuan Huang, Yi An, Shuai Xiao, Jinsong Lan, Xiaoy-ong Zhu, and Bo Zheng. 2025. MMKB-RAG: A Multi-Modal Knowledge-Based Retrieval-Augmented Generation Framework. arXiv preprint arXiv:2504.10074 
+
+(2025). [30] Yu Liu, Yanbing Liu, Fangfang Yuan, Cong Cao, Youbang Sun, Kun Peng, WeiZhuo Chen, Jianjun Li, and Zhiyuan Ma. 2026. OPERA: A Reinforcement Learning– Enhanced Orchestrated Planner-Executor Architecture for Reasoning-Oriented Multi-Hop Retrieval. In Proceedings of the AAAI Conference on Artificial Intelli-gence , Vol. 40. 32258–32266. [31] Yu Liu, Wenxiao Zhang, Diandian Guo, Cong Cao, Fangfang Yuan, Qiang Sun, Yanbing Liu, Jin B. Hong, and Zhiyuan Ma. 2026. Does Faithfulness-Guided Align-ment Hurt Accuracy? Unlocking Accurate and Faithful Post-Retrieval Reasoning. 
+
+arXiv preprint arXiv:2602.01348 (2026). [32] Guangtao Lyu, Xinyi Cheng, Qi Liu, Chenghao Xu, Jiexi Yan, Muli Yang, Fen Fang, and Cheng Deng. 2026. Towards Interpretable Hallucination Analysis and Mitiga-tion in LVLMs via Contrastive Neuron Steering. arXiv preprint arXiv:2602.00621 
+
+(2026). [33] Guangtao Lyu, Xinyi Cheng, Chenghao Xu, Qi Liu, Muli Yang, Fen Fang, Huilin Chen, Jiexi Yan, Xu Yang, and Cheng Deng. 2025. Revealing Perception and Gen-eration Dynamics in LVLMs: Mitigating Hallucinations via Validated Dominance Correction. arXiv preprint arXiv:2512.18813 (2025). [34] Guangtao Lyu, Qi Liu, Chenghao Xu, Jiexi Yan, Muli Yang, Xueting Li, Fen Fang, and Cheng Deng. 2026. Revealing and Enhancing Core Visual Regions: Harnessing Internal Attention Dynamics for Hallucination Mitigation in LVLMs. 
+
+ACL Findings (2026). [35] Guangtao Lyu, Chenghao Xu, Jiexi Yan, Muli Yang, and Cheng Deng. 2025. To-wards Unified Human Motion-Language Understanding via Sparse Interpretable Characterization. In The Thirteenth International Conference on Learning Repre-sentations(ICLR) .[36] Yue Ma, Xinyu Wang, Qianli Ma, Qinghe Wang, Mingzhe Zheng, Xiangpeng Yang, Hao Li, Chongbo Zhao, Jixuan Ying, Harry Yang, et al. 2026. Group editing: Edit multiple images in one go. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 43418–43428. [37] Kenneth Marino, Mohammad Rastegari, Ali Farhadi, and Roozbeh Mottaghi. 2019. Ok-vqa: A visual question answering benchmark requiring external knowledge. In Proceedings of the IEEE/cvf conference on computer vision and pattern recognition .3195–3204. [38] Siwei Meng, Yawei Luo, and Ping Liu. 2025. Grounding creativity in physics: A brief survey of physical priors in aigc. IJCAI (2025). [39] Siwei Meng, Yawei Luo, and Ping Liu. 2026. PhyMAGIC: Physical motion-aware generative inference with confidence-guided llm. ECCV (2026). [40] Siwei Meng, Yawei Luo, Shu Zhang, and Ping Liu. 2026. When Physical Pref-erences Meet Semantic Constraints: Physical and Semantic Direct Preference Optimization for Text-to-Video Generation. arXiv preprint arXiv:2607.16947 
+
+(2026). MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Hangrui Xu et al. 
+
+[41] Thomas Mensink, Jasper Uijlings, Lluis Castrejon, Arushi Goel, Felipe Cadar, Howard Zhou, Fei Sha, André Araujo, and Vittorio Ferrari. 2023. Encyclopedic vqa: Visual questions about detailed properties of fine-grained categories. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision . 3113– 3124. [42] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. 2021. Learning transferable visual models from natural language supervision. In International conference on machine learning . PmLR, 8748–8763. [43] Quan Sun, Jinsheng Wang, Qiying Yu, Yufeng Cui, Fan Zhang, Xiaosong Zhang, and Xinlong Wang. 2024. Eva-clip-18b: Scaling clip to 18 billion parameters. 
+
+arXiv preprint arXiv:2402.04252 (2024). [44] Grant Van Horn, Elijah Cole, Sara Beery, Kimberly Wilber, Serge Belongie, and Oisin Mac Aodha. 2021. Benchmarking representation learning for natural world image collections. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 12884–12893. [45] Can Wang, Yuhao Wang, Yushe Cao, Canran Xiao, and Fei Shen. 2026. LaP-Forensics: Latent-Pixel Consistency Guided Multimodal Reasoning for Deepfake Detection. arXiv preprint arXiv:2607.25962 (2026). https://arxiv.org/abs/2607. 25962 [46] Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al. 2024. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 (2024). [47] Xinyu Wang, Yue Zhang, and Liqiang Jing. 2025. Can Large Vision-Language Models Understand Multimodal Sarcasm?. In Proceedings of the 34th ACM Inter-national Conference on Information and Knowledge Management . 5340–5345. [48] Xinyu Wang, Chongbo Zhao, Fangneng Zhan, and Yue Ma. 2026. LiveEdit: Towards Real-Time Diffusion-Based Streaming Video Editing. arXiv preprint arXiv:2606.26740 (2026). [49] Haiyan Wei, Hangrui Xu, Bingxu Zhu, Yulian Geng, Aolei Liu, Wenfei Yin, and Jian Liu. 2025. Patch-Wise Hypergraph Contrastive Learning with Dual Normal Distribution Weighting for Multi-Domain Stain Transfer. In 2025 IEEE Interna-tional Conference on Multimedia and Expo (ICME) . 1–6. doi:10.1109/ICME59968. 2025.11208933 [50] Tobias Weyand, Andre Araujo, Bingyi Cao, and Jack Sim. 2020. Google landmarks dataset v2-a large-scale benchmark for instance-level recognition and retrieval. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition .2575–2584. [51] Zhengxian Wu, Kai Shi, Chuanrui Zhang, Zirui Liao, Jun Yang, Ni Yang, Qiuying Peng, Luyuan Zhang, Hangrui Xu, Tianhuang Su, et al. 2026. When Models Judge Themselves: Unsupervised Self-Evolution for Multimodal Reasoning. arXiv preprint arXiv:2603.21289 (2026). [52] ZhengXian Wu, Hangrui Xu, Kai Shi, Zhuohong Chen, Yunyao Yu, Chuanrui Zhang, Zirui Liao, Jun Yang, Zhenyu Yang, Haonan Lu, et al. 2026. ProMSA: Progressive Multimodal Search Agents for Knowledge-Based Visual Question Answering. arXiv preprint arXiv:2606.27974 (2026). [53] Zhengxian Wu, Chuanrui Zhang, Shen’Ao Jiang, Hangrui Xu, Zirui Liao, Luyuan Zhang, Li Huaqiu, Peng Jiao, and Haoqian Wang. 2026. Language-guided and motion-aware gait representation for generalizable recognition. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 10871–10878. [54] Zhengxian Wu, Chuanrui Zhang, Hangrui Xu, Peng Jiao, and Haoqian Wang. 2025. Dagait: Generalized skeleton-guided data alignment for gait recognition. In 2025 IEEE International Conference on Multimedia and Expo (ICME) . IEEE, 1–6. [55] Junhao Xiao, Zhiyu Wu, Hao Lin, Yi Chen, Yahui Liu, Xiaoran Zhao, Zixu Wang, and Zejiang He. 2026. Not just what’s there: Enabling clip to comprehend negated visual descriptions without fine-tuning. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 10978–10986. [56] Xi Xiao, Xingjian Li, Yunbei Zhang, Cheng Han, Tianming Liu, Tianyang Wang, Runmin Jiang, Jihun Hamm, Xiao Wang, and Min Xu. 2026. Layer-Specific Prompt Fusion Discovery via Differentiable Search in Vision Foundation Models. arXiv preprint arXiv:2606.26379 (2026). [57] Xi Xiao, Chen Liu, Chih-Ting Liao, Yunbei Zhang, Qizhen Lan, Yuxiang Wei, Lin Zhao, Janet Wang, Jianyang Gu, Muchao Ye, et al. 2026. Staying VIGILant: Mitigating Visual Laziness via Counterfactual Visual Alignment in MLLMs. arXiv preprint arXiv:2606.26387 (2026). [58] Xi Xiao, Yunbei Zhang, Xingjian Li, Tianyang Wang, Xiao Wang, Yuxiang Wei, Jihun Hamm, and Min Xu. 2025. Visual instance-aware prompt tuning. In Pro-ceedings of the 33rd ACM International Conference on Multimedia . 2880–2889. [59] Xi Xiao, Yunbei Zhang, Lin Zhao, Yiyang Liu, Xiaoying Liao, Zheda Mai, Xingjian Li, Xiao Wang, Hao Xu, Jihun Hamm, Xue Lin, Min Xu, Qifan Wang, Tianyang Wang, and Cheng Han. 2026. Prompt-based Adaptation in Large-scale Vision Models: A Survey. Transactions on Machine Learning Research (2026). [60] Hangrui Xu, Zhengxian Wu, Chuanrui Zhang, Zhuohong Chen, Zhifang Liu, Peng Jiao, and Haoqian Wang. 2026. Psgait: Gait recognition using parsing skeleton. In ICASSP 2026-2026 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 10427–10431. [61] Yibin Yan and Weidi Xie. 2024. EchoSight: Advancing visual-language models with Wiki knowledge. arXiv preprint arXiv:2407.12735 (2024). [62] Qianyun Yang, Zhiwei Chen, Yupeng Hu, Zixu Li, Zhiheng Fu, and Liqiang Nie. 2026. Stable: Efficient hybrid nearest neighbor search via magnitude-uniformity and cardinality-robustness. IEEE Transactions on Knowledge and Data Engineering 
+
+(2026). [63] Wei Yang, Jingjing Fu, Rui Wang, Jinyu Wang, Lei Song, and Jiang Bian. 2025. OMGM: Orchestrate Multiple Granularities and Modalities for Efficient Multi-modal Retrieval. arXiv preprint arXiv:2505.07879 (2025). [64] Yunyao Yu, Zhengxian Wu, Zhuohong Chen, Hangrui Xu, Zirui Liao, Xiangwen Deng, Zhifang Liu, Senyuan Shi, and Haoqian Wang. 2026. Stabilizing Unsuper-vised Self-Evolution of MLLMs via Continuous Softened Retracing reSampling. 
+
+arXiv preprint arXiv:2604.03647 (2026). [65] Yifan Yuan, Guanqun Yang, James Z Wang, Hui Zhang, Hongming Shan, Fei-Yue Wang, and Junping Zhang. 2025. Dissecting and mitigating semantic discrep-ancy in stable diffusion for image-to-image translation. IEEE/CAA Journal of Automatica Sinica 12, 4 (2025), 705–718. [66] Tao Zhang, Ziqi Zhang, Zongyang Ma, Yuxin Chen, Zhongang Qi, Chunfeng Yuan, Bing Li, Junfu Pu, Yuxuan Zhao, Zehua Xie, et al. 2024. mR 2AG: Multimodal Retrieval-Reflection-Augmented Generation for Knowledge-Based VQA. arXiv preprint arXiv:2411.15041 (2024). [67] Wei Zhang, Qiang Li, and Qi Wang. 2025. Refined Cascade Cost Volume for Multiview Remote Sensing Image Reconstruction. IEEE Transactions on Geoscience and Remote Sensing 63 (2025), 1–11. doi:10.1109/TGRS.2025.3595544 [68] Wei Zhang, Qiang Li, Yuan Yuan, and Qi Wang. 2024. Visual Consistency Enhance-ment for Multiview Stereo Reconstruction in Remote Sensing. IEEE Transactions on Geoscience and Remote Sensing 62 (2024), 1–11. doi:10.1109/TGRS.2024.3482697 [69] Wei Zhang, Yihang Wu, Shengkai Yu, Songhua Li, Qiang Li, and Qi Wang. 2026. GPR-MVS: Global Propagation Regularization for Large Scale Multi-view Stereo. 
+
+IEEE Transactions on Geoscience and Remote Sensing (2026), 1–1. doi:10.1109/ TGRS.2026.3710063 [70] Wei Zhang, Zhigang Yang, Qiang Li, and Qi Wang. 2025. Semantic-Guided Mul-tiview Stereo Reconstruction for Aerial Image. IEEE Transactions on Geoscience and Remote Sensing 63 (2025), 1–11. doi:10.1109/TGRS.2025.3585623 [71] Xin Zhang, Yanzhao Zhang, Wen Xie, Mingxin Li, Ziqi Dai, Dingkun Long, Pengjun Xie, Meishan Zhang, Wenjie Li, and Min Zhang. 2024. GME: Im-proving Universal Multimodal Retrieval by Multimodal LLMs. arXiv preprint arXiv:2412.16855 (2024). [72] Qicheng Zhao, Yu Li, Qi Sun, and Zheyu Yan. 2026. ResilPhase: Plug-and-Play Phase Mapping and Noise-Resilient Macro-Trajectory Extrapolation for Diffusion Acceleration. arXiv preprint arXiv:2606.26769 (2026). [73] Qicheng Zhao, Qi Sun, and Zheyu Yan. 2026. Seeing the End at Step Zero: Accelerating Diffusion MLLMs via MLP Sparsity-Aware Truncation. arXiv:2607.14557 [cs.AI] https://arxiv.org/abs/2607.14557 [74] Zhixin Zheng, Xinyu Wang, Chang Zou, Shaobo Wang, and Linfeng Zhang. 2025. Compute only 16 tokens in one timestep: Accelerating diffusion transformers with cluster-driven feature caching. In Proceedings of the 33rd ACM International Conference on Multimedia . 10181–10189. [75] Yan Zhong, Xingyu Wu, Li Zhang, Chenxi Yang, and Tingting Jiang. 2024. Causal-IQA: Towards the Generalization of Image Quality Assessment Based on Causal Inference.. In ICML .[76] Yan Zhong, Chenxi Yang, Suyuan Zhao, and Tingting Jiang. 2025. Semi-supervised blind quality assessment with confidence-quantifiable pseudo-label learning for authentic images. In Forty-second International Conference on Machine Learning .[77] Yan Zhong, Xinping Zhao, Li Zhang, Xinyuan Song, and Tingting Jiang. 2025. Adaptive Prompt Learning for Blind Image Quality Assessment with Multi-modal Mixed-datasets Training. In Proceedings of the 33rd ACM International Conference on Multimedia . 7453–7462. [78] Yan Zhong, Xinping Zhao, Guangzhi Zhao, Bohua Chen, Fei Hao, Ruoyu Zhao, Jiaqi He, Lei Shi, and Li Zhang. 2025. Ctd-inpainting: Towards the coherence of text-driven inpainting with blended diffusion. Information Fusion 122 (2025), 103163. [79] Junjie Zhou, Yongping Xiong, Zheng Liu, Ze Liu, Shitao Xiao, Yueze Wang, Bo Zhao, Chen Jason Zhang, and Defu Lian. 2025. Megapairs: Massive data synthesis for universal multimodal retrieval. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 19076–19095.

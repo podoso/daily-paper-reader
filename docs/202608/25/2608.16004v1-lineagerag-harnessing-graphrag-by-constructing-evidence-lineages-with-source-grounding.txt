@@ -1,0 +1,233 @@
+Title: LineageRAG: Harnessing GraphRAG by Constructing Evidence Lineages with Source Grounding
+
+URL Source: https://arxiv.org/pdf/2608.16004v1
+
+Published Time: Tue, 18 Aug 2026 01:29:22 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# LineageRAG: Harnessing GraphRAG by Constructing Evidence Lineages with Source Grounding 
+
+# Linyao Zheng 2∗, Xuhang Shi 1, Zhifang Mao 1,Sai Zhou 2, Shuaixian An 2, Xiuquan Hou 2, Jinze Li 2
+
+> 1
+
+XiaoLab, Beijing University of Posts and Telecommunications 2Xi’an Jiaotong University 
+
+Abstract 
+
+Graph-based Retrieval-Augmented Generation (GraphRAG) retrieves evidence for multi-hop questions over structured cor-pus graphs. Existing GraphRAG methods leave the connection between evidence discovery and source grounding implicit. We propose LineageRAG, which constructs one evidence lin-eage for each query-derived evidence demand and completes it with a verbatim source span when the selected evidence supports that demand. LineageRAG first initializes the evi-dence demands. It then expands each lineage through demand-conditioned retrieval over the corpus graph while retaining the demand associated with every candidate. Lineage completion uses this provenance to select complementary passages and grounds supported demands in verbatim source text. Experi-ments on HotpotQA, 2WikiMultiHopQA, and MuSiQue show that LineageRAG improves R@5, EM, and F1 by 3.51, 5.96, and 5.22 points on average over leading GraphRAG baselines. 
+
+# 1 Introduction 
+
+Retrieval-augmented generation (RAG) supplies a language model with evidence retrieved from an external corpus (Lewis et al. 2020). Conventional retrievers score passages independently, which works when one passage contains the required evidence. Multi-hop questions often depend on bridge passages whose relevance emerges through previously discovered evidence. Graph-based RAG (GraphRAG) ad-dresses this dependency by organizing corpus units through structured relations. HippoRAG propagates relevance across an OpenIE graph using Personalized PageRank (Gutiér-rez et al. 2024). HippoRAG 2 deepens passage integration through online language-model use (Gutiérrez et al. 2025). PropRAG retrieves proposition paths (Wang and Han 2025). HGRAG uses a cross-granularity hypergraph (Wang et al. 2026). Graph-based retrieval finds relevant candidates, but the final evidence set does not record the requirement behind each source. This missing connection can leave GraphRAG with an incomplete evidence chain. Figure 1 presents a rep-resentative GraphRAG failure on HotpotQA. The retrieved passages cover only part of the question, leaving one evi-dence demand unresolved. This example motivates our cen-
+
+> ∗
+
+Corresponding author. Email: zlyxjtu@gmail.com 
+
+tral question. How can GraphRAG carry each evidence de-mand from graph discovery to source grounding? 
+
+Previous work uses query structure at different points in retrieval. Question decomposition preserves subqueries dur-ing candidate discovery (Ammann, Golde, and Akbik 2025). SETR uses explicit information requirements during evi-dence selection (Lee et al. 2025b), while RichRAG retains aspect–document associations during ranking (Wang et al. 2025a). Relink organizes retrieved evidence into a query-specific graph (Huang et al. 2026). NeocorRAG organizes retrieval around evidence chains (Peng et al. 2026). These methods improve coverage during discovery, ranking, or se-lection, but do not carry the same demand–passage associa-tion through graph retrieval to verbatim source evidence. Lineage tracing offers a natural model for this missing history. In biology, it identifies the descendants of a marked cell (Kretzschmar and Watt 2012). Data lineage applies the same principle to derived records by identifying the source items that produced them (Cui, Widom, and Wiener 2000). For GraphRAG, we define an evidence lineage as the trace that carries one evidence demand from graph discovery to its verbatim source evidence. We propose LineageRAG, a GraphRAG framework that constructs and maintains these lineages in three stages. 
+
+Evidence-Demand Induction derives query-specific de-mands, each specifying what the retrieved evidence must es-tablish. Demand-Conditioned Lineage Expansion retrieves candidates for each demand and preserves their demand as-sociations during candidate merging. Lineage Completion with Source Grounding uses this provenance to select com-plementary passages and extract source-anchored verbatim spans from the selected passages. Retaining such a span com-pletes the corresponding lineage. Our contributions are as follows. 
+
+• We formulate evidence lineage as a trace that follows each Evidence Demand from graph discovery to verbatim source evidence. It keeps the provenance of each demand explicit while the final passage set is constructed. 
+
+• We introduce LineageRAG, which preserves each Ev-idence Demand’s identity from candidate discovery to grounded source evidence. This correspondence guides passage selection and links each supported demand to a source-anchored span. arXiv:2608.16004v1 [cs.IR] 17 Aug 2026 Figure 1: A GraphRAG failure case on HotpotQA under R@5. Whole-question ranking misses the Columbia passage required for the second hop and leaves the evidence chain incomplete. LineageRAG retrieves evidence for both hops using separate demands and returns 1981 as the correct answer. 
+
+• Experiments on multi-hop QA benchmarks show that Lin-eageRAG achieves the strongest overall results, with av-erage gains of 3.51 R@5, 5.96 EM, and 5.22 F1 points over leading GraphRAG baselines. 
+
+# 2 Related Work 
+
+GraphRAG. GraphRAG represents corpus knowledge or query-specific evidence as a graph and retrieves through its relations. HippoRAG propagates relevance over an OpenIE graph (Gutiérrez et al. 2024), and HippoRAG 2 strengthens the integration of passages and graph retrieval (Gutiérrez et al. 2025). PropRAG searches proposition paths with an online beam search (Wang and Han 2025). LightRAG com-bines graph and vector retrieval at two granularities (Guo et al. 2025), while HGRAG retrieves over a cross-granularity hypergraph (Wang et al. 2026). G-reasoner trains a graph foundation model over its QuadGraph abstraction (Luo et al. 2026). SUBQRAG stores triples from sub-question reason-ing as graph memory (Li et al. 2025). AGRAG presents a reasoning subgraph with the retrieved chunks (Wang et al. 2025b). These systems improve evidence discovery through graph structure. LineageRAG also keeps the connection be-tween each Evidence Demand and its retrieved sources avail-able during passage selection and source grounding. 
+
+Query decomposition and evidence selection. Question decomposition preserves subqueries during candidate dis-covery and merges their results for reranking (Ammann, Golde, and Akbik 2025). DeCoR uses decomposed queries and compressed evidence to initiate a second retrieval stage (Yun and Kim 2025). SETR uses explicit information re-quirements during evidence selection (Lee et al. 2025b), while RichRAG retains aspect–document associations dur-ing ranking (Wang et al. 2025a). Relink constructs a query-driven evidence graph (Huang et al. 2026), NeocorRAG or-ganizes retrieval around evidence chains (Peng et al. 2026), and ETS searches over candidate evidence sets with a tree (Sun et al. 2025). LineageRAG preserves each Evidence De-mand’s identity through retrieval, selection, and grounding to a verbatim source span. 
+
+# 3 Problem Formulation 
+
+Let q be a query and D = {di}Ni=1 a passage corpus. For d ∈D, text( d) denotes its source text. G is the graph index over this corpus. The parameter k specifies the context size. An 
+
+Evidence Demand is a query-specific evidence requirement. The method produces 
+
+Oq = ( Sk, W q ), Sk = ( d(1) , . . . , d (k)) ∈ D k, (1) where Sk is the ordered list of selected passages and Wq is the set of grounded annotations. The passages in Sk are distinct. Each annotation w = ( iw, d w, s w, a w) links demand iw to span sw in selected passage dw. The term aw records the resulting typed relation. 
+
+# 4 LineageRAG 
+
+LineageRAG carries each Evidence Demand from graph dis-covery to a grounded source span in three stages. Figure 2 illustrates these stages with an example. Figure 2: Overview of LineageRAG. Evidence-Demand Induction identifies facts required by the query. Demand-Conditioned Lineage Expansion retrieves candidates for each demand and preserves demand–passage provenance. Lineage Completion with Source Grounding selects complementary passages and grounds each supported demand in a verbatim source span. 
+
+Evidence-Demand Induction 
+
+An inference-time language model maps q to an ordered sequence of Evidence Demands using a fixed prompt PD :
+
+Rq = Normalize(LLM θ (PD , q )) = ( r1, . . . , r m). (2) 
+
+rj = (id j , δ j , I j , O j ), 1 ≤ j ≤ m ≤ 5. (3) The description δj states the fact that evidence must establish. 
+
+Ij records the symbolic variables consumed by the demand, and Oj records those its evidence should establish. They are not values resolved from retrieved evidence. All demands are induced jointly from q. In Figure 1, r0 identifies the shuttle and r1 requests its launch year. The identifier id j remains fixed through retrieval, selection, and grounding. The induction prompt asks the model to express the re-quired facts as ordered demands: 
+
+Evidence-Demand Induction Prompt PD
+
+Decompose the query into ordered Evidence Demands whose joint resolution makes the answer derivable. Each demand states one fact that a source passage must estab-lish. Separate evidence identifying an intermediate entity from evidence establishing the answer. The complete prompt and JSON schema are provided in the supplementary material. 
+
+Demand-Conditioned Lineage Expansion 
+
+For each Evidence Demand, LineageRAG retrieves a ranked passage list from the same graph index: 
+
+Lj = Retrieve G (q, δ j ) = ( dj, 1, . . . , d j,h ), (4) where h is the retrieval depth. The retrieval query formed from q and δj determines the graph seeds. Personalized PageRank propagates the seed scores over G and ranks pas-sages to form Lj . Each call uses (q, δ j ) independently and does not substitute values resolved for earlier demands. The order of Rq controls depth-wise list merging and de-mand presentation to selection and grounding. A passage en-ters Cq = ( c1, . . . , c M ) at its first occurrence, with M ≥ k.Let τ (d) be its normalized title. The retained provenance and selector representation are 
+
+Aq (d) = {(id j , ℓ ) | d = dj,ℓ }. (5) 
+
+bq (d) = ( Aq (d), n q (d), ρ q (d), g q (d)) , d ∈ Cq . (6) 
+
+Aq (d) preserves the demand ID and rank of every retrieval event that exposed d. The count nq (d) = |A q (d)| summa-rizes repeated exposure. The statistic ρq (d) is the best rank recorded in Aq (d). Same-title redundancy is represented by 
+
+gq (d) = |{ c ∈ Cq : τ (c) = τ (d)}| .During merging, LineageRAG retains each candidate’s de-mand IDs and within-demand ranks in Aq (d). The selector can then distinguish candidates retrieved for different Evi-dence Demands and construct a passage set that covers com-plementary requirements. 
+
+Lineage Completion with Source Grounding 
+
+Set-wise selection. The selector evaluates the merged can-didate pool against Rq . Each candidate excerpt is augmented by bq (d):
+
+Sk = Select k(q, R q , C q , {bq (d)}d∈Cq ). (7) The selector evaluates candidates jointly to build the passage set. The provenance in bq (d) reveals whether a candidate contributes to an uncovered demand. It can therefore favor a complementary passage even when a redundant passage is ranked higher in the merged pool. The selector applies this provenance through the following instruction: 
+
+Set-Wise Selection Prompt 
+
+Use each candidate’s demand-specific retrieval provenance to select k passages that jointly cover the Evidence De-mands. Favor complementary facts and avoid evidence that repeats a covered demand. Returned IDs are validated against Cq and deduplicated. The retained passages follow candidate-pool order, and the earliest unselected candidates fill any remaining positions up to k. The complete selector protocol appears in the supple-mentary material. 
+
+Source grounding. After Sk is fixed, source grounding ex-tracts demand-linked verbatim spans from the selected pas-sages. Candidate annotations are proposed by 
+
+cWq = Extract( q, R q , S k). (8) The joint grounding call uses Ij and Oj to populate the 
+
+consumes and produces bindings. Evidence lineage preserves demand identity across stages without sequential query rewriting. The extraction prompt is: 
+
+Source Grounding Prompt 
+
+For each supported Evidence Demand, return its source passage and the verbatim span that establishes it. Return no record for unsupported demands. The proposed annotations are filtered by 
+
+Wq = {w ∈ cWq : Valid q (w)}. (9) Validity first anchors the proposal to a selected source: 
+
+dw ∈ Sk and sw ⊑norm text( dw). Here ⊑norm is sub-string containment after whitespace and case normalization. The schema check VΓ(aw) = 1 verifies the typed annotation. Provenance continuity further requires ∃ℓ (iw, ℓ ) ∈ A q (dw).These conditions jointly define Valid q (w).Duplicate passage–span pairs are removed before pre-sentation. The reader receives the retained annotations Wq
+
+alongside the selected passages Sk. A lineage remains open when Wq contains no valid annotation for its demand. The complete grounding protocol appears in the supplementary material. 
+
+# 5 Experiments 
+
+We evaluate LineageRAG through four research questions: 
+
+• RQ1. How does LineageRAG compare with leading GraphRAG methods on multi-hop QA benchmarks? 
+
+• RQ2. How do the components of LineageRAG contribute to retrieval and answer quality? 
+
+• RQ3. How do evidence-set construction and source grounding account for LineageRAG’s retrieval and QA gains? 
+
+• RQ4. What is the computational cost of LineageRAG? 
+
+Experimental Setup 
+
+Datasets. We evaluate on three multi-hop benchmarks: HotpotQA (Yang et al. 2018), 2WikiMultiHopQA (Ho et al. 2020), and MuSiQue (Trivedi et al. 2022). Following Hip-poRAG 2 (Gutiérrez et al. 2025), we use 1,000 queries from each dataset and its corresponding retrieval corpus. 
+
+Baselines. The baselines are grouped as follows: (1) LLM-based retrieval: NV-Embed-v2 (Lee et al. 2025a). (2) Con-ventional RAG: BM25 (Robertson and Zaragoza 2009) and RAPTOR (Sarthi et al. 2024). (3) GraphRAG: Hip-poRAG 2 (Gutiérrez et al. 2025), PropRAG (Wang and Han 2025), HGRAG (Wang et al. 2026), and G-reasoner (Luo et al. 2026). (4) Evidence selection methods: ETS-7B (Sun et al. 2025), Relink (Huang et al. 2026), and NeocorRAG 
+
+(Peng et al. 2026). 
+
+Metrics. Retrieval is evaluated with supporting-passage R@5, and QA with exact match (EM) and token-level F1. Source Grounding is evaluated by demand coverage and GPT-4o demand–span support judgments, with GPT-4o-mini judging the same samples independently. The full audit pro-tocol is provided in the supplementary material. 
+
+Implementation details. Qwen3-32B (Qwen Team 2025) constructs an OpenIE graph with passage and entity nodes connected by extracted relations, passage–entity edges, and entity-similarity edges. At query time, it runs the three Lin-eageRAG stages. Retrieve G uses HippoRAG 2 PPR with a damping factor of 0.5, and the matched baseline uses the same graph index and retrieval settings. NV-Embed-v2 (Lee et al. 2025a) supplies dense embeddings, and GPT-4o-mini (OpenAI 2024) serves as the QA reader. All generative calls use temperature 0. Runnable baselines use the best settings reported in their papers. All rerun methods use the same corpus, query split, and GPT-4o-mini reader. ETS-7B and Relink use the published results obtained with their native readers. Full prompts, retrieval settings, candidate budgets, and baseline configurations are provided in the supplemen-tary material. 
+
+Main Results (RQ1) 
+
+As shown in Table 1, LineageRAG achieves the high-est macro-averaged retrieval and end-to-end answer scores across the three benchmarks: 89.57 R@5, 58.22 EM, and 69.63 F1. Figure 3 compares LineageRAG with leading GraphRAG methods on R@5 and F1 across the three datasets. Each axis is scaled to its observed range. 
+
+Compared with LLM-based retrieval and conventional RAG. The largest margins occur on 2WikiMultiHopQA. LineageRAG surpasses NV-Embed-v2 by 18.13 R@5, 14.20 EM, and 17.36 F1 points. The corresponding gains over RAP-TOR are 22.33, 19.60, and 23.46 points. The retrieval advan-tage is accompanied by substantial gains in both answer met-rics, showing that the additional supporting passages form useful reader contexts. 
+
+Compared with leading GraphRAG baselines. Linea-geRAG ranks first in seven of the nine dataset–metric cells among GraphRAG systems and achieves the highest R@5 HotpotQA 2WikiMultiHopQA MuSiQue Average Method R@5 EM F1 R@5 EM F1 R@5 EM F1 R@5 EM F1                                
+
+> LLM-based retrieval
+> NV-Embed-v2 (dense) 93.40 59.50 73.00 75.90 55.00 60.50 68.30 35.20 46.20 79.20 49.90 59.90
+> Conventional RAG
+> BM25 72.90 49.40 61.00 65.80 45.10 49.00 47.80 20.50 28.00 62.20 38.30 46.00 RAPTOR 90.90 59.00 72.00 71.70 49.60 54.40 65.20 31.50 41.50 75.90 46.70 56.00
+> GraphRAG
+> HippoRAG 2 95.30 58.40 72.60 89.78 60.10 69.18 73.04 35.70 49.92 86.04 51.40 63.90 HGRAG 95.50 58.70 73.90 81.00 56.50 63.00 70.10 36.80 48.10 82.20 50.67 61.67 PropRAG 96.25 58.10 73.97 92.95 61.30 69.01 73.21 35.00 49.69 87.47 51.47 64.22 G-reasoner 97.00 59.00 74.00 93.70 70.00 78.10 74.90 37.50 51.50 88.53 55.50 67.87
+> Evidence selection methods
+> ETS-7B †– 60.50 57.70 – 60.50 54.80 – 40.00 40.80 – 53.70 51.10 Relink †– 58.50 72.20 – 55.80 70.40 – 30.40 41.30 – 48.23 61.30 NeocorRAG 96.00 58.40 73.67 90.90 60.80 68.50 73.10 37.10 48.10 86.67 52.10 63.42 LineageRAG 98.15 62.76 75.27 94.03 69.20 77.86 76.53 42.70 55.76 89.57 58.22 69.63
+
+Table 1: Main results on three multi-hop QA benchmarks. † indicates published answer metrics obtained with each method’s native reader. Average denotes the macro-average across the three datasets. on every dataset. The macro-average gains over leading GraphRAG baselines are 3.51 R@5, 5.96 EM, and 5.22 F1 points. On 2WikiMultiHopQA, LineageRAG leads in R@5, while the best GraphRAG EM and F1 scores are 0.80 and 0.24 points higher. Relative to HippoRAG 2, the R@5 gains are 2.85 points on HotpotQA, 4.25 on 2WikiMultiHopQA, and 3.49 on MuSiQue. The corresponding end-to-end F1 gains are 2.67, 8.68, and 5.84 points. The largest retrieval gain and answer 
+
+Figure 3: Relative R@5 and F1 profiles across three multi-hop QA benchmarks. Each axis is scaled to its observed range. Values mark LineageRAG results. gain therefore coincide on 2WikiMultiHopQA, where the se-lected and grounded two-hop evidence has the strongest ef-fect. HotpotQA is closer to retrieval saturation: LineageRAG exceeds the strongest GraphRAG R@5 by 1.15 points while improving the strongest GraphRAG EM by 3.76 points. This separation shows that source-grounded reader input remains consequential when document recall is already high. 
+
+Compared with evidence-selection baselines. Among evidence-selection baselines under the aligned reader proto-col, NeocorRAG is the strongest directly comparable system. LineageRAG raises average R@5 from 86.67 to 89.57, aver-age EM from 52.10 to 58.22, and average F1 from 63.42 to 69.63. These gains are 2.90, 6.12, and 6.21 points, respec-tively. The answer gains exceed the retrieval gain, indicating that grounding makes the selected evidence more useful to the QA reader. ETS-7B and Relink are included as published native-reader results, with macro EM/F1 scores of 53.7/51.1 and 48.23/61.30, respectively. 
+
+Ablation Study (RQ2) 
+
+We ablate the three LineageRAG stages on 1,000 MuSiQue queries. Without Evidence-Demand Induction, the original question serves as a single Evidence Demand. Without Lin-eage Expansion, the induced demands remain, but candi-dates are retrieved with the whole question and enter evi-dence selection without demand–passage provenance. With-out Source Grounding, the selected passages and their order remain fixed, while grounded spans are removed from the reader input. All other stages and settings remain unchanged. Table 2 reports R@5, EM, and F1. Removing Evidence-Demand Induction lowers R@5, EM, and F1 by 0.92, 1.84, and 1.20 points. Removing Lineage Ex-pansion produces the largest retrieval loss, reducing R@5 by 2.15 points, with corresponding decreases of 1.58 EM and Variant R@5 EM F1 Full LineageRAG 76.53 42.70 55.76          
+
+> w/o Evidence-Demand Induction 75.61 40.86 54.56 w/o Lineage Expansion 74.38 41.12 54.48 w/o Source Grounding 76.53 36.50 50.11
+
+Table 2: Component ablations on MuSiQue. 1.28 F1. Source Grounding leaves R@5 unchanged but con-tributes 6.20 EM and 5.65 F1 points. The first two com-ponents improve evidence discovery and selection, while Source Grounding primarily improves how the reader uses the selected evidence. 
+
+Mechanism Analysis (RQ3) 
+
+LineageRAG constructs a complementary evidence set from demand–passage provenance and completes supported lin-eages through Source Grounding. On MuSiQue, RQ3 exam-ines how evidence-set construction improves retrieval and whether the grounded spans support their demands and im-prove answer generation. 
+
+Evidence-set construction. Does set-wise selection alone explain the retrieval gain? Table 3 asks whether Linea-geRAG’s set-wise selector can recover the retrieval gain when applied to HippoRAG 2 candidates without demand– passage provenance. HippoRAG 2 produces 73.04 R@5 from a single graph ranking. Applying the same set-wise selector to its candidate pool raises R@5 to 74.34, showing that joint selection contributes 1.30 points without evidence lineage. This selector can only choose among candidates exposed by the original ranking, and its input contains no demand– passage provenance. LineageRAG reaches 76.53 by orga-nizing candidate discovery around Evidence Demands and retaining their passage associations during selection. Its 3.49-point gain therefore includes 1.30 points from set-wise se-lection and a further 2.19 points from evidence-lineage con-struction. The comparison shows that reranking improves evidence coverage, but the larger gain occurs when candi-date discovery and selection preserve the demands associated with each passage. Tables 4 and 5 next separate candidate ex-posure from provenance within this additional gain. 
+
+Do question decomposition and evidence-set selection to-gether explain the retrieval gain? Table 4 compares Linea-geRAG with QD, SETR, and their combination. QD follows the question-decomposition pipeline of Ammann, Golde, and Akbik (2025). SETR (Lee et al. 2025b) performs explicit-requirement evidence-set selection. Pool oracle measures support available before selection. Selected reports R@5 after retaining five passages and Loss is their difference. Best values in each column, including ties, are bold. QD and SETR select 75.30 and 73.58 R@5. Their combination raises selected R@5 to 75.47 but remains 1.06 points below Linea-geRAG. QD + SETR and LineageRAG share a pool-oracle R@5 of 84.26, so lower aggregate support coverage does not explain the gap. Their selection losses are 8.79 and 7.73. The composition therefore retains less available support under the five-passage budget. Table 5 tests this mechanism by varying         
+
+> Evidence-set construction R@5 ∆
+> HippoRAG 2 73.04 –+ Set-wise selector 74.34 +1.30 LineageRAG evidence-set construction 76.53 +3.49
+
+Table 3: Attribution of evidence-set construction gains on MuSiQue.                
+
+> Pipeline Pool oracle Selected Loss Question decomposition 84.02 75.30 8.72 SETR 84.24 73.58 10.66 QD + SETR 84.26 75.47 8.79 LineageRAG 84.26 76.53 7.73
+
+Table 4: Candidate availability and five-passage selection on MuSiQue. candidate-specific demand–passage provenance.           
+
+> Demand–passage provenance R@5 ∆
+> Correct 76.53 –Removed 73.58 -2.95 Equal-length neutral replacement 73.50 -3.03 Shuffled across passages 68.42 -8.11
+
+Table 5: Effect of demand–passage provenance on evidence selection. 
+
+Does evidence selection depend on correct demand– passage provenance? All conditions in Table 5 use the same candidate pool, selector, and five-passage output. They differ only in the provenance shown for each candidate. Remov-ing provenance lowers R@5 from 76.53 to 73.58. Equal-length neutral text gives 73.50, only 0.08 points lower, so extra prompt content does not explain the gain. Shuffling valid provenance across passages preserves its volume but breaks the candidate-specific correspondence. R@5 falls to 68.42, which is 8.11 points below correct provenance and 5.16 points below removing it. This ordering is diagnostic. Missing provenance removes demand-coverage information, while incorrect provenance actively directs its five positions toward the wrong passages. Correct provenance lets the se-lector allocate those positions across distinct Evidence De-mands and retain complementary support. Read with Ta-ble 4, these controls attribute the selection-side benefit of evidence lineage to preserving candidate-specific demand– passage correspondence between Demand-Conditioned Lin-eage Expansion and set-wise selection. 
+
+Source Grounding. How often does Source Grounding complete an evidence lineage? Table 6 measures whether the lineage established for each Evidence Demand reaches a verbatim span in the selected source. Source Grounding completes 1,865 of 2,182 induced lineages. All lineages are completed for 734 of 1,000 queries, and 976 queries contain at least one completed lineage. Of the 266 queries without full completion, 242 contain both completed and Measure Result       
+
+> Evidence-lineage completion
+> Grounded Evidence Demands 1,865 / 2,182 demands Queries with all demands grounded 734 / 1,000 queries Queries with any demand grounded 976 / 1,000 queries
+> Demand–span support
+> Fully supporting spans 420 / 500 audited spans Full or partial support 470 / 500 audited spans Wrong-demand links 10 / 500 audited spans
+
+Table 6: Evidence-lineage completion on 1,000 MuSiQue queries and demand–span support on 500 audited spans.         
+
+> Reader evidence EM F1 Selected passages 36.50 50.11 Selected passages with grounded spans 42.70 55.76
+> Gain +6.20 +5.65
+
+Table 7: Contribution of Source Grounding to answer gener-ation on MuSiQue. open lineages, while 24 contain no completed lineage. Open lineages are thus concentrated within partially completed queries. Demand-level analysis identifies requirements still ungrounded after evidence-set construction. 
+
+Do the grounded spans support their linked Evidence Demands? Table 6 evaluates whether each grounded end-point establishes its linked demand. Of the 500 audited spans, 420 provide full support and 50 provide partial support. The partial cases reach relevant source evidence but do not es-tablish the complete fact specified by the demand. Among the remaining 30 records, 20 do not establish the required fact, while 10 attach a span to the wrong demand. These errors distinguish insufficient source evidence from an in-correct demand–span connection. The counts expose span adequacy and correspondence as separate factors. GPT-4o-mini matches GPT-4o on 481 of 500 binary support decisions (96.2%), indicating that the distinction between supporting and insufficient evidence is stable across the two judges. 
+
+Does Source Grounding improve answer generation? 
+
+Table 7 fixes the selected passages and their order, chang-ing only whether grounded spans are provided. Adding them raises EM from 36.50 to 42.70 and F1 from 50.11 to 55.76. Because retrieval is identical, the spans introduce no new sources and leave the passage set and order unchanged, iso-lating their effect on reader-side evidence use. In the passage-only condition, the reader must locate support within the pas-sages and infer which demand each passage resolves before combining facts. Grounded spans make both decisions ex-plicit through demand-indexed evidence cues, allowing the reader to compose facts whose locations and roles are already identified. The gains in both EM and F1 indicate better exact-answer recovery and broader answer-token coverage. Source Grounding therefore improves how the reader uses selected evidence while leaving evidence availability unchanged. The mechanism analysis follows evidence lineage from evidence-set construction to answer generation. Tables 3– 5                  
+
+> Method Offline Query-time Total (M) (M / 1,000 queries) (M) LineageRAG 13.49 1.51 15.00 HippoRAG 2 13.49 0.63 14.12 PropRAG 18.84 0.00 18.84 NeocorRAG 12.84 6.94 19.78
+
+Table 8: Average model-token consumption across the three benchmarks (millions of tokens). show that preserving demand–passage provenance improves the selected evidence set. Table 7 shows that carrying the same demand-to-evidence correspondence into source spans improves how the reader uses that evidence. The two analyses locate the effect at successive stages: demand–passage corre-spondence guides which evidence is selected, and demand– span correspondence guides how selected evidence is pre-sented to the reader. 
+
+Computational Cost (RQ4) 
+
+Table 8 separates one-time graph construction from query-time model use. LineageRAG and HippoRAG 2 share the same graph index, whose construction consumes 13.49M to-kens. HippoRAG 2 follows one whole-query retrieval path. LineageRAG additionally induces demands, retrieves for each demand, selects from a provenance-augmented pool, and extracts grounded spans for the reader. These stages preserve demand identity from candidate discovery through source grounding and increase query-time token consump-tion from 0.63M to 1.51M tokens per 1,000 queries, or 880 additional tokens per query. The total for one graph con-struction and 1,000 queries rises from 14.12M to 15.00M. Because graph construction is shared, the total difference comes from these query-time lineage operations. This 2.40-fold increase in query-time token consumption accompanies gains of 3.53 R@5, 6.82 EM, and 5.73 F1 over HippoRAG 2. The ablations attribute 2.15 R@5 points to Lineage Expansion and 6.20 EM and 5.65 F1 points to Source Grounding. These gains locate the return from the additional computation in both evidence construction and answer generation. PropRAG uses 18.84M tokens offline and none online, while NeocorRAG uses 6.94M online. 
+
+# 6 Conclusion 
+
+In this work, we propose LineageRAG for multi-hop GraphRAG to address the missing connection between ev-idence discovery and source grounding. LineageRAG in-duces Evidence Demands and expands each through graph retrieval while preserving demand–passage provenance. It then uses this provenance to construct a complementary ev-idence set and ground supported demands in source text. Experiments on three multi-hop QA benchmarks show im-proved retrieval and answer quality over leading GraphRAG baselines and demonstrate the value of evidence lineage for source-grounded multi-hop reasoning. References 
+
+Ammann, P. J. L.; Golde, J.; and Akbik, A. 2025. Ques-tion Decomposition for Retrieval-Augmented Generation. In 
+
+Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 4: Student Research Workshop) , 497–507. Cui, Y.; Widom, J.; and Wiener, J. L. 2000. Tracing the Lineage of View Data in a Warehousing Environment. ACM Transactions on Database Systems , 25(2): 179–227. Guo, Z.; Xia, L.; Yu, Y.; Ao, T.; and Huang, C. 2025. Ligh-tRAG: Simple and Fast Retrieval-Augmented Generation. In 
+
+Findings of the Association for Computational Linguistics: EMNLP 2025 , 10746–10761. Gutiérrez, B. J.; Shu, Y.; Gu, Y.; Yasunaga, M.; and Su, Y. 2024. HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models. In Advances in Neural Information Processing Systems , volume 37, 59532–59569. Curran Associates, Inc. Gutiérrez, B. J.; Shu, Y.; Qi, W.; Zhou, S.; and Su, Y. 2025. From RAG to Memory: Non-Parametric Continual Learning for Large Language Models. In Proceedings of the 42nd In-ternational Conference on Machine Learning , volume 267 of 
+
+Proceedings of Machine Learning Research , 21497–21515. Ho, X.; Duong Nguyen, A.-K.; Sugawara, S.; and Aizawa, A. 2020. Constructing A Multi-hop QA Dataset for Com-prehensive Evaluation of Reasoning Steps. In Proceedings of the 28th International Conference on Computational Lin-guistics , 6609–6625. Huang, M.; Bu, C.; He, Y.; Zhuo, X.; and Wu, X. 2026. Relink: Constructing Query-Driven Evidence Graph On-the-Fly for GraphRAG. Proceedings of the AAAI Conference on Artificial Intelligence , 40(37): 31202–31210. Kretzschmar, K.; and Watt, F. M. 2012. Lineage Tracing. 
+
+Cell , 148(1–2): 33–45. Lee, C.; Roy, R.; Xu, M.; Raiman, J.; Shoeybi, M.; Catanzaro, B.; and Ping, W. 2025a. NV-Embed: Improved Techniques for Training LLMs as Generalist Embedding Models. In The Thirteenth International Conference on Learning Represen-tations .Lee, D.; Jo, Y.; Park, H.; and Lee, M. 2025b. Shifting from Ranking to Set Selection for Retrieval Augmented Gener-ation. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 17606–17619. Lewis, P.; Perez, E.; Piktus, A.; Petroni, F.; Karpukhin, V.; Goyal, N.; Küttler, H.; Lewis, M.; Yih, W.; Rocktäschel, T.; Riedel, S.; and Kiela, D. 2020. Retrieval-Augmented Gen-eration for Knowledge-Intensive NLP Tasks. In Advances in Neural Information Processing Systems , volume 33, 9459– 9474. Curran Associates, Inc. Li, J.; Ruan, J.; Tang, S.; Chen, S.; Chang, K.; Ge, Y.; Xiao, T.; and Zhu, J. 2025. SUBQRAG: Sub-Question Driven Dynamic Graph RAG. arXiv preprint arXiv:2510.07718 .Luo, L.; Zhao, Z.; Liu, J.; Qiu, Z.; Dong, J.; Panev, S.; Gong, C.; Vu, T.-T.; Haffari, G.; Phung, D.; Liew, A. W.-C.; and Pan, S. 2026. G-reasoner: Foundation Models for Unified Rea-soning over Graph-structured Knowledge. In The Fourteenth International Conference on Learning Representations .OpenAI. 2024. GPT-4o mini: Advancing Cost-Efficient In-telligence. OpenAI Research. Peng, S.; Zheng, Q.; Hao, Z.; Tang, Z.; Li, R.; Huang, Q.; Huang, J.; Liu, J.; Zhu, Y.; and E, H. 2026. NeocorRAG: Less Irrelevant Information, More Explicit Evidence, and More Effective Recall via Evidence Chains. In Proceedings of the ACM Web Conference 2026 , 1899–1910. ACM. Qwen Team. 2025. Qwen3 Technical Report. arXiv preprint arXiv:2505.09388 .Robertson, S.; and Zaragoza, H. 2009. The Probabilistic Relevance Framework: BM25 and Beyond. Foundations and Trends in Information Retrieval , 3(4): 333–389. Sarthi, P.; Abdullah, S.; Tuli, A.; Khanna, S.; Goldie, A.; and Manning, C. D. 2024. RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. In The Twelfth International Conference on Learning Representations .Sun, H.; Cai, H.; Li, Y.; Fan, X.; Wei, X.; Wang, S.; Zhang, Y.; and Yin, D. 2025. Enhancing Retrieval-Augmented Gen-eration via Evidence Tree Search. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 24116–24127. Asso-ciation for Computational Linguistics. Trivedi, H.; Balasubramanian, N.; Khot, T.; and Sabharwal, A. 2022. MuSiQue: Multihop Questions via Single-hop Question Composition. Transactions of the Association for Computational Linguistics , 10: 539–554. Wang, C.; Deng, W.; Guan, W.; Lu, Q.; and Jiang, N. 2026. Cross-Granularity Hypergraph Retrieval-Augmented Gener-ation for Multi-hop Question Answering. Proceedings of the AAAI Conference on Artificial Intelligence , 40(39): 33368– 33376. Wang, J.; and Han, J. 2025. PropRAG: Guiding Retrieval with Beam Search over Proposition Paths. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 6212–6227. Wang, S.; Yu, X.; Wang, M.; Chen, W.; Zhu, Y.; and Dou, Z. 2025a. RichRAG: Crafting Rich Responses for Multi-faceted Queries in Retrieval-Augmented Generation. In Proceedings of the 31st International Conference on Computational Lin-guistics , 11317–11333. Association for Computational Lin-guistics. Wang, Y.; Li, H.; Teng, F.; and Chen, L. 2025b. AGRAG: Advanced Graph-based Retrieval-Augmented Generation for LLMs. arXiv preprint arXiv:2511.05549 .Yang, Z.; Qi, P.; Zhang, S.; Bengio, Y.; Cohen, W. W.; Salakhutdinov, R.; and Manning, C. D. 2018. HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question An-swering. In Proceedings of the 2018 Conference on Empiri-cal Methods in Natural Language Processing , 2369–2380. Yun, J.; and Kim, Y. 2025. Query, Decompose, Compress: Structured Query Expansion for Efficient Multi-Hop Re-trieval. In Proceedings of the 34th ACM International Con-ference on Information and Knowledge Management , 5459– 5463.

@@ -1,0 +1,701 @@
+Title: TASSO: TAsk-Specific Subspace Optimization for Continual Learning of Vision-Language Models
+
+URL Source: https://arxiv.org/pdf/2608.21487v1
+
+Published Time: Tue, 25 Aug 2026 00:08:06 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# TASSO: TAsk-Specific Subspace Optimization for Continual Learning of Vision-Language Models 
+
+Chang Sun , Francesco Barbato , Matteo Caligiuri , and Pietro Zanuttigh 
+
+University of Padova, Padova(PD), Italy 
+
+{sunchang,francesco.barbato,matteo.caligiuri,zanuttigh}@dei.unipd.it 
+
+Abstract. Vision-Language Models (VLMs) exhibit strong zero-shot capabilities, making them an attractive solution for continual learning across diverse tasks. However, during continual adaptation, both catas-trophic forgetting and zero-shot degradation occur, severely degrading performance. In this paper, we introduce TASSO 1, a new paradigm that efficiently preserves the latent space geometry while ensuring network plasticity. We achieve this with two complementary techniques: subspace learning and geometry-aware knowledge distillation. Specifically, we first learn a sequence of task-specific low-rank projectors, which we use to project the latent representations before optimizing cross-entropy. Sec-ondly, we employ a geodesic-distance-based loss that distills knowledge from the previous-task model while effectively preserving the latent space geometry. These design choices not only avoid unnecessary parameter up-dates along the full embedding dimensions but also improve learning by focusing on task-specific manifolds. Moreover, the geometry-aware distil-lation provides strong regularization and significantly reduces both catas-trophic forgetting and zero-shot degradation throughout the continual learning sequence. Experimental results with the CLIP vision language model in the multi-domain task incremental and class incremental learn-ing benchmarks demonstrate clear improvements over state-of-the-art methods in mitigating forgetting and preserving zero-shot capabilities. 
+
+Keywords: Continual Learning · Knowledge Distillation · Subspace Learning · Vision-Language models 
+
+# 1 Introduction 
+
+Recently, highly performing Vision-language Models (VLMs), such as CLIP [33], BLIP [20], ALIGN [15], and Flamingo [1], have emerged as key tools for Arti-ficial Intelligence (AI), bridging Computer Vision (CV) and Natural Language Processing (NLP), and enabling machines to jointly understand images and text, thus producing valuable information for many downstream tasks. While their zero-shot accuracy is undeniable, there exist several deployment scenarios, e.g ., embodied agents, autonomous driving, or robotics, where static general-level knowledge may not be sufficient. To effectively tackle these issues,  
+
+> 1
+
+Code is available at https://github.com/LTTM/TASSO arXiv:2608.21487v1 [cs.CV] 21 Aug 2026 2 C. Sun et al. 
+
+VLMs must be able to continuously learn new and specific concepts, refining their internal knowledge over time [26]. The Continual Learning (CL) task has been thoroughly investigated across various computer vision tasks and architectures [36], but the specific character-istics of VLMs introduce several additional issues that require attention [26]. More specifically, in addition to the standard issue of Catastrophic Forgetting 
+
+in continual learning ( i.e ., optimizing models for new tasks leads to degraded performance on previous ones), the Open-Vocabulary nature of VLMs also ne-cessitates addressing Zero-Shot Degradation (i.e ., when learning a task degrades accuracy on future, unrelated tasks). Tackling these complementary issues requires a careful balance between achiev-ing accuracy in the new task being learned, preservation of old knowledge, and maintenance of zero-shot capability, as the plasticity-stability tradeoff is even more challenging in this setting. Current methods tackle the problem using various distillation strategies from the pre-trained model, which reduce forgetting but typically also lead to a di-minished capability to learn new tasks. Other approaches add external adapters with additional parameters, allowing for the learning of new tasks at the expense of cumbersome architectures that do not scale well to a large number of tasks. To this end, we introduce a novel continual learning strategy for VLMs, which we denote TASSO (TAsk-Specific Subspace Optimization for Continual Learning of Vision-Language Models). It introduces a subspace learning strategy that separates knowledge related to the current task from general knowledge, along with a novel distillation objective that exploits the geodesic distance. The subspace separation allows TASSO to optimize the training process of the new task by focusing only on the relevant manifold and avoiding unnec-essary parameter updates that may impair performance on previous or future tasks. Moreover, we leverage these orthogonal subspaces to distill knowledge from prior tasks more effectively: we explicitly extract task-relevant information and enable the training process to separate it from newly learned content, while task-irrelevant information can remain fully preserved. The experimental evaluation under the Multidomain Class Incremental and Task Incremental Learning (MCIL and MTIL) settings demonstrates how these provisions enable us to achieve state-of-the-art performance on challenging con-tinual learning benchmarks for VLMs. In summary, our contributions are: 1. We propose a novel framework that efficiently tackles catastrophic forgetting and zero-shot degradation through low-rank subspace learning. 2. We introduce a learned projector that separates the subspace relevant to the current task from the irrelevant part and selectively applies the losses. 3. We present a novel geometry- and subspace-aware loss for knowledge distil-lation based on the geodesic distance. 4. Results show how the approach outperforms the state-of-the-art, demon-strating an impressive capability to tackle zero-shot degradation and catas-trophic forgetting. TASSO: TAsk-Specific Subspace Optimization 3
+
+# 2 Related Works 
+
+Continual Learning for Vision-Language Models Recent continual learn-ing work has increasingly focused on pretrained vision-language models (espe-cially CLIP), where the goal is to adapt to sequential tasks while preserving both previously learned knowledge and the pretrained model’s generalization ability. Early CLIP-based methods, such as [38], utilize prompt tuning with a frozen backbone, demonstrating that adaptation methods can perform well in domain-incremental settings. A key VLM-specific challenge was later highlighted by the authors of [43], who introduced the MTIL benchmark and discovered that con-tinual learning can also hinder zero-shot transfer. More recent work broadens the setting to open-domain continual learning [22], multimodal image-caption streams [25], and time-continual CLIP training at web scale [9]. 
+
+Distillation-based Continual Adaptation The key objective of continual learning in VLMs is to mitigate both catastrophic forgetting and zero-shot degra-dation. Distillation-based methods tackle this problem by transferring knowledge from previous models to the model being trained [21]. More specifically, [43] proposed distilling knowledge from the pretrained CLIP using reference images from a public dataset, while preserving its zero-shot ca-pabilities. Furthermore, [41, 42] proposed utilizing two teachers in parallel: the pretrained model and the model from the previous task. The approach in [41] focuses on weighting the two teachers differently based on each reference image. The method of [42] instead aims to distill multimodal proximity while preserving the intra- and inter-modal information from both the vision and text modalities. These methods all rely on the distillation of the pretrained model for zero-shot degradation mitigation, which significantly increases storage and computa-tional costs and may risk damaging the ability to learn new tasks. 
+
+Parameter-Efficient Adaptation An alternative to KD-based approaches is parameter-efficient training. This technique optimizes a limited set of parameters to rapidly adapt a pretrained model to downstream tasks. Popular approaches include Low-Rank Approximation (LoRA) [12] and adapter modules [11, 37]. Continual low-rank learning is studied in [28], which systematically analyzes how the rank and placement of LoRA modules can affect learning and forgetting. Their findings confirm the intuition that a relatively high-rank LoRA improves task learning but increases forgetting, while a relatively low-rank LoRA reduces forgetting but limits adaptation. Their proposed solution involves adaptively changing the LoRA rank to achieve an optimal plasticity-stability balance. An interesting refinement is introduced by [40], which exploits the idea of Mixture-of-Experts (MoE) [14] for the continual learning of CLIP. Their method dynamically expands the pretrained CLIP model through the integration of MoE adapters in response to new tasks. To preserve the zero-shot ability, they also designed an Auto-Selector that can automatically route inputs into the MoE adapters or the pretrained CLIP. 4 C. Sun et al. 
+
+A strategy that handles the two modalities in the CLIP model asymmet-rically is proposed in [16]. It restricts the update of visual parameters within the common subspace of multiple null spaces, further limiting the impacts of non-zero residual terms. Despite their efficiency, existing methods rarely address explicit plasticity restoration, and they do not leverage task-specific structure in the feature subspace. Our method balances parameter-efficient strategies with knowledge distilla-tion by transferring knowledge from prior models through geometry-aware met-rics, while constraining the optimization of the VLM on the current task to a low-rank subspace, all without explicitly adding adapter modules. 
+
+# 3 Continual Learning Setup 
+
+In this section, we introduce the mathematical notation for the Task and Class-Incremental Learning [35] settings used throughout the paper. The objective is the continual optimization of a Vision Language Model g (in our experiments, we used CLIP [33]) across a sequence of K tasks T = {T 1, · · · , T K }. Each task T is associated with a set of N labeled images, D, and the corresponding class names 
+
+C. In task T k = {(Dk, Ck)}, the model gk is trained on samples {(xkj , ykj )} ∈ D k,where xkj is the j-th image in the dataset and ykj is the corresponding one-hot en-coded label. During training, the label ykj is also used to extract the appropriate class name ckj from C for use in the textual prompt [33]. Each class c in task Ck is transformed using the template “The photo of {c}”, before being encoded by the textual branch of the VLM gt into the ft embedding. Similarly, an image x is fed to the vision branch of CLIP gi to obtain the visual embedding fi. Note that the feature vectors are normalized before use, i.e ., || fi|| 2 = 1 , || ft|| 2 = 1 . Following the standard approach, to perform classification, the vision and textual embed-dings are compared using cosine similarity (denoted as ⟨· , ·⟩ ). More specifically, a given vision embedding is compared to the ft’s of all classes in C, and the closest vector is taken as the prediction: ˆy = argmax c∈C ⟨fi, g t(c)⟩. In multi-task set-tings, inference can be performed in a task-specific or task-agnostic manner [41]. The former setting, denoted as MTIL (Multidomain Task Incremental Learning), assumes that each test sample is accompanied by a task index k that allows for the selection of the appropriate class set Ck for classification. The latter, denoted as MCIL (Multidomain Class Incremental Learning), removes this assumption and makes predictions on the full label set given by concatenating all the Ck.
+
+# 4 Continual Learning Strategy 
+
+To perform continual optimization of the VLM, we start from using a standard Cross-Entropy (CE) objective computed on the distribution of the similarities of the vision-textual embeddings. More specifically, the core optimization target is: 
+
+LCE = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+CE (sj , yj ) , (1) TASSO: TAsk-Specific Subspace Optimization 5        
+
+> Fig. 1: TASSO architecture. At each incremental step k, the vision encoder gkiis optimized with a combination of three objectives: cross-entropy; task-specific subspace cross-entropy (computed according to the learnable projector U); and geometry-aware knowledge distillation (retaining knowledge from the previous step’s encoder gk−1
+> i).
+
+where s = softmax ([ ⟨fi, g t(c)⟩ ∀ c ∈ C ]) is the vector of class probabilities for a sample x. Note that we only train the vision branch; the text encoder is frozen. When cross-entropy is used as the sole optimization objective, training VLMs over a series of incremental tasks leads to two undesirable effects: Catastrophic Forgetting of previous tasks’ knowledge and Zero-Shot Degradation , i.e ., the loss of accuracy on unseen tasks. A common way to mitigate these effects is through Knowledge Distillation (KD), which serves as a regularizer during optimization. Unlike the main competitor [41], who requires two teacher models to fully regulate the learning process (the model learned during the previous task gk−1
+
+and the reference model at the beginning of continual optimization g0), our geometry-aware (Sec. 4.2) approach only requires gk−1 to effectively tackle both 
+
+catastrophic forgetting and zero-shot degradation .Moreover, to enhance network plasticity and reduce the degradation effect brought by the Cross-Entropy loss, the current task is learned within a projected low-rank subspace (Sec. 4.1). Figure 1 summarizes our pipeline. 
+
+4.1 Subspace Learning for Plasticity Restoration 
+
+Knowledge distillation strategies have the drawback of reducing model plasticity and, consequently, performance on novel tasks. A key reason for this is that the regularization is applied uniformly across the entire high-dimensional manifold. We introduce the idea that an effective way to handle this issue is to con-strain optimization for the new task to a specific subspace, leaving most of the original manifold intact. This allows the new task to be learned flexibly within 6 C. Sun et al. 
+
+that subspace, while the regularization remains largely unchanged elsewhere, thus reducing potential conflicts between the task objective and the regulariza-tion. This insight leads to the first main contribution of our work: we propose using subspace learning to restrict parameter updates to a low-rank subspace of the vision language model. More specifically, at task k, we exploit a learnable low-rank projector Uk ∈ Rd×r , r ≪ d (in our experiments we used r = 144 ) to map the VLM embeddings into task-specific (f∥ = UkU ⊤ 
+
+> k
+
+f ) and task-irrelevant 
+
+(f⊥ = f − f∥) subspaces, allowing us to supervise the two regions of the mani-fold in complementary ways. During training, we force Uk to be a basis for the subspace, i.e ., U ⊤ 
+
+> k
+
+Uk = I ∈ Rr×r 2. Note that the low-rank projection is used exclusively during training, as it is only required for computing the loss. Dur-ing inference, this projection is removed, and the full-dimensional embeddings are employed instead, allowing for a seamless transition between the MTIL and MCIL configurations. Formally, we first compute the vector of class probabilities in the low-rank subspace for a given sample x as: 
+
+s∥ = softmax ([ UkU ⊤ 
+
+> k
+
+fi, U kU ⊤ 
+
+> k
+
+gt(c) ∀c ∈ C ]) , (2) where we re-normalize the projected embeddings before use for consistency with the previous formulation. The vector is then used for the subspace learning objective, which is defined as the cross entropy between the vectors s∥ and the one-hot encoded labels: 
+
+Lsub = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+CE (sj, ∥, yj ) . (3) 
+
+4.2 Geodesic Distance for Strong Stability 
+
+We previously mentioned that using a geometric-aware optimization objective helps reduce catastrophic forgetting and zero-shot degradation. This stems from the topology that the CLIP latent space has attained during training (high-dimensional sphere). This insight allows us to recognize the geodesic distance as a suitable metric, as it respects the inherent structure of CLIP’s latent space. More specifically, while the L2 distance (proportional to the cosine distance in normalized embeddings) is the standard choice to compare CLIP features, it does not perfectly match the geometry of CLIP’s image embeddings, since they lie on the surface of a high-dimensional sphere due to vector normalization [17, 30]. In contrast, the geodesic distance serves as a more appropriate measure, align-ing with the pretrained latent space geometry of the CLIP model and potentially preserving its zero-shot abilities in continual learning scenarios. Given an input sample x and two encoders gki and gk−1 
+
+> i
+
+, the geodesic loss can be expressed as: 
+
+Lgeo = cos −1   gki (x), g k−1 
+
+> i
+
+(x)  . (4)            
+
+> 2Ukis computed via reparameterization. We optimize a randomly initialized proxy matrix A∈Rd×r, decompose it via QR-decomposition in reduced mode, and use the orthonormal Qas Uk. The linearity of the decomposition guarantees gradient flow. TASSO: TAsk-Specific Subspace Optimization 7
+
+Intuitively, rather than measuring distance along straight lines through the high-dimensional sphere, the metric computes distance along the shortest path on the curved surface, preserving the underlying geometry imparted by the cosine distance during training. For this reason, we introduce the concept of using this metric to compare descriptors. 
+
+4.3 Learning Objective 
+
+Furthermore, to tackle the stability-vs-plasticity trade-off, we also leverage the learned projector Uk at each task T k to decompose the image embeddings into two orthogonal subspaces and apply knowledge distillation separately to both. More specifically, given the embedding f k from gk and f k−1 from gk−1, we compute the knowledge distillation loss as the sum of the two geodesic distances in the task-specific and task-irrelevant subspaces: 
+
+LKD = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+h
+
+Lgeo (f k 
+
+> ∥,j
+
+, f k−1 
+
+> ∥,j
+
+) + Lgeo (f k 
+
+> ⊥,j
+
+, f k−1 
+
+> ⊥,j
+
+)
+
+i
+
+. (5) Note that computing the metric on the separate projected subspaces leads to different results than computing it on the original vectors (see the Suppl. Mat. Section 1.3). These considerations lead us to the total objective function, which is a convex combination of the global Cross-Entropy loss LCE , the subspace learning loss 
+
+Lsub , and the decomposed distillation loss LKD :
+
+L = LCE + αLsub + βLKD , (6) where α = 0 .5 and β = 3 are hyperparameters that control the trade-off between plasticity and stability. Please refer to Sec. 5.6 for details. 
+
+# 5 Experimental Evaluation 
+
+This section presents the experimental evaluation of our approach. We start by detailing the setup and the datasets used for the experiments. Then, we present the experimental comparison with the state-of-the-art and, finally, some ablation data analyzing the impact of the different components and parameters. 
+
+5.1 Experimental Setup 
+
+For our experimental evaluation, we use the CLIP architecture [33] implemented by open_clip [13] as the reference VLM. The image encoder gi is a ViT-B/16 [8], while the text encoder gt is a 12 -layer decoder-only transformer network with a latent space dimension of 512 and a context length of 77 tokens. In our experiments, only the vision encoder is optimized, while the text en-coder remains frozen. The encoder gi is optimized using AdamW, with a peak 8 C. Sun et al. 
+
+learning rate of 1 × 10 −5 decayed to 0 via a cosine annealing scheduler, and the weight decay is set to 5 × 10 −4. In each incremental step, training lasts for 1000 
+
+iterations or 10 epochs, whichever comes first. A full training on all 8 datasets lasts around 96 minutes on an NVIDIA 4090. Following the procedure of [41,43], we select the same 100 K unlabeled images from ImageNet [7] to be used as the reference dataset for knowledge distillation. 
+
+5.2 Datasets 
+
+Following previous work, we evaluate our method in a continual setting that includes a sequence of 8 fine-grained classification datasets in both MTIL and MCIL benchmarks. More specifically, we use FGVC-Aircraft [29] (containing 100 
+
+airplane models), DTD [6] (containing 47 patterns and textures), EuroSAT [10] (containing 10 types of satellite imagery), Flowers-102 [31] (containing 102 species of flowers), Food-101 [3] (containing 101 classes of foodstuffs), Oxford-Pets [32] (containing 37 species of cats and dogs), Stanford-Cars [19] (containing 196 car models), and UCF-101 [18] (containing 101 action recognition classes). Since task ordering can substantially influence continual learning perfor-mance [2, 24], we did not restrict our analysis to only two sequences, as in [43]. Instead, we adopted the validation protocol proposed by [41], constructing 8 sequences of tasks Sk, k = 1 , .., 8 as follows: 
+
+Sk = ( T k(mod K), T k+1(mod K), · · · , T k+K−1(mod K)) , (7) where K = 8 is the total number of tasks. Essentially, we set S1 as the original ordering ( i.e ., FGVC-Aircraft, DTD, EuroSAT, Flowers-102, Food-101, Oxford-Pets, Stanford-Cars, UCF-101) and construct the other 7 by rotating the se-quence to the left one task at a time. Details of all the 8 sequences are provided in the supplementary material. 
+
+5.3 Metrics 
+
+We consider three metrics in this paper: accuracy, catastrophic forgetting, and zero-shot degradation. Following [4,5,27,41], we adopt the evaluation procedures illustrated in Fig. 2: accuracy is computed as the average of per-task accuracies after training on the final task; catastrophic forgetting measures the average maximum performance drop across all previous tasks; and zero-shot degradation evaluates the average maximum performance drop on unseen tasks. 
+
+5.4 Baseline Methods 
+
+We compare our approach with several recent methods focusing on CLIP. As a baseline, we include basic Continual Fine-Tuning (FT), which naively fine-tunes CLIP on each task sequentially without regularization. This method serves as a lower-bound reference for all comparisons. We also compare it with classic contin-ual learning methods (LwF [23] and iCaRL [34]) and with recent state-of-the-art techniques such as ZSCL [43], MoE-Adapters [40], SnD [41] and GIFT [39]. TASSO: TAsk-Specific Subspace Optimization 9       
+
+> Fig. 2: Schematic overview of how the metrics are computed. Accuracy denotes the mean performance over all tasks once Continual Learning has finished. Catastrophic Forgetting quantifies the average, worst-case loss in performance on previously learned tasks, relative to supervised training on each task. Zero-Shot Degradation captures the average, worst-case drop in performance on unseen future tasks, relative to the accuracy of the pretrained model before the start of continual learning.
+
+5.5 Main Results 
+
+In Tables 1 and 2, we report the quantitative results attained by TASSO in the Multi Domain Task-Incremental Learning (MTIL) and Class-Incremental Learning (MCIL) settings, respectively. More specifically, the two tables report Accuracy (higher-is-better), Catastrophic Forgetting (lower-is-better), and Zero-Shot Degradation (lower-is-better) in the MTIL and MCIL settings. Starting from the easier MTIL setting (where the task and the corresponding label space are known), the results in Table 1 show that our method achieves noticeable gains over competing approaches. More specifically, TASSO achieves the best accuracy across all orderings, surpassing the best competitor ( i.e ., [41]) by an average of ≈ 1% , achieving an impressive absolute accuracy of 85 .89% . Even more remarkable is the reduction in Catastrophic Forgetting, which is just 0.67% , compared to 1.2% of the best competitor and much larger values for all the others. Notice how forgetting preservation is stable across all tasks, never surpassing the 1% threshold (the worst result is a 0.96% in sequence S7). Nevertheless, our approach shines in Zero-Shot Degradation, achieving an average of just 0.47% , 4 times lower than the closest competitors [40, 41], who hover around 2% . This indicates that TASSO is generally able to retain the existing knowledge within the VLM, preserving accuracy for future unseen tasks. 10 C. Sun et al. 
+
+Table 1: Task-Specific evaluation (MTIL task). During inference, each image is com-pared only against the class embeddings of its task. We report percent Accuracy ( ↑), Catastrophic Forgetting ( ↓), and Zero-Shot Degradation (Z. S. Deg., ↓). Best in bold. Method S1 S2 S3 S4 S5 S6 S7 S8 Mean Accuracy  (→) Continual FT 76.16 76.24 78.03 68.69 76.64 75.44 72.71 77.45 75.17 LwF [23] 76.78 80.45 80.65 77.52 79.64 79.45 77.31 78.70 78.81 iCaRL [34] 77.99 79.77 79.93 76.66 79.26 79.08 77.06 78.61 78.55 ZSCL [43] 81.89 83.98 84.30 83.49 83.41 82.38 81.92 81.97 82.92 MoE-Adapters [40] 82.71 80.74 81.15 83.97 83.68 83.68 82.73 79.68 82.29 GIFT [39] 81.93 84.01 84.10 83.67 84.11 84.25 82.54 83.10 83.46 SnD [41] 84.48 84.92 84.97 84.89 85.50 85.07 85.02 84.52 84.92 
+
+Ours 85.74 86.11 86.06 85.99 86.05 85.78 85.70 85.68 85.89 Forgetting  (←) Continual FT 10.98 10.60 8.80 19.17 10.11 11.95 15.19 9.48 12.04 LwF [23] 10.38 6.52 6.37 10.22 7.99 7.70 10.41 8.91 8.56 iCaRL [34] 8.42 7.00 6.45 10.21 7.03 7.33 9.68 8.23 8.04 ZSCL [43] 4.67 2.35 2.13 2.97 3.15 4.28 4.89 4.70 3.64 MoE-Adapters [40] 2.74 4.71 4.28 1.15 1.50 1.60 2.94 2.77 2.71 GIFT [39] 5.81 3.08 3.35 3.81 3.17 3.26 4.82 4.31 3.95 SnD [41] 1.70 1.16 0.89 1.04 0.59 1.34 1.12 1.79 1.20 
+
+Ours 0.81 0.40 0.44 0.65 0.48 0.83 0.96 0.82 0.67 Z. S. Deg.  (←) Continual FT 24.81 23.58 19.54 16.46 22.22 19.02 19.54 24.02 21.15 LwF [23] 10.75 10.23 8.63 8.25 12.02 10.33 8.98 11.01 10.03 iCaRL [34] 13.77 12.68 11.28 12.14 13.20 13.20 13.09 14.01 12.92 ZSCL [43] 3.44 3.94 4.02 2.85 3.79 2.31 1.86 1.84 3.00 MoE-Adapters [40] 1.62 2.58 1.04 2.37 4.31 3.05 1.77 0.63 2.17 GIFT [39] 0.80 0.82 1.58 3.86 4.23 3.88 3.56 4.39 2.89 SnD [41] 1.55 2.04 1.21 1.92 2.79 2.18 1.90 2.08 1.96 
+
+Ours 0.36 0.19 0.68 0.58 0.67 0.64 0.55 0.12 0.47 
+
+The behavior is also consistent across all task orderings ( i.e ., Sk in the Ta-bles), with values ranging from an impressive 0.19% to a maximum of just 0.68% .These results also support the hypothesis that some datasets provide information useful for distinguishing samples from other tasks. For example, the DTD dataset (which appears first in S2, leading to the best performance, and last in S3, leading to the worst) contains several different patterns and textures. Tuning the CLIP architecture on it may help it better understand and distinguish images from a general point of view. This capability is then reflected in higher accuracy on later tasks ( i.e ., those measured by the Zero-Shot Degradation metric). TASSO: TAsk-Specific Subspace Optimization 11 
+
+Table 2: Task-Agnostic evaluation (MCIL task). During inference, each image is com-pared against all 694 textual class embeddings. We report percent Accuracy ( ↑), Catas-trophic Forgetting ( ↓), and Zero-Shot Degradation (Z. S. Deg., ↓). Best in bold. Method S1 S2 S3 S4 S5 S6 S7 S8 Mean Accuracy  (→) Continual FT 75.17 75.13 76.01 67.17 75.54 74.47 71.66 76.40 73.94 LwF [23] 74.14 77.44 77.94 74.89 77.30 77.43 75.50 76.51 76.39 iCaRL [34] 76.97 78.82 78.57 75.43 78.08 78.10 75.70 77.52 77.40 ZSCL [43] 80.49 82.54 82.99 82.08 82.17 80.99 80.30 80.09 81.46 GIFT [39] 79.99 81.68 81.95 83.08 83.48 83.27 81.58 81.27 82.04 SnD [41] 83.35 83.57 83.88 83.70 84.46 83.82 83.89 83.43 83.76 
+
+Ours 85.00 85.27 85.37 85.27 85.28 85.05 84.97 84.96 85.15 Forgetting  (←) Continual FT 11.17 10.89 10.16 20.12 10.57 12.14 15.62 9.80 12.56 LwF [23] 9.56 6.38 6.93 11.09 8.37 7.69 10.24 8.44 8.59 iCaRL [34] 8.43 6.90 6.83 10.69 7.09 7.37 10.17 8.66 8.27 ZSCL [43] 4.21 1.41 2.08 3.32 2.85 4.39 5.22 5.13 3.58 GIFT [39] 6.85 4.52 5.07 3.51 3.42 3.80 5.19 5.46 4.73 SnD [41] 1.92 1.53 0.97 1.14 0.58 1.55 1.29 1.81 1.35 
+
+Ours 1.05 0.63 0.58 0.77 0.68 0.99 1.14 1.02 0.86 Z. S. Deg.  (←) Continual FT 24.54 24.10 19.53 17.60 21.96 18.92 20.26 24.31 21.40 LwF [23] 11.94 11.82 8.27 9.99 13.36 11.47 10.95 12.63 11.30 iCaRL [34] 13.02 12.78 10.89 11.81 12.74 12.87 11.92 13.34 12.42 ZSCL [43] 3.59 4.71 4.17 2.81 3.55 1.97 1.47 2.30 3.07 GIFT [39] 2.71 1.87 1.12 2.66 3.56 3.78 3.15 3.97 2.85 SnD [41] 1.44 1.80 1.01 1.53 2.17 1.80 1.65 1.82 1.65 
+
+Ours 0.47 0.38 0.67 0.69 0.85 0.85 0.76 0.34 0.63 
+
+Table 2 shows results from the more challenging MCIL benchmark, where the selected task is unknown, and the class must be recognized among all those learned in the incremental steps (totaling 694 classes). As expected, the results are slightly lower in absolute terms, reaching an aver-age accuracy of 85 .15% . However, the improvement compared to the competitors actually increases to ≈ 1.4% and is consistent across all sequences (TASSO has the best accuracy on all 8 considered sequences). As before, Catastrophic Forgetting is significantly reduced, reaching an av-erage of 0.86% , with only S1, S7, and S8 surpassing the 1% threshold. TASSO outperforms competitors also in this setting with a gain of around 0.5% on the best competitors being the best in 7 out of 8 cases. The most remarkable improvements, however, are still found in Zero-Shot Degradation, where our approach averages 0.63% , corresponding to a reduction of 1% compared to the closest alternative. The degradation is almost 3 times 12 C. Sun et al.               
+
+> (a) FGVCAircraft (b) DTD (c) EuroSat (d) Flowers-102
+> (e) Food101 (f ) OxfordPets (g) StanfordCars (h) UCF-101
+
+Fig. 3: Distribution of cosine distances between text anchors and vision class-prototypes. TASSO (in blue) consistently achieves lower distances than SnD (the closest competitor, in orange). Metrics computed in the last continual step of S1 ordering. 
+
+Fig. 4: Stacked boxplot comparing the cosine distances between image prototypes and textual class embeddings (lower is better). TASSO (in blue) and SnD (the closest competitor, in orange). Metrics computed in the last continual step of S1 ordering. 
+
+smaller than [41], which is the best competitor, while the improvement is also consistent across all sequences, all of which have a degradation below 1% .As supporting experiments for the results reported in Tables 1 and 2, in Fig-ure 3 we report the distributions of the distances between the text and vision class prototypes for TASSO and its closest competitor, SnD [41], confirming a signif-icant improvement in multimodal alignment at the end of the Task-Incremental Learning process in 7 out of 8 tasks (only the Food-101 dataset shows a slight advantage of the competitor). A summarized version of the distributions is also shown in Figure 4 as boxplots, confirming the analysis. Both figures refer to the S1 ordering. Overall, these experimental results confirm that TASSO is a simple yet effective approach to tackling Task-Incremental Learning of VLMs, surpassing the previous state-of-the-art by significant margins and setting new benchmark results in this field. TASSO: TAsk-Specific Subspace Optimization 13                            
+
+> Table 3: Ablation study on the method components in the MTIL setting
+> LKD
+> Subspace Accuracy Forgetting Zero-Shot Learning Degradation
+> ✗✗76.86 9.82 11.63
+> L2✗84.48 1.71 1.75
+> Lgeo ✗85.07 1.00 0.25
+> ✗✓75.24 13.01 17.60
+> L2✓84.73 2.26 1.86
+> Lgeo ✓85.74 0.81 0.36
+
+5.6 Ablation Study 
+
+Here, we provide supporting results for the design choices made in this work. All ablation experiments are presented on sequence S1 in the MTIL setting. 
+
+Ablation on the method components: we start with Table 3, where we analyze the impact of the two main contributions of this paper. The Table confirms that the joint use of our techniques yields the best results. As ex-pected, the best performance improvements are achieved when the knowledge distillation objective is enabled. The standard L2 distance (recall that for nor-malized vectors like in our case, L2 is proportional to cosine distance, so the results for cosine distance are the same as L2) leads to remarkable results, but our geometry-aware geodesic metric achieves the best relative performance, with improvements of 0.6% and 1% in accuracy for the standard case and when us-ing subspace learning, respectively. Note how the improvement is larger when combined with subspace learning, proving that the two contributions work well together and are complementary. Furthermore, it allows for significant gains in catastrophic forgetting (which is, on average, halved) and even greater reductions in zero-shot degradation, which decreases by ≈ 6 times. In the Suppl. Mat. we also show that computing the knowledge distillation separately on the two subspaces improves performances, specially in terms of zero-shot and catastrophic forget-ting. Regarding subspace learning, the Table clearly shows that it can improve accuracy, especially when combined with the geodesic metric, which further en-hances performance by 0.7% , reaching the best score of 85 .74% and the best forgetting score of 0.81 , about 20% better than the value of 1.00 achieved with just the geodesic distance. For zero-shot degradation, the biggest improvements come from the geodesic loss, but the combined use of both components leads to the optimal balance across the 3 metrics. See the Suppl. Mat. for an analysis of alternative strategies for the subspace optimization. The ablation confirms the usefulness of both components in the efficient adaptation of VLM architectures and shows that they provide complementary contributions. 
+
+Ablation on the hyperparameters: we continue the ablation studies in Table 4, where we analyze the impact of the main hyperparameters of the method: the rank r of the projector matrix U , the subspace learning loss scale 
+
+α, and the knowledge distillation loss scale β. For all hyperparameters, we report three values: our best choice, a smaller setting, and a larger one. In all cases, 14 C. Sun et al.                           
+
+> Table 4: Ablation study on the method hyperparameters in the MTIL sequence S1
+> setting: a) the rank rof the projector matrix U; b) subspace learning loss scale α; c) knowledge distillation loss weight β.
+> rAcc. Forg. Z.Shot 72 85.70 0.85 0.41
+> 144 85.74 0.81 0.36 288 85.72 0.85 0.38 a)
+> αAcc. Forg. Z.Shot 0.1 85.19 0.76 0.24
+> 0.5 85.74 0.81 0.36 185.86 0.99 0.57 b)
+> βAcc. Forg. Z.Shot 1.5 85.77 1.11 0.61
+> 385.74 0.81 0.36 685.37 0.68 0.22 c)
+
+we observe the relative stability of the metrics across the various configurations, indicating that parameter sensitivity is relatively low in our architecture. More specifically, for the rank parameter r, the selected value of 144 leads to the best performance on all 3 metrics, even though halving or doubling the dimension results in a similar accuracy. For the subspace learning loss weight, the accuracy tends to increase with the value of α, but forgetting and zero-shot degradation worsen with larger values. The selected value of 0.5 achieves a good trade-off across all 3 metrics. Finally, setting the knowledge distillation loss weight β = 3 
+
+leads to almost optimal accuracy, with very good forgetting and zero-shot scores. The smaller value of 1.5 results in an almost unnoticeable improvement in accu-racy at the cost of much worse forgetting and zero-shot performances. Additional ablation studies and the pseudocode are provided in the Suppl. Mat. 
+
+# 6 Conclusions and Future Work 
+
+In this paper, we present TASSO (TAsk-Specific Subspace Optimization), a novel approach to Task Incremental Learning for Vision-Language Models. It intro-duces a subspace learning strategy and a modified distance metric for distillation that allows it to outperform previous state-of-the-art techniques by more than 
+
+1% in accuracy on both Multidomain Task Incremental Learning (MTIL) and Multidomain Class Incremental Learning (MCIL) benchmarks. Even more re-markable gains are made in Catastrophic Forgetting and Zero-Shot Degradation, both of which are drastically reduced in the two settings. Unlike some competi-tors, our approach can tackle the task using a single teacher model and does not require computationally demanding additional modules or stages, thanks to the combination of subspace learning and geometry-aware knowledge distillation. The results in the paper highlight the effectiveness of subspace learning, and future research directions will further explore this topic. More specifically, we plan to implement dynamic low-rank approximation for different tasks, allowing for an adaptive setting of the dimensionality of the subspace based on the seman-tics of the domains. Moreover, text-image alignment is also another important direction as this paper only adapts the visual side. We also plan to explore the application of the approach to different VLMs and to other computer vision tasks beyond image classification to further verify the generalizability of the method. TASSO: TAsk-Specific Subspace Optimization 15 
+
+# References 
+
+1. Alayrac, J.B., Donahue, J., Luc, P., Miech, A., Barr, I., Hasson, Y., Lenc, K., Mensch, A., Millican, K., Reynolds, M., et al.: Flamingo: a visual language model for few-shot learning. Adv. Neural Inform. Process. Syst. 35 , 23716–23736 (2022) 2. Bell, S.J., Lawrence, N.D.: The effect of task ordering in continual learning. arXiv preprint arXiv:2205.13323 (2022) 3. Bossard, L., Guillaumin, M., Van Gool, L.: Food-101–mining discriminative com-ponents with random forests. In: Eur. Conf. Comput. Vis. pp. 446–461. Springer (2014) 4. Chaudhry, A., Dokania, P.K., Ajanthan, T., Torr, P.H.: Riemannian walk for in-cremental learning: Understanding forgetting and intransigence. In: Eur. Conf. Comput. Vis. pp. 532–547 (2018) 5. Chaudhry, A., Rohrbach, M., Elhoseiny, M., Ajanthan, T., Dokania, P.K., Torr, P.H., Ranzato, M.: On tiny episodic memories in continual learning. arXiv preprint arXiv:1902.10486 (2019) 6. Cimpoi, M., Maji, S., Kokkinos, I., Mohamed, S., Vedaldi, A.: Describing textures in the wild. In: IEEE Conf. Comput. Vis. Pattern Recog. pp. 3606–3613 (2014) 7. Deng, J., Dong, W., Socher, R., Li, L., Li, K., Li, F.: Imagenet: A large-scale hierarchical image database. In: IEEE Conf. Comput. Vis. Pattern Recog. pp. 248–255 (2009) 8. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al.: An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 (2020) 9. Garg, S., Farajtabar, M., Pouransari, H., Vemulapalli, R., Mehta, S., Tuzel, O., Shankar, V., Faghri, F.: Tic-clip: Continual training of clip models. arXiv preprint arXiv:2310.16226 (2023) 10. Helber, P., Bischke, B., Dengel, A., Borth, D.: Eurosat: A novel dataset and deep learning benchmark for land use and land cover classification. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing 12 (7), 2217– 2226 (2019) 11. Houlsby, N., Giurgiu, A., Jastrzebski, S., Morrone, B., De Laroussilhe, Q., Ges-mundo, A., Attariyan, M., Gelly, S.: Parameter-efficient transfer learning for nlp. In: Int. Conf. Mach. Learn. pp. 2790–2799. PMLR (2019) 12. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al.: Lora: Low-rank adaptation of large language models. Int. Conf. Learn. Represent. 1(2), 3 (2022) 13. Ilharco, G., Wortsman, M., Carlini, N., Taori, R., Dave, A., Shankar, V., Namkoong, H., Miller, J., Hajishirzi, H., Farhadi, A., et al.: Openclip. Zenodo (2021) 14. Jacobs, R.A., Jordan, M.I., Nowlan, S.J., Hinton, G.E.: Adaptive mixtures of local experts. Neural computation 3(1), 79–87 (1991) 15. Jia, C., Yang, Y., Xia, Y., Chen, Y.T., Parekh, Z., Pham, H., Le, Q., Sung, Y.H., Li, Z., Duerig, T.: Scaling up visual and vision-language representation learning with noisy text supervision. In: Int. Conf. Mach. Learn. pp. 4904–4916. PMLR (2021) 16. Kang, B., Wang, L., Wu, Z., Feng, T., Li, Y., Gao, Y., Li, W.: Dynamic multi-layer null space projection for vision-language continual learning. In: Int. Conf. Comput. Vis. pp. 2077–2086 (2025) 16 C. Sun et al. 17. Kang, R., Song, Y., Gkioxari, G., Perona, P.: Is clip ideal? no. can we fix it? yes! In: Int. Conf. Comput. Vis. pp. 22436–22446 (2025) 18. Khurram, S., Roshan, Z.A., Shah, M.: A dataset of 101 human action classes from videos in the wild. Center for Research in Computer Vision 2(11) (2012) 19. Krause, J., Stark, M., Deng, J., Fei-Fei, L.: 3d object representations for fine-grained categorization. In: Proceedings of the IEEE international conference on computer vision workshops. pp. 554–561 (2013) 20. Li, J., Li, D., Xiong, C., Hoi, S.: Blip: Bootstrapping language-image pre-training for unified vision-language understanding and generation. In: Int. Conf. Mach. Learn. pp. 12888–12900. PMLR (2022) 21. Li, S., Su, T., Zhang, X.Y., Wang, Z.: Continual learning with knowledge distil-lation: A survey. IEEE Transactions on Neural Networks and Learning Systems 
+
+36 (6), 9798–9818 (2024) 22. Li, Y., Pang, G., Suo, W., Jing, C., Xi, Y., Liu, L., Chen, H., Liang, G., Wang, P.: Coleclip: Open-domain continual learning via joint task prompt and vocabulary learning. IEEE Transactions on Neural Networks and Learning Systems (2025) 23. Li, Z., Hoiem, D.: Learning without forgetting. IEEE Trans. Pattern Anal. Mach. Intell. 40 (12), 2935–2947 (2017) 24. Li, Z., Hiratani, N.: Optimal task order for continual learning of multiple tasks. arXiv preprint arXiv:2502.03350 (2025) 25. Liu, W., Zhu, F., Wei, L., Tian, Q.: C-clip: Multimodal continual learning for vision-language model. In: Int. Conf. Learn. Represent. (2025) 26. Liu, Y., Hong, Q., Huang, L., Gomez-Villa, A., Goswami, D., Liu, X., van de Weijer, J., Tian, Y.: Continual learning for vlms: A survey and taxonomy beyond forgetting. arXiv preprint arXiv:2508.04227 (2025) 27. Lopez-Paz, D., Ranzato, M.: Gradient episodic memory for continual learning. Adv. Neural Inform. Process. Syst. 30 (2017) 28. Lu, H., Zhao, C., Xue, J., Yao, L., Moore, K., Gong, D.: Adaptive rank, reduced forgetting: Knowledge retention in continual learning vision-language models with dynamic rank-selective lora. arXiv preprint arXiv:2412.01004 (2024) 29. Maji, S., Rahtu, E., Kannala, J., Blaschko, M., Vedaldi, A.: Fine-grained visual classification of aircraft. arXiv preprint arXiv:1306.5151 (2013) 30. Mei, S., Wang, H., Ni, B.: Geomm: On geodesic perspective for multi-modal learn-ing (2025) 31. Nilsback, M.E., Zisserman, A.: Automated flower classification over a large number of classes. In: 2008 Sixth Indian conference on computer vision, graphics & image processing. pp. 722–729. IEEE (2008) 32. Parkhi, O.M., Vedaldi, A., Zisserman, A., Jawahar, C.: Cats and dogs. In: IEEE Conf. Comput. Vis. Pattern Recog. pp. 3498–3505. IEEE (2012) 33. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: Int. Conf. Mach. Learn. pp. 8748–8763. PMLR (2021) 34. Rebuffi, S.A., Kolesnikov, A., Sperl, G., Lampert, C.H.: icarl: Incremental classifier and representation learning. In: IEEE Conf. Comput. Vis. Pattern Recog. pp. 2001– 2010 (2017) 35. Van de Ven, G.M., Tolias, A.S.: Three scenarios for continual learning. arXiv preprint arXiv:1904.07734 (2019) 36. Wang, L., Zhang, X., Su, H., Zhu, J.: A comprehensive survey of continual learning: Theory, method and application. IEEE Trans. Pattern Anal. Mach. Intell. 46 (8), 5362–5383 (2024) TASSO: TAsk-Specific Subspace Optimization 17 37. Wang, R., Tang, D., Duan, N., Wei, Z., Huang, X.J., Ji, J., Cao, G., Jiang, D., Zhou, M.: K-adapter: Infusing knowledge into pre-trained models with adapters. In: Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021. pp. 1405–1418 (2021) 38. Wang, Y., Huang, Z., Hong, X.: S-prompts learning with pre-trained transformers: An occam’s razor for domain incremental learning. Adv. Neural Inform. Process. Syst. 35 , 5682–5695 (2022) 39. Wu, et al.: Synth. data is an elegant gift for cont. VLMs. CVPR (2025) 40. Yu, J., Zhuge, Y., Zhang, L., Hu, P., Wang, D., Lu, H., He, Y.: Boosting continual learning of vision-language models via mixture-of-experts adapters. In: IEEE Conf. Comput. Vis. Pattern Recog. pp. 23219–23230 (2024) 41. Yu, Y.C., Huang, C.P., Chen, J.J., Chang, K.P., Lai, Y.H., Yang, F.E., Wang, Y.C.F.: Select and distill: Selective dual-teacher knowledge transfer for continual learning on vision-language models. In: Eur. Conf. Comput. Vis. pp. 219–236. Springer (2024) 42. Zheng, M., Tang, Y., Hao, Z., Han, K., Wang, Y., Xu, C.: Adapt without forget-ting: Distill proximity from dual teachers in vision-language models. In: Eur. Conf. Comput. Vis. pp. 109–125. Springer (2024) 43. Zheng, Z., Ma, M., Wang, K., Qin, Z., Yue, X., You, Y.: Preventing zero-shot transfer degradation in continual learning of vision-language models. In: Int. Conf. Comput. Vis. pp. 19125–19136 (2023) 18 C. Sun et al. 
+
+# A Appendix Summary 
+
+In this document, we present supplementary experiments and clarifications that allow us to better motivate the design choices behind the TASSO approach and to evaluate its performance in more detail. Specifically, in Section B we report additional ablation studies examining various facets of our continual learning strategy. In Section C we report the computational overhead related to the pro-posed approach. We then move to Section D, where we include the per-domain results at each incremental training step associated with the summary metrics reported in the main document for sequence S1. Furthermore, in Section E, we conduct a statistical analysis of the results presented in the main paper. Next, we describe in more detail the datasets and task sequences employed in our experimental evaluation in Section F. Finally, in Section G we provide the pseu-docode for our method, including training and evaluation procedures for the Multidomain Task (MTIL) and Class (MCIL) Incremental settings. 
+
+# B Additional Ablation Studies 
+
+In this section, we present additional ablation studies that encompass all aspects of the TASSO multidomain learning approach. We start by reporting the results of the components and hyperparameter ablation studies on the MCIL benchmark in Sec. B.1 and Sec. B.2, respectively. This complements the study in the main document, which reported results only on the MTIL benchmark. We also report in Sec. B.3 the advantages of decomposing embeddings in knowledge distillation computation. In Sec. B.4 we fully analyze the choice of jointly optimizing both the image encoder and the subspace in our subspace learning loss Lsub . We then analyze the performance of our approach when employing different Knowledge Distillation (KD) distance functions in the two subspaces identified by TASSO (namely, task-specific and task-irrelevant) in Sec. B.5. 
+
+B.1 Ablation on the method’s components on MCIL 
+
+In this section, we report the results of the ablation study on the various method components on the MCIL benchmark (in the main document, the study was performed only on the MTIL benchmark). More specifically, we report TASSO’s accuracy in the MCIL task using the same ablated setting presented in Table 3 of the main paper. The results are reported in Tab. 5 and closely match those shown in the main document. More specifically, the best performance is achieved when the knowledge distillation objective is combined with subspace learning. Geodesic distillation is consistently better than L2 with or without subspace learning. When subspace learning is enabled, geodesic distillation reduces the forgetting and zero-shot degradation by 1.72% and 2.32% , respectively. Even without sub-space learning, geodesic distillation is still able to mitigate both the forgetting and zero-shot degradation by 1.80% and 1.33% . This indicates that the main TASSO: TAsk-Specific Subspace Optimization 19 
+
+Table 5: Ablation study on the method components in the MCIL setting. 
+
+LKD 
+
+Subspace Accuracy Forgetting Zero-Shot Learning Degradation 
+
+✗ ✗ 75.70 9.99 13.73 
+
+L2 ✗ 83.27 1.85 1.72 
+
+Lgeo ✗ 83.83 1.05 0.39 
+
+✗ ✓ 74.33 13.73 19.60 
+
+L2 ✓ 83.83 2.77 2.79 
+
+Lgeo ✓ 85.00 1.05 0.47 
+
+Table 6: Ablation study on the hyperparameters. MCIL sequence S1.
+
+r Acc. Forg. Z.S. Deg. 72 84.99 1.02 0.54 144 85.00 1.05 0.47 288 84.23 0.99 0.50  
+
+> (a) Supspace Rank
+
+α Acc. Forg. Z.S. Deg. 0.1 84.16 0.87 0.29 0.5 85.00 1.05 0.47 1.0 85.08 1.40 0.90   
+
+> (b) Lsub coefficient.
+
+β Acc. Forg. Z.S. Deg. 1.5 85.14 1.28 0.84 3.0 85.00 1.05 0.47 6.0 84.59 0.80 0.34   
+
+> (c) LKD coefficient.
+
+preservation effect comes from the distillation term, and that matching geome-try on the hypersphere is more effective than Eculidean alignment. The subspace learning strategy allows for a further boost in accuracy of 1.17% reaching the best value of 85 .00% when both strategies are enabled. 
+
+B.2 Hyperparameter Study on MCIL 
+
+In this section, we report the results of the ablation study on the MCIL bench-mark (in the main document, the study was performed only on the MTIL bench-mark). More specifically, we report TASSO’s accuracy in the MCIL task as we vary its hyperparameters. The results are reported in Tab. 6 and closely match those shown in the main document. More specifically, the selected subspace rank leads to the best accuracy in this task (Tab. 6a), while the chosen values of α and β result in a very good tradeoff between metrics (with the second-best accuracy very close to the best, as well as small forgetting and zero-shot degradation performances; see Tab. 6b and 6c). Moreover, note how the metrics across different hyperparameters’ values are quite constant, confirming that TASSO is hyperparameter-stable. 
+
+B.3 Ablation on embedding decomposition 
+
+We run an additional ablation study where the KD loss is applied on the original vectors, rather than on the subspace decomposition. The evaluation on the MTIL task results in an accuracy of 85 .72 , a catastrophic forrgetting of 1.21 , and a zero-shot of 0.59 , that is, an almost identical accuracy, but significant degradation in CF and ZS ( 33% and 39% , respectively). 20 C. Sun et al. 
+
+B.4 Analysis of Subspace-Encoder Optimization Strategies 
+
+The subspace learning loss Lsub is meant to target both the image encoder and the projector. It encourages the image encoder to focus on a low-dimensional subspace while training the task-specific projector. Note that the subspace re-ceives supervision from the text-encoder as well, which, being frozen, provides a clearer signal. As evidence for the joint optimization, in Tab. 7, we run an ex-periment where the image encoder does not receive supervision from Lsub , i.e ., when a stop-grad layer is added after the features. We denote it as TASSO (no 
+
+Lsub sup.) and the results are: Acc 84 .88 , CF 0.79 , ZS 0.13 ; that is, a 1% drop in accuracy. Furthermore, we also run two experiments where the subspace and the en-coder are optimized separately. TASSO (proj-dec) optimizes the projector first and the decoder second, achieving Acc 85 .37 , CF 1.21 , ZS 0.44 , i.e ., a reduction in all metrics. By alternating the training of the two components (odd step pro-jector, even encoder), TASSO (alt) achieves Acc 85 .51 , CF 0.70 , and ZS 0.20 (i.e ., slightly worse Acc, but better CF and ZS). Summarizing, joint training achieves the best results, but alternating training as suggested is a viable option.                 
+
+> Table 7: Different optimization choices for the subspace learning loss Lsub .Accuracy Forgetting Z.S. Degradation TASSO 85.74 0.81 0.36 TASSO(no Lsub sup.) 84.88 0.79 0.13 TASSO (proj-dec) 85.37 1.21 0.44 TASSO (alt) 85.51 0.70 0.20
+
+B.5 Knowledge Distillation 
+
+In this section, we evaluate the effect of using different knowledge distillation techniques in the two subspaces identified by TASSO. More specifically, we test three configurations for each subspace: i) No KD (only subspace learning is employed), ii) L2 distance (which is also proportional to the cosine distance for normalized vectors), and iii) our proposed geodesic distance. The results reported in Tables 8a-8c confirm the optimality of our distillation objective, which achieves second-best accuracy (very close to the best Geo/L2 configuration) and the best forgetting and zero-shot degradation results. 
+
+# C Computational Requirements 
+
+Subspace learning requires negligible compute overhead, and TASSO’s training is faster than the main competitor (SnD): full training on S1 (80k iters) requires 
+
+13 .34 TFLOPs for TASSO (both with and without subspace learning) and 15 .49 TASSO: TAsk-Specific Subspace Optimization 21 
+
+Table 8: Subspace distillation ablation 
+
+f⊥
+
+f∥ ✗ L2 Geo 
+
+✗ 75.24 83.05 85.20 L2 84.38 84.73 85.82 Geo 85.54 85.60 85.74  
+
+> (a) Accuracy
+
+f⊥
+
+f∥ ✗ L2 Geo 
+
+✗ 13.01 3.91 1.36 L2 2.51 2.26 0.97 Geo 1.39 1.02 0.81  
+
+> (b) Catastrophic Forgetting
+
+f⊥
+
+f∥ ✗ L2 Geo 
+
+✗ 17.60 4.73 1.16 L2 2.57 1.86 0.66 Geo 1.32 0.80 0.36  
+
+> (c) Zero-shot Degradation
+
+TFLOPs for SnD. Max VRAM use is 17 .13 GBs for all settings. Wall-clock time is 1h36 m00 s for TASSO (removing subspace learning is just 3s less, i.e ., 
+
+1h35 m57 s), while for SnD is 1h50 m12 s.
+
+# D Per-Domain Results 
+
+We report in this section the detailed results for each domain at each step of the incremental learning procedure attained during the Multidomain Task-Incremental Learning and the Multidomain Class-Incremental Learning experi-ments in the main document. We present the S1 results on the MTIL benchmark in Tab. 9, and the corresponding results on the MCIL benchmark in Tab. 10. These tables corroborate the findings from the aggregate metrics: although per-formance in the more challenging MCIL setting is slightly lower than in the MTIL one, the gap is minimal, and the behavior across tasks and datasets re-mains largely consistent. 
+
+Table 9: Accuracy for each domain at each incremental training step on sequence S1
+
+in the MTIL benchmark. Dataset FGVC-Aircraft DTD EuroSAT Flowers-102 Food-101 Oxford-Pets Stanford-Cars UCF-101 Original VLM 23.91 44.39 42.22 67.40 83.69 87.27 65.51 64.26 FGVC-Aircraft 53.74 44.56 42.74 66.95 83.58 86.92 65.32 64.10 DTD 53.98 80.14 45.65 66.83 83.39 87.30 64.97 64.21 EuroSAT 53.86 80.08 98.80 67.15 83.31 86.97 64.83 64.00 Flowers-102 53.95 80.26 98.72 99.07 83.25 87.05 64.71 63.89 Food-101 53.35 79.14 98.64 98.58 90.64 86.97 64.53 63.73 Oxford-Pets 53.20 78.90 98.64 98.54 90.54 95.45 64.31 63.86 Stanford-Cars 51.25 79.31 98.64 98.25 90.52 95.48 84.34 63.60 UCF-101 50.83 78.96 98.60 98.34 90.37 95.48 84.09 89.24 22 C. Sun et al. 
+
+Table 10: Accuracy for each domain at each incremental training step on sequence S1
+
+in the MCIL benchmark. Dataset FGVC-Aircraft DTD EuroSAT Flowers-102 Food-101 Oxford-Pets Stanford-Cars UCF-101 Original VLM 23.91 36.52 32.80 67.40 83.15 87.05 65.51 63.68 FGVC-Aircraft 52.84 36.94 33.05 66.91 83.06 86.70 65.32 63.55 DTD 52.69 78.31 34.30 66.42 82.40 87.11 64.97 63.63 EuroSAT 52.51 78.07 98.31 66.71 82.32 86.84 64.83 63.49 Flowers-102 52.72 77.96 98.17 98.94 82.26 86.86 64.71 63.34 Food-101 52.27 76.00 98.26 98.42 90.22 86.75 64.53 63.28 Oxford-Pets 52.09 75.71 98.31 98.38 90.12 95.31 64.31 63.44 Stanford-Cars 50.17 76.00 98.40 98.09 90.01 95.34 84.34 63.15 UCF-101 49.80 75.59 98.37 98.17 89.84 95.42 84.09 88.69 
+
+# E Statistical Analysis 
+
+Here, we report a study on the stability of our approach across varying random seeds. The experimental results are shown in Tab. 11, where sequence S1 under the MTIL setting is executed multiple times with different random initializa-tions. Looking at the results in the table, one can appreciate how the gains with respect to the closest competitor are preserved in all cases, falling well outside the confidence bounds of our measure. Moreover, the variance of the Forgetting and Degradation metrics is contained ( 0.20 and 0.18 , respectively) and is very close to that of the accuracy ( 0.19 ). As a final remark, we would like to highlight how the seed used in the main experimental results is the closest to the mean performance across seeds, with an average distance in all metrics of 0.08 .
+
+Table 11: Statistical significance of TASSO on S1 of MTIL. For fairness, we used seed 1102 to match the one used by the main competitor SnD [41]. Seed Accuracy Forgetting Z.S. Degradation 
+
+42 85.73 0.89 0.45 
+
+123 86.03 0.65 0.74 
+
+1234 85.62 0.73 0.43 
+
+12345 85.39 1.21 0.79 
+
+123456 85.79 0.61 0.50 
+
+1234567 85.87 0.63 0.85 
+
+1102 85.74 0.81 0.36 Avg. 85.74 0.79 0.59 Std. 0.19 0.20 0.18 TASSO: TAsk-Specific Subspace Optimization 23 
+
+# F Details on Datasets and Sequences 
+
+In this section, we report additional details on the dataset and task sequences used for TASSO evaluation. More specifically, Tab. 12 reports the number of classes and the amount of training and test samples for all datasets used, while Tab. 13 reports a detailed breakdown of the 8 sequences used in the evaluation. 
+
+Table 12: Number of classes and samples in the training and test splits of the dataset used in TASSO. (*): Note that only a subset of the 1.28M training samples from ImageNet has been used. Dataset Classes Train Test FGVC-Aircraft [29] 100 3,334 3,333 DTD [6] 47 2,820 1,692 EuroSAT [10] 10 13,500 8,100 Flowers-102 [31] 102 4,093 2,463 Food-101 [3] 101 50,500 30,300 Oxford-Pets [32] 37 2,944 3,669 Stanford-Cars [19] 196 6,509 8,041 UCF-101 [18] 101 7,639 3,783 ImageNet-1k [7] 1000 100,000* 50,000 
+
+Table 13: Details on the 8 sequences used in the TASSO experimental evaluation. Sequence T 1 T 2 T 3 T 4 T 5 T 6 T 7 T 8
+
+S1 FVGC DTD EuroSAT Flowers Food Oxford Stanford UCF Aircraft 102 101 Pets Cars 101 
+
+S2 DTD EuroSAT Flowers Food Oxford Stanford UCF FVGC 102 101 Pets Cars 101 Aircraft 
+
+S3 EuroSAT Flowers Food Oxford Stanford UCF FVGC DTD 102 101 Pets Cars 101 Aircraft 
+
+S4 Flowers Food Oxford Stanford UCF FVGC DTD EuroSAT 102 101 Pets Cars 101 Aircraft 
+
+S5 Food Oxford Stanford UCF FVGC DTD EuroSAT Flowers 101 Pets Cars 101 Aircraft 102 
+
+S6 Oxford Stanford UCF FVGC DTD EuroSAT Flowers Food Pets Cars 101 Aircraft 102 101 
+
+S7 Stanford UCF FVGC DTD EuroSAT Flowers Food Oxford Cars 101 Aircraft 102 101 Pets 
+
+S8 UCF FVGC DTD EuroSAT Flowers Food Oxford Stanford 101 Aircraft 102 101 Pets Cars 24 C. Sun et al. 
+
+# G Pseudocode of our Method 
+
+Here, we report the pseudocode implementation of the TASSO algorithm for fine-tuning the vision encoder on a given task. We also report the pseudocode of the evaluation pipeline, which includes the cross-task confusion matrix and the computation of aggregate metrics for reproducibility purposes. 
+
+Algorithm 1 TASSO Fine-tuning Protocol 
+
+Require: reference dataset X ref , training steps T , hyperparameters α, β 
+
+Input: Current task data T k = {(Dk , Ck )}, previous step model gk−1 = ( gk−1 
+
+> i
+
+, g t)
+
+Output: Current step model gk = ( gki , g t)
+
+1: Initialization: gki ← gk−1 
+
+> i
+
+; freeze text encoder gt
+
+2: Randomly initialize A ∈ Rd×r
+
+3: for t = 1 , . . . , T do 
+
+4: B = {(x, y )} ∼ D k // Sample minibatch from current task’s data 5: ft(c) ← gt(c) for all c ∈ C k ; // Text embeddings, ∥ft(c)∥2 = 1 
+
+6: f ki (x) ← gki (x) for x ∈ B ; // Current model image emeddings, ∥f ki (x)∥2 = 1 
+
+// Current task supervision (Cross-Entropy loss) 7: s(x) ← softmax([ ⟨f ki (x), f t(c)⟩ ∀ c ∈ C k ]) 
+
+8: LCE ← 1
+
+> |B|
+
+P 
+
+> (x,y )∈B
+
+CE( s(x), y )
+
+// Orthonormal projector (QR reparameterization): 9: [Uk , _] ← QR( A) // decomposition in reduced mode, Uk ∈ Rd×r and U ⊤ 
+
+> k
+
+Uk = Ir
+
+// Subspace learning: 10: f k 
+
+> ∥
+
+(x) ← Uk U ⊤ 
+
+> k
+
+f ki (x); f t
+
+> ∥
+
+(c) ← Uk U ⊤ 
+
+> k
+
+ft(c)
+
+11: re-normalize f k 
+
+> ∥
+
+(x) and f t
+
+> ∥
+
+(c) // ∥f k 
+
+> ∥
+
+(x)∥2 = 1 , ∥f t
+
+> ∥
+
+(c)∥2 = 1 
+
+12: s∥(x) ← softmax([ ⟨f k 
+
+> ∥
+
+(x), f t
+
+> ∥
+
+(c)⟩ ∀ c ∈ C k ]) 
+
+13: Lsub ← 1
+
+> |B|
+
+P 
+
+> (x,y )∈B
+
+CE( s∥(x), y )
+
+14: Bref = {xref } ∼ X ref // Sample minibatch from reference dataset 15: f ki (xref ) ← gki (xref ), f k−1 
+
+> i
+
+(xref ) ← gk−1 
+
+> i
+
+(xref ); // normalize both // Decompose into task-specific and task-irrelevant subspaces: 16: f k 
+
+> ∥
+
+← Uk U ⊤ 
+
+> k
+
+f ki , f k 
+
+> ⊥
+
+← f ki − f k
+
+> ∥
+
+17: f k−1 
+
+> ∥
+
+← Uk U ⊤ 
+
+> k
+
+f k−1 
+
+> i
+
+, f k−1 
+
+> ⊥
+
+← f k−1 
+
+> i
+
+− f k−1
+
+> ∥
+
+// Geometry-aware KD: 18: LKD ← 1
+
+> |B ref |
+
+P
+
+> xref ∈B ref
+
+h
+
+cos −1(f k 
+
+> ∥
+
+(xref ), f k−1 
+
+> ∥
+
+(xref )) + cos −1(f k
+
+> ⊥
+
+(xref ), f k−1 
+
+> ⊥
+
+(xref )) 
+
+i
+
+// Optimization objective: 19: L ← L CE + α Lsub + β LKD 
+
+20: Update (θki , A ); keep gt frozen // Update with AdamW 21: end for Return: gk = ( gki , g t)TASSO: TAsk-Specific Subspace Optimization 25 
+
+Algorithm 2 TASSO Evaluation Protocol 
+
+Require: Text encoder gt, setting (MTIL/MCIL), number of tasks K, pretrained model accuracy on MTIL pMTIL ∈ RK and MCIL pMCIL ∈ RK
+
+Input: Task Sequence S = {T 1, T 2, . . . , T K }, Vision Encoders {gki , k = 1 , . . . , K }
+
+Output: Mean Accuracy ¯a, Mean Forgetting ¯f , Mean Zero-Shot Degradation ¯d
+
+1: if MCIL setting then 
+
+2: Ck ← SKk′=1 Ck′
+
+∀k = 1 , . . . , K // Update the task class sets: under the MCIL setting, the class set is the union of all sets. 3: b ← pMCIL // Select the appropriate upper-bound 4: else 
+
+5: b ← pMTIL // Select the appropriate upper-bound 6: end if 
+
+7: M ← 0K×K // Initialize an K-by-K matrix of zeros to store accuracy metrics 8: for k1 = 1 , . . . , K do 
+
+// Training task loop - row 9: for k2 = 1 , . . . , K do 
+
+// Evaluation task loop - column 10: (D, C) ← T k2 ∈ S // Extract dataset and class set from the sequence. 11: for (x, y ) ∈ D do 
+
+// For each sample and label in the dataset 12: ˆy ← argmax c∈C ⟨gi(x), g t(c)⟩ // Compute the prediction by comparing the embedding of the image to all text embeddings 13: if ˆy = y then 
+
+14: M[k1, k 2] ← M[k1, k 2] + 100  
+
+> |D|
+
+// Accumulate percent (top-1) accuracy 15: end if 
+
+16: end for 
+
+17: end for 
+
+18: end for 
+
+// Mean Accuracy 19: ¯a ← 1
+
+> K
+
+PKk2=1 M[K, k 2] // Average across tasks // Mean Forgetting 20: ¯f ← 0
+
+21: for k = 1 , . . . , K − 1 do 
+
+22: a ← M[k, k ] // Fine-tuning accuracy 23: ˆa ← min  
+
+> k′=k+1 ,...,K
+
+M[k′, k ] // Worst accuracy on following incremental steps. 24: ¯f ← ¯f + ( a − ˆa)
+
+25: end for 
+
+26: ¯f ← 1 
+
+> K−1
+
+¯f
+
+// Mean Zero-shot Degradation 27: ¯d ← 0
+
+28: for k = 2 , . . . , K do 
+
+29: ˆa ← min  
+
+> k′=1 ,...,k −1
+
+M[k′, k ] // Worst accuracy on unseen tasks. 30: ¯d ← ¯d + ( b[k] − ˆa
+
+31: end for 
+
+32: ¯d ← 1 
+
+> K−1
+
+¯d
+
+Return: ¯a, ¯f , ¯d

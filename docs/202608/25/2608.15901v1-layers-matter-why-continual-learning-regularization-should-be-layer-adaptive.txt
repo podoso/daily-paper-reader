@@ -1,0 +1,1404 @@
+Title: Layers Matter: Why Continual Learning Regularization Should Be Layer-Adaptive
+
+URL Source: https://arxiv.org/pdf/2608.15901v1
+
+Published Time: Tue, 18 Aug 2026 01:21:34 GMT
+
+Number of Pages: 37
+
+Markdown Content:
+# Layers Matter: Why Continual Learning Regularization Should Be Layer-Adaptive 
+
+Brian B. Moser 1∗ Ahmed Anwar 1,2∗ Tobias Christian Nauen 1,2 Shishir Muralidhara 1,2
+
+Federico Raue 1 René Schuster 1,2 Stanislav Frolov 1 Andreas Dengel 1,21 German Research Center for Artificial Intelligence (DFKI)  
+
+> 2
+
+RPTU University Kaiserslautern-Landau 
+
+first.last@dfki.de \ first_second.last@dfki.de  
+
+> ∗
+
+Equal Contribution 
+
+Abstract 
+
+Continual learning regularizers like EWC fight forgetting by penalizing changes from previous-task parameters with per-parameter importance, typically diago-nal Fisher values. Per-parameter looks more flexible than per-layer, but each layer’s diagonal Fisher is a weak summary of its actual curvature, missing the top-eigenvalue information that controls forgetting. Adversarial bit-flip attacks and Hessian-spectrum studies show that this missing per-layer sensitivity spans orders of magnitude in neural networks. Under a block-diagonal Hessian assumption, the layer-level analogue of EWC’s existing diagonal assumption, we prove three things. Forgetting decomposes as a sum of per-layer terms weighted by each layer’s top Hessian eigenvalue. Diagonal-Fisher weights cannot recover this eigenvalue. For instance, two layers with identical Fisher averages can have top eigenvalues differ-ing by a factor as large as the layer width. For the same level of forgetting, uniform regularization loses new-task performance by an amount scaling with the layer condition number. Our theoretical analysis leads to a simple recipe: protect early layers strongly, let deeper layers move. We apply this recipe to EWC and SLCA and show clear improvements in average performance and forgetting metrics. 
+
+1 Introduction 
+
+Continual learning (CL) trains a single neural network on a sequence of tasks T1, T2, . . . presented one after another. The defining difficulty of this setting is catastrophic forgetting : the network keeps performing well on the most recent task but loses competence on the earlier ones. To prevent forget-ting, the literature has converged on three broad families. Replay-based methods store or generate examples from past tasks [29, 5, 40], parameter-isolation methods route different tasks through different parts of the network [44, 26, 49], and regularization-based methods anchor parameters near the previous-task optimum [23, 59, 1]. This paper advances the third family. Regularization-based methods prevent forgetting by adding a penalty against parameter drift, 
+
+Ω( θ) = 12 ∥θ − θ⋆∥2 
+
+> W
+
+, (1) where θ⋆ is the previous-task optimum, ∥x∥2 
+
+> W
+
+:= x⊤W x , and W ⪰ 0 encodes the importance assigned to each direction in parameter space. Setting W to the diagonal Fisher gives EWC [23], to path-integral importance gives SI [59], and to synaptic salience gives MAS [1]. Later refinements 
+
+> Preprint. arXiv:2608.15901v1 [cs.LG] 16 Aug 2026
+
+such as Online EWC [43] and RWalk [4] change how W is estimated but keep the form of Eq. 1 unchanged. What the form does not do is reflect any quantity describing the layer as a whole. Two layers with similar parameter-wise Fisher-averages get the same per-layer penalty in EWC, even when one is ten times more sensitive to weight change than the other [37, 42, 34]. We call this the 
+
+static, layer-uniform view of the network, where every parameter wears its own scalar tag, which is determined without considering the layer. A growing body of evidence from outside CL says the static view is wrong. Adversarial bit-flip attacks [37, 55, 38, 39, 6] drop ImageNet accuracy by more than 60% by flipping fewer than 30 bits, and those bits cluster in a small number of layers because those layers dominate the loss response to weight perturbation. Empirical Hessian-spectrum analyses [41, 42, 34, 14] as an independent research direction find per-layer eigenvalues that span two to three orders of magnitude on standard backbones. Both lines of evidence point to the top eigenvalue sℓ of the per-layer Hessian block. If sℓ
+
+varies across layers by a factor of 100 , then any regularizer blind to it spends its forgetting budget in the wrong places, which leads to a worse stability-plasticity trade-off. This paper closes the gap between the static view used by EWC and the layer-heterogeneous structure that real networks exhibit. Under a block-diagonal Hessian assumption (the layer-level analogue of the diagonal-Fisher assumption EWC already uses), forgetting decomposes cleanly into per-layer contributions weighted by sℓ (Theorem 2). Diagonal-Fisher weights cannot recover this structure, because averaging the diagonal of a positive semidefinite matrix loses the rank information that controls the top eigenvalue (Proposition 5). At a fixed forgetting budget, uniform regularization incurs regret scaling with the layer condition number κ = max ℓ sℓ/ min ℓ sℓ (Theorem 6). Within the scalar-per-layer family, the minimum-regret choice is λℓ ∝ sℓ (Theorem 8). We measure κ on six ImageNet-pretrained backbones (ResNet-18/34/50/101, ViT-B/16, ViT-L/16) and find values in the range 22 to 195 , so the static view is leaving real performance unused. Two recent CL methods already make a layer-dependent choice. TUNA [51] restricts each layer’s update to a per-layer low-rank adapter. SLCA [60] uses a two-group learning-rate schedule for backbone and head. Each implicitly imposes a different prior on sℓ, and our analysis explains where each helps and where each does not. To probe the prescription on a method the framework directly covers, we also extend EWC with a one-parameter geometric schedule λℓ = c/α ℓ−1, sweep α from below one to above one, and compare against λℓ ∝ sℓ from measured Hessians. The contribution of this paper is therefore both diagnostic and prescriptive. It identifies the static view in regularization-based CL as the part of the design space leaving performance unused, and gives the closed-form recipe λℓ ∝ sℓ for what to do instead. Protect early layers strongly, let deeper layers move. 
+
+2 Related work 
+
+Regularization-based CL. EWC [23], as introduced in Eq. 1, sets W to the diagonal Fisher. SI [59] and MAS [1] use path-integral and output-sensitivity importance, RWalk [4] unifies the two through a KL-based Riemannian formulation, and Progress & Compress [43] introduces online EWC. All produce per-parameter diagonal weights. Replay [29, 5, 40] and parameter-isolation [44] families are orthogonal to this analysis. 
+
+Layer-adaptive CL. SLCA [60] applies a smaller learning rate to the pretrained backbone than to the head, a two-group layer-adaptive update rule on ViT. The prompt family [53, 52, 50, 46, 48] can be read as the limit where most of the backbone is frozen and only an input-prompt subspace updates. Each of these methods imposes its own prior on which layers are more sensitive. 
+
+Layer-wise scaling. Layer-wise update scaling has independent roots in optimization (LARS [57], LAMB [58]) and fine-tuning (ULMFiT [19]). Our scalar-per-layer family is the regularization-side analog. Second-order weight importance descends from Optimal Brain Damage [27]. More recent instances include WoodFisher [45], EigenDamage [47], and SparseGPT [13], alongside first-order signals such as magnitude pruning [17] and the Lottery Ticket Hypothesis [12]. Proposition 5 is in the same spirit, specialised to the per-layer aggregation CL penalties implicitly perform. 
+
+Per-layer Hessian sensitivity. Adversarial bit-flip attacks [37–39, 55, 6] concentrate the destructive bits in a small number of layers, an empirical lower bound on per-layer sensitivity spread. The empirical Hessian of trained networks has a bulk-plus-outlier structure [41, 42, 34, 33, 35, 31], with 2scalable estimators in PyHessian [56] and Lanczos [14], both validating the per-layer power-iteration we use for sℓ. Block-diagonal preconditioners K-FAC [30, 15] and Shampoo [16] exploit the same structure; Kunstner et al. [24] caution against empirical-Fisher approximations that we sidestep by computing the true Hessian. The flat-minima line [22, 18, 9, 11, 25] operationalises top-eigenvalue sensitivity at training time. Theoretical CL through the NTK lens [2, 10, 32] provides landscape-level evidence that the CL optimum lives in the low-curvature region we exploit per layer. 
+
+3 Methodology 
+
+Let θ be the parameters of a neural network, partitioned by architecture into L layer blocks θ =(θ(1) , . . . , θ (L)) with θ(ℓ) ∈ Rdℓ , where each residual or transformer block counts as one layer. For a vector v ∈ Rd, v(ℓ) denotes its layer-ℓ part. For a matrix A ∈ Rd×d acting on the full parameter vector (such as the Hessian), A(ℓ,ℓ ′) denotes the block of rows in layer ℓ and columns in layer ℓ′.Tasks T1, T2, . . . arrive sequentially with losses Lk. Let θ⋆ be the parameters after training on tasks 
+
+1, . . . , k − 1, and let θ⋆ + ∆ θ be the parameters after additionally training on task k. Forgetting on task k − 1 is 
+
+F(∆ θ) := Lk−1(θ⋆ + ∆ θ) − Lk−1(θ⋆) ≥ 0. (2) Let H = ∇2Lk−1(θ⋆). The gradient vanishes at θ⋆, so Taylor expansion gives 
+
+F(∆ θ) = 12 ∆θ⊤H ∆θ + O ∥∆θ∥3. (3) This second-order regime is the same one EWC [23] uses to derive its Fisher penalty, and every result in the paper concerns the quadratic term. 
+
+Assumption 1 (Block-diagonal Hessian) . H(ℓ,ℓ ′) = 0 for ℓ̸ = ℓ′. The Hessian couples parameters within a layer but not across layers. Assumption 1 is the layer-level analogue of the diagonal-Fisher approximation EWC already relies on. It is exact in fully factorized architectures and approximate in real ones. Skip connections, LayerNorm, and attention all create off-diagonal blocks. Appendix A gives a continuous relaxation. All main-text results use the block-diagonal form. 
+
+Theorem 2 (Per-layer decomposition) . Under Assumption 1, to the second order in ∥∆θ∥, we have 
+
+F(∆ θ) = 12
+
+> L
+
+X
+
+> ℓ=1
+
+ ∆θ(ℓ)⊤H(ℓ,ℓ ) ∆θ(ℓ) + O(∥∆θ∥3). (4) 
+
+Proof. Apply the Taylor expansion of Eq. 3. Under Assumption 1, ∆θ⊤H∆θ =P
+
+> ℓ
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ )∆θ(ℓ).Every unit of forgetting now belongs to a specific layer, which turns the question of how to spread a forgetting budget across layers into a well-posed optimization rather than a heuristic. 
+
+Definition 3 (Layer sensitivity) . The sensitivity of layer ℓ is the top eigenvalue of the layer’s Hessian block, namely 
+
+sℓ := λmax (H(ℓ,ℓ )). (5) The upper bound on forgetting follows immediately: 
+
+F(∆ θ) ≤ 12
+
+X
+
+> ℓ
+
+sℓ ∆θ(ℓ) 22 . (6) The sensitivity sℓ acts as a per-layer price tag on displacement, and the rest of the paper revolves around this bound. 3stem layer1 layer2 layer3 layer4 fc 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0      
+
+> log 10  s
+> 39.1
+> 3,167
+> 519 139 57.7
+> 23.5
+> max: layer1
+> min: fc
+> ResNet-50 (134.6)
+> geo-mean = 152 depth trend
+> patch_embed block0 block1 block2 block3 block4 block5 block6 block7 block8 block9 block10 block11 head
+> log 10  s
+> 78.2
+> 10.7
+> 2.85 3.11 6.81 4.48 6.96 3.26 3.32 3.54 3.93 5.16 4.36 6.61
+> max: patch_embed
+> min: block1
+> ViT-B/16 (27.4)
+> geo-mean = 5.67 depth trend
+
+Figure 1: Measured per-layer Hessian top eigenvalue sℓ on ResNet-50 (left) and ViT-B/16 (right), pretrained on ImageNet, evaluated at a 100-class cross-entropy minibatch. y-axis is log 10 sℓ. ResNet-50: κ = 134 .6, with layer1 dominating. ViT-B/16: κ = 27 .4, with patch_embed dominating and the twelve transformer blocks within an order of magnitude of each other. Both profiles are heavy-tailed. 
+
+3.1 The layer condition number Definition 4 (Layer condition number) . κ := max ℓ sℓ
+
+max(min ℓ sℓ, ε ) , with a floor ε > 0 to handle layers with a flat direction. We use ε = 10 −8 max ℓ sℓ.Our empirical claim, which we call the Layer-Importance Hypothesis (LIH), is that on standard deep networks trained to convergence, κ is non-trivial and falls in the range 10 –10 3. We verify this directly in Figure 1, which reports power-iteration measurements of sℓ on ImageNet-pretrained ResNet-50 and ViT-B/16 (full procedure and per-layer numbers in Appendix E). On ResNet-50 we measure 
+
+κ = 134 .6, with the early conv stage layer1 dominating ( slayer1 = 3 ,167 ) and the fc head 134 ×
+
+less sensitive ( sfc = 23 .5). On ViT-B/16 we measure κ = 27 .4, with the patch-embedding stem dominating ( spatch_embed = 78 .2) and the transformer blocks roughly within an order of magnitude of each other. Both profiles are heavy-tailed and consistent with what the bit-flip, Optimal Brain Damage, and Hessian-spectrum literature already report [37, 55, 27, 34, 42]. To measure sℓ on a real network, run power iteration on H(ℓ,ℓ ) using Hessian-Vector Products (HVPs). The cost is k HVPs per layer. 10 to 20 iterations suffice whenever the second eigenvalue is well separated from the first, which is the typical regime for trained networks because the per-layer Hessian is near low-rank. On very wide layers where power iteration is expensive, tr( H(ℓ,ℓ ))/d ℓ recovered from a single Hutchinson HVP is a cheaper proxy. The two quantities can disagree by a factor in 
+
+[1 , d ℓ] (Proposition 5). 
+
+3.2 Diagonal Fisher cannot see layer sensitivity 
+
+EWC’s per-parameter Fisher weights do vary across layers in the sense that the sum of Fisher values in one layer differs from another. But that sum is a weak summary of the layer’s actual curvature. The next proposition quantifies how weak. 
+
+Proposition 5 (Diagonal-spectral gap) . For any positive semidefinite matrix A ∈ Rd×d,
+
+1 ≤ λmax (A)
+
+> 1
+> d
+
+P 
+
+> p
+
+App 
+
+≤ d. (7) 
+
+The left inequality is an equality if and only if A = σI . The right is an equality if and only if A has rank at most 1. Every value in [1 , d ] is realized by some positive semidefinite A.Proof in Appendix J. 
+
+For the per-layer Hessian block H(ℓ,ℓ ), Proposition 5 says the following. Two layers with identical mean diagonal (and hence identical mean Fisher under the standard F ≈ H identity at exponential-family optima [30]) can have sℓ values that differ by a factor up to the smaller of their widths. The 4low-rank Hessian regime observed in trained networks [35, 31] pushes this bound close to tight. EWC treats the two cases as identical, but they produce very different amounts of forgetting (Appendix E). 
+
+3.3 Uniform regularization pays a price 
+
+The performance cost of the static, layer-uniform view comes from comparing two regularizers held to the same forgetting budget B > 0.The oracle regularizer uses the true per-layer Hessian: 
+
+min  
+
+> ∆θ
+
+Lk(θ⋆ + ∆ θ) subject to 12
+
+X
+
+> ℓ
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ )∆θ(ℓ) ≤ B. (8) The constraint equals forgetting to second order by Theorem 2. The uniform regularizer treats all displacement as equally costly: 
+
+min  
+
+> ∆θ
+
+Lk(θ⋆ + ∆ θ) subject to 12 μ ∥∆θ∥22 ≤ B, (9) with μ chosen so that the resulting ∆θ produces the same actual forgetting B under the true Hessian. This μ-calibration step blocks the trivial reply that uniform could just tighten its penalty. Both regularizers now respect the same forgetting budget, so the comparison isolates the stability-plasticity trade-off, namely the new-task accuracy each regularizer sacrifices to hit that fixed forgetting level. Only the allocation of the budget across layers differs. The bound below uses two further quantities. Write g(ℓ) := ∇θ(ℓ) Lk(θ⋆) for the new-task gradient at the old optimum, restricted to layer ℓ, and Q(ℓ,ℓ ) := ∇2 
+
+> θ(ℓ)
+
+Lk(θ⋆) for the new-task Hessian block. We assume the new-task Hessian is well-conditioned in the standard sense, with smallest and largest eigenvalues satisfying μQ ≤ λmin (Q(ℓ,ℓ )) and λmax (Q(ℓ,ℓ )) ≤ MQ uniformly across layers. Equivalently: μQI ⪯ Q(ℓ,ℓ ) ⪯ MQI, where μQ is a uniform lower curvature bound and MQ
+
+a uniform upper curvature bound on the new-task quadratic. Let v(ℓ) be a top eigenvector of H(ℓ,ℓ ),and define the alignment 
+
+χℓ := g(ℓ)⊤v(ℓ)
+
+g(ℓ) 2
+
+∈ [0 , 1] . (10) The alignment χℓ measures how much of the new-task gradient on layer ℓ points along the old-task fragile direction. When χℓ is small, the new task is not pushing on anything the old task cares about. 
+
+Theorem 6 (Regret of uniform regularization) . Assume Q(ℓ,ℓ ′) = 0 for ℓ̸ = ℓ′ (Appendix B treats the coupled case). The regret of the uniform regularizer, Regret := ˜Lk(∆ θ⋆ 
+
+> unif
+
+) − ˜Lk(∆ θ⋆
+
+> oracle
+
+),satisfies 
+
+Regret ≥ c0 · κ − 1
+
+κ · max 
+
+> ℓ∈L +
+
+χ2 
+
+> ℓ
+
+g(ℓ) 22
+
+sℓ
+
+, c0 := μQ
+
+MQ + μQ
+
+∈  0, 12
+
+, (11) 
+
+where L+ := {ℓ : sℓ > min ℓ′ sℓ′ } is everything except the most flexible layer. The gap vanishes when κ = 1 , vanishes when every χℓ for ℓ ∈ L + is zero, and is strictly positive and monotone non-decreasing in κ otherwise. 
+
+Three factors multiply. The heterogeneity amplifier (κ − 1) /κ grows from 0 to 1 as the layer spectrum spreads. The alignment χ2 
+
+> ℓ
+
+captures whether the new-task gradient actually pushes on fragile directions. When it does not, uniform and oracle agree. The per-layer unit g(ℓ) 22 /s ℓ is the ratio of new-task pressure on layer ℓ to the layer’s rigidity. 
+
+Proof in Appendix B. 
+
+Corollary 7 (Large-κ asymptotic) . Fix smax := max ℓ sℓ and let κ → ∞ by min ℓ sℓ ↓ 0. Writing 
+
+ˆℓ := arg max ℓ sℓ,
+
+lim  
+
+> κ→∞
+
+Regret ≥ c0 ·
+
+χ2ˆℓ g(ˆℓ) 22
+
+smax 
+
+. (12) 53.4 The optimal per-layer strength 
+
+Staying inside the scalar-per-layer family 
+
+Ω(∆ θ) = 12
+
+X
+
+> ℓ
+
+λℓ ∆θ(ℓ) 22
+
+(13) is the simplest strict improvement on uniform, and it is what our proposed adaptive methods in Section 4 actually implement. 
+
+Theorem 8 (Optimal λℓ). Fix the worst-case displacement direction in each layer ∆θ(ℓ) aligned with the top eigenvector v(ℓ) of H(ℓ,ℓ ). Among regularizers of the form in Eq. 13, the choice that matches the oracle’s penalty on this direction, up to one global constant shared across layers, is 
+
+λℓ ∝ sℓ. (14) 
+
+No scalar choice reproduces the oracle on every direction unless every H(ℓ,ℓ ) is a scalar multiple of the identity. Proof in Appendix C. 
+
+Theorem 8 fixes λℓ to a noisy per-layer top eigenvalue, and on standard backbones the dynamic range of sℓ spans more than two orders of magnitude (Figure 1), so a literal schedule over-protects the most curvature-dominant layer in absolute terms and starves the rest of plasticity. A one-parameter approximation that fits only the depth direction provides implicit smoothing across layers, motivating the following corollary below. 
+
+Corollary 9 (Geometric schedules) . If sℓ decays or grows geometrically with depth, sℓ ∝ γℓ−1, then the optimal λℓ ∝ γℓ−1. This is the one-parameter family our experiments in Section 4 fit. 
+
+3.5 Practical implications 
+
+The math reduces the design to one empirical question: which depth direction grows sℓ? On six pretrained backbones (Figure 1, Appendix E), early conv stages on ResNets and patch embeddings on ViTs dominate sℓ. Given the corollary 9, so combined with λℓ ∝ sℓ, this gives the rule of thumb: 
+
+protect early layers strongly, let deeper layers move . Concretely, methods that enforce weight penalty should set 
+
+λ1 ≥ λ2 ≥ . . . ≥ λL, (15) larger penalty on the early layers and smaller on the head. Methods that enforce per-layer learning rate ( e.g. , SLCA) should set 
+
+η1 ≤ η2 ≤ . . . ≤ ηL, (16) smaller LR on the early layers and larger on the head. The two schedules are opposite in sign because constraining LR is the inverse of constraining penalty strength. We test both forms next. 
+
+4 Experiments 
+
+Our LIH predicts that a layer-adaptive regularizer should outperform a uniform one whenever the layer condition number κ is non-trivial, and that the optimal scalar-per-layer strength tracks the per-layer sensitivities (sℓ). We test these predictions in two settings. The first uses a depth-weighted EWC variant we implement directly on small from-scratch CNNs. The second applies the same depth-weighted rule inside SLCA on a pretrained ViT-B/16 backbone. We also tested the rule on TUNA, but the gains there are smaller than for EWC and SLCA. TUNA’s adapter family already restricts each layer’s update to a 16 -dimensional subspace, which leaves limited headroom for layer-wise reweighting, so we report those results in Appendix H. 
+
+Experiment 1: Depth-weighted EWC on Split-C (small CNNs). We extend EWC by replacing its single scalar λ with the geometric decreasing schedule λℓ = c/α ℓ−1, fulfilling Eq. 15, and grid-search over α ∈ { 2−2, 2−1, 20, 21, 22, 23} and c ∈ { 200 , 1000 , 5000 , 20000 }. The point α = 2 0 = 1 is exactly uniform EWC. Everything else is layer-adaptive. The backbones are deliberately small so we can sweep the full grid: SmallCNN (3 conv + 2 fc, L = 5 layers) on Split-CIFAR-10 (5 tasks of 2 classes), and MediumCNN (4 conv + 2 fc, L = 6 layers) on Split-CIFAR-100 (10 tasks of 10 classes). 6Each task trains for two epochs. Remaining hyperparameters are in the supplementary materials. We report four metrics across the grid: average accuracy across all tasks (the standard CL metric), final-task accuracy, forgetting (max accuracy reached minus final accuracy, averaged over tasks), and backward transfer (BWT [29], end-of-sequence accuracy on each earlier task minus its end-of-task accuracy, averaged over earlier tasks). 
+
+Experiment 2: SLCA depth-weighted schedule on ViT-B/16, Split-CIFAR-100. SLCA enforces the per-layer constraint differently from Experiment 1. Instead of weighting the EWC penalty per layer, it scales the per-layer learning rate (default backbone 0.1×, head 1×). Protection here happens through how far each layer is allowed to move per step rather than through how strongly it is anchored to θ⋆, so the depth-weighted schedule has a different sign convention. Larger α means deeper layers receive a larger LR multiplier, not a smaller penalty. We extend SLCA’s two-group LR schedule to a per-block depth-weighted chain λl = c · αl−L, fulfilling Eq. 16, where L = 15 is the number of ViT-B blocks plus stem, norm, and head, and at (c, α ) = (1 , 1) we reproduce default SLCA exactly. We sweep c ∈ { 0.5, 1.0, 2.0} and α ∈ { 0.85 , 0.92 , 1.0, 1.08 , 1.18 } on two pretrainings of the same backbone, namely MoCoV3 (self-supervised contrastive, used in the SLCA paper’s ablations) and ImageNet-21k (supervised classification). The framework predicts the same equation in both cases but allows the optimum to land at different α if the two pretrainings produce different per-layer sensitivities. 
+
+4.1 Depth-weighted EWC on small from-scratch CNNs 
+
+Figure 2 reports the MediumCNN sweep on Split-CIFAR-100 across all four metrics, with 3-seed mean ± std bands. The avg-acc peak at c = 200 sits at α = 2 (59 .8% ± 1.5) and beats α = 1 
+
+(57 .2% ±1.3) with non-overlapping bands. The forgetting and BWT panels prefer α ≤ 1 instead. The framework reads that as deeper layers being the more sensitive ones on this from-scratch backbone, opposite of the shallow-dominated pattern measured on pretrained backbones (Figure 1). The avg-acc preference for α > 1 on the longer task sequence is then plasticity dominating the metric rather than a sensitivity prediction. The remaining EWC sweeps (SmallCNN/Split-CIFAR-10 and ResNet-18/Split-CIFAR-100) are reported in Appendix F. The SmallCNN effect is statistically marginal and the ResNet-18 sweep gains nothing from a one-parameter geometric prior, consistent with the non-monotone ResNet-50 sensitivity in Figure 1 that a geometric schedule cannot fit. 
+
+4.2 SLCA depth-weighted schedule on a pretrained ViT-B/16 
+
+Figure 3 shows the SLCA depth-weighted sweep on Split-CIFAR-100 (10 incremental tasks, ViT-B/16 + ImageNet-21k pretraining). Default SLCA corresponds exactly to (c = 1 , α = 1) at 91 .29% 
+
+final-task accuracy. The optimum moves away from α = 1 to α ∈ { 1.08 , 1.18 } for every c. The best configuration (c = 1 , α = 1 .18) achieves 92 .01% , a +0 .7% absolute gain over the default. On the average-incremental metric the gain narrows to +0 .13% (95 .03% vs 94 .90% ) but is direction-consistent across all three c values. The ImageNet-21k backbone benefits from a schedule that protects shallow layers more than default SLCA’s two-group LR choice does. The complementary MoCoV3-pretrained sweep (Figure 7, Appendix G) is much flatter, consistent with MoCoV3 having per-layer sensitivities that default SLCA already fits well. The contrast between the two pretrainings is the sharper test of the framework: the same method on the same backbone with different pretraining has different optima. Table 1 places this result in context under SLCA’s protocol [60] (10 tasks of 10 classes, ViT-B/16); each row’s method is cited inline. Our depth-weighted SLCA uses the dominant configuration found in the sweep above ( c=1 , α =1 .18 on ImageNet-21k; c=0 .5, α =0 .92 on MoCoV3). On ImageNet-21k pretraining, depth-weighted SLCA improves on every memory-free baseline reproduced in [60], including default SLCA itself ( 91 .35 → 91 .80 last-acc, 94 .40 → 94 .51 inc-acc). On MoCoV3 the depth-weighted variant matches default SLCA in the noise ( 84 .26 vs 84 .44 ), consistent with the framework’s reading that MoCoV3 already lands near the per-layer schedule the default two-group LR ratio implements. 
+
+4.3 Empirical takeaways 
+
+Theorem 8 prescribes λℓ ∝ sℓ as the optimal scalar-per-layer schedule, and Corollary 9 specializes this to λℓ ∝ γℓ−1 when sℓ decays geometrically with depth. Our experiments fit this one-parameter 72 2 2 1 20 21 22 23
+
+( = c/ 1; larger deeper layers less protected) 
+
+0.2 0.3 0.4 0.5 0.6 Average Accuracy (after all tasks) 
+
+Split-C100 
+
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform)
+
+2 2 2 1 20 21 22 23
+
+( = c/ 1; larger deeper layers less protected) 
+
+0.00 0.02 0.04 0.06 0.08 0.10 0.12 Forgetting (max-acc  final-acc) 
+
+Split-C100 
+
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform)
+
+2 2 2 1 20 21 22 23
+
+( = c/ 1; larger deeper layers less protected) 
+
+0.2 0.3 0.4 0.5 0.6 Final Avg Accuracy 
+
+Split-C100 
+
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform)
+
+2 2 2 1 20 21 22 23
+
+( = c/ 1; larger deeper layers less protected) 
+
+0.12 
+
+0.10 
+
+0.08 
+
+0.06 
+
+0.04 
+
+0.02 
+
+0.00 Backward Transfer 
+
+Split-C100 
+
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform)
+
+Figure 2: Depth-weighted EWC on Split-CIFAR-100 (MediumCNN, 10 tasks, 3 seeds, mean ± std bands). Top, average accuracy across tasks (left) and forgetting (right). Bottom, final-task accuracy (left) and backward transfer (right). The dotted vertical line marks α = 1 (uniform EWC). The avg-acc peak at c = 200 sits at α = 2 with non-overlapping seed bands over uniform. 0.85 0.90 0.95 1.00 1.05 1.10 1.15 ( l = c l L; larger deeper layers stronger) 
+
+86 87 88 89 90 91 92 Final-task Accuracy (%) (  )
+
+c=0.5 c=1 c=2 = 1 (default) 
+
+0.85 0.90 0.95 1.00 1.05 1.10 1.15 ( l = c l L; larger deeper layers stronger) 
+
+45678910 11 Forgetting (%) (  )
+
+c=0.5 c=1 c=2 = 1 (default) 
+
+0.85 0.90 0.95 1.00 1.05 1.10 1.15 ( l = c l L; larger deeper layers stronger) 
+
+91.5 92.0 92.5 93.0 93.5 94.0 94.5 95.0 Avg Incremental Accuracy (%) (  )
+
+c=0.5 c=1 c=2 = 1 (default) 
+
+0.85 0.90 0.95 1.00 1.05 1.10 1.15 ( l = c l L; larger deeper layers stronger) 
+
+11 
+
+10 
+
+9
+
+8
+
+7
+
+6
+
+5
+
+4
+
+> BWT (%) (  )
+
+c=0.5 c=1 c=2 = 1 (default) 
+
+Figure 3: SLCA depth-weighted sweep on Split-CIFAR-100 (ViT-B/16 + ImageNet-21k pretraining, 10 tasks). Per-block LR multiplier λl = c · αl−L, L = 15 . Top: final-task accuracy (left) and forgetting (right). Bottom: average incremental accuracy (left) and BWT (right). The dotted vertical line is default SLCA ( α = 1 ). The optimum is consistently away from α = 1 at α ∈ { 1.08 , 1.18 },with best configuration (c = 1 , α = 1 .18) giving +0 .7% final-task accuracy over default SLCA at 
+
+(c = 1 , α = 1) .8Table 1: Class-incremental learning on Split-CIFAR-100 (10 tasks, ViT-B/16), two pretrainings: ImageNet-21k supervised and ImageNet-1k MoCoV3 [7]. Last-acc and Inc-acc as in [60]. Prior-method numbers reproduced under SLCA’s protocol; the SLCA rows report multi-seed mean ±std over task-order seeds (Appendix G). Bold = best in column among non-upper-bound rows.                                                           
+
+> ImageNet-21k pretrain MoCoV3 pretrain Method Memory-free Last-acc Inc-acc Last-acc Inc-acc Joint training (upper bound) –93.22 —89.11 —GDumb [36] 81.92 89.46 69.72 80.95 DER++ [3] 84.50 91.49 63.64 79.55 BiC [54] 88.45 93.37 80.57 89.39 L2P [53] ✓82.76 88.48 ——DualPrompt [52] ✓85.56 90.33 ——EWC [23] ✓89.30 92.31 81.62 87.56 LwF [28] ✓87.99 92.13 77.94 86.90 Seq FT ✓88.86 92.01 81.47 87.55 SLCA [60] ✓91.35 ±0.23 94.40 ±0.69 84.44 ±0.29 90.12 ±0.32 SLCA + ours (depth-weighted) ✓91.80 ±0.23 94.51 ±0.66 84.26 ±0.48 90.08 ±0.32
+
+family. The measurements say sℓ is shallow-dominated on every standard pretrained backbone. The rule of thumb that follows says protect shallow layers strongly, let deeper layers move. The experiments confirm this where the rule applies. The cleanest single bridge between theory and experiments is the cross-pretraining contrast on SLCA (Figures 3 and 7). The same method on the same backbone with different pretraining shifts the optimal α, in the direction the framework predicts. Depth-weighted EWC on MediumCNN/CIFAR-100 peaks at α = 2 on avg-acc with non-overlapping 3-seed bands (Figure 2), and SLCA on ViT-B/ImageNet-21k peaks at α ∈ { 1.08 , 1.18 } across all c
+
+with +0 .7% over default (Figure 3). The rule is silent (or has the opposite forgetting signal) where its domain assumption fails, namely on small from-scratch CNNs whose sℓ profile is not shallow-dominated, and we report those cases honestly in Appendix F. The TUNA adapter-orthogonality sweep is consistent in direction (Appendix H) but the gain is small because the adapter family already constrains each layer’s update to a 16-dimensional subspace. As a robustness check, we also swap the geometric schedule for a linear and a two-group “step” schedule on MediumCNN/CIFAR-100; all three monotone-decreasing shapes consistently beat uniform within ∼1–4% of each other, indicating the rule of thumb is the load-bearing piece, not the specific shape (Appendix I). Across backbones, the magnitude of the forgetting penalty for under-protecting deep layers tracks the measured layer condition number κ, the empirical analog of Theorem 6’s regret bound (Appendix L). A direct test of the literal λℓ ∝ sℓ prescription on EWC is reported in Appendix K, where the geometric proxy outperforms the literal schedule. This is the empirical counterpart of the dynamic-range and measurement-noise concerns introduced in Section 3.4, and confirms that the framework’s prediction carries through the direction of the schedule rather than through the exact per-layer ratios. The same per-layer measurement procedure on a language backbone (BERT-base) recovers a qualitatively similar shallow-dominated profile with κ = 9 .15 , indicating the LIH and the resulting prescription extend beyond computer vision (Appendix N). 
+
+5 Discussion and limitations 
+
+The framework is deliberately minimal. It inherits EWC’s second-order approximation and adds the block-diagonal analogue of EWC’s diagonal assumption, isolating per-layer operator norms sℓ as the missing piece. This minimality has costs. The quadratic surrogate is only valid inside a trust region around θ⋆ (Appendix B). The block-diagonal assumption is violated at the boundaries created by skip connections, LayerNorm, and attention. Appendix A gives a continuous relaxation and a granularity diagnostic for that case. The empirical Fisher information matrix can diverge from H [24], but Proposition 5 applies to any positive semidefinite block, so the gap result survives. The SLCA reduction is functional rather than algebraic. The sensitivity sℓ is measured at θ⋆ and then used to regularize motion away from it, and we have no stability argument beyond the trust region. 96 Conclusion 
+
+The diagonal Fisher-penalty at the heart of EWC treats every layer as equally sensitive, but per-layer Hessian top eigenvalues span two orders of magnitude on every standard backbone we measured. The framework formalises this gap (forgetting decomposes by sℓ; diagonal Fisher-penalty cannot recover sℓ; uniform regularization pays regret (κ − 1) /κ ) and gives the closed-form remedy λℓ ∝ sℓ,computable from one cheap power iteration per layer. SLCA approximates this implicitly through its layer-wise learning rate, our depth-weighted EWC is the direct test, and the resulting rule of thumb (Section 4.3) holds on pretrained backbones, namely protect shallow layers strongly and let deeper layers move. 
+
+Acknowledgements 
+
+This work was supported by the BMFTR project Albatross (Grant 16IW24002). 
+
+References 
+
+[1] R. Aljundi, F. Babiloni, M. Elhoseiny, M. Rohrbach, and T. Tuytelaars. Memory aware synapses: Learning what (not) to forget. In Proc. ECCV , pages 144–161, 2018. [2] M. A. Bennani, T. Doan, and M. Sugiyama. Generalisation guarantees for continual learning with orthogonal gradient descent. In arXiv:2006.11942 , 2006. [3] P. Buzzega, M. Boschini, A. Porrello, D. Abati, and S. Calderara. Dark experience for general continual learning: a strong, simple baseline. In Proc. NeurIPS , 2020. [4] A. Chaudhry, P. K. Dokania, T. Ajanthan, and P. H. S. Torr. Riemannian walk for incremental learning: Understanding forgetting and intransigence. In Proc. ECCV , 2018. [5] A. Chaudhry, M. Ranzato, M. Rohrbach, and M. Elhoseiny. Efficient lifelong learning with a-gem. In Proc. ICLR , 2019. [6] H. Chen, C. Fu, J. Zhao, and F. Koushanfar. Proflip: Targeted trojan attack with progressive bit flips. In Proc. ICCV , 2021. [7] X. Chen, S. Xie, and K. He. An empirical study of training self-supervised vision transformers (moco v3). In Proc. ICCV , 2021. [8] J. Devlin, M.-W. Chang, K. Lee, and K. N. Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. 2018. [9] L. Dinh, R. Pascanu, S. Bengio, and Y. Bengio. Sharp minima can generalize for deep nets. In 
+
+Proc. ICML , 2017. [10] T. Doan, M. A. Bennani, B. Mazoure, G. Rabusseau, and P. Alquier. A theoretical analysis of catastrophic forgetting through the ntk overlap matrix. In Proc. AISTATS , 2021. [11] P. Foret, A. Kleiner, H. Mobahi, and B. Neyshabur. Sharpness-aware minimization for efficiently improving generalization. In Proc. ICLR , 2021. [12] J. Frankle and M. Carbin. The lottery ticket hypothesis: Finding sparse, trainable neural networks. In Proc. ICLR , 2019. [13] E. Frantar and D. Alistarh. Sparsegpt: Massive language models can be accurately pruned in one-shot. In Proc. ICML , 2023. [14] B. Ghorbani, S. Krishnan, and Y. Xiao. An investigation into neural net optimization via hessian eigenvalue density. In Proc. ICML , 2019. [15] R. Grosse and J. Martens. A kronecker-factored approximate fisher matrix for convolution layers. In Proc. ICML , 2016. 10 [16] V. Gupta, T. Koren, and Y. Singer. Shampoo: Preconditioned stochastic tensor optimization. In 
+
+Proc. ICML , 2018. [17] S. Han, J. Pool, J. Tran, and W. Dally. Learning both weights and connections for efficient neural networks. In Proc. NeurIPS , 2015. [18] S. Hochreiter and J. Schmidhuber. Flat minima. In Neural Computation , 1997. [19] J. Howard and S. Ruder. Universal language model fine-tuning for text classification. In Proc. ACL , 2018. [20] Y. Huang, Y. Zhang, J. Chen, X. Wang, and D. Yang. Continual learning for text classification with information disentanglement based regularization. In Proc. NAACL , 2021. [21] S. Jastrzebski, Z. Kenton, N. Ballas, A. Fischer, Y. Bengio, and A. Storkey. On the relation between the sharpest directions of dnn loss and the sgd step length. In Proc. ICLR , 2019. [22] N. S. Keskar, D. Mudigere, J. Nocedal, M. Smelyanskiy, and P. T. P. Tang. On large-batch training for deep learning: Generalization gap and sharp minima. In Proc. ICLR , 2017. [23] J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K. Milan, J. Quan, T. Ramalho, A. Grabska-Barwinska, D. Hassabis, C. Clopath, D. Kumaran, and R. Hadsell. Overcoming catastrophic forgetting in neural networks. Proceedings of the National Academy of Sciences , 114(13), 2017. [24] F. Kunstner, P. Hennig, and L. Balles. Limitations of the empirical fisher approximation for natural gradient descent. In Proc. NeurIPS , pages 4156–4167, 2019. [25] J. Kwon, J. Kim, H. Park, and I. K. Choi. Asam: Adaptive sharpness-aware minimization for scale-invariant learning of deep neural networks. In Proc. ICML , 2021. [26] M. D. Lange et al. A continual learning survey: Defying forgetting in classification tasks. IEEE TPAMI , 44(7), 2022. [27] Y. LeCun, J. S. Denker, and S. A. Solla. Optimal brain damage. In Advances in Neural Information Processing Systems 2 , pages 598–605, 1990. [28] Z. Li and D. Hoiem. Learning without forgetting. In Proc. ECCV , 2016. [29] D. Lopez-Paz and M. Ranzato. Gradient episodic memory for continual learning. In Proc. NeurIPS , 2017. [30] J. Martens. New insights and perspectives on the natural gradient method. Journal of Machine Learning Research , 21(146), 2020. [31] C. H. Martin and M. W. Mahoney. Implicit self-regularization in deep neural networks: Evidence from random matrix theory and implications for learning. Journal of Machine Learning Research , 22(165), 2021. [32] S. I. Mirzadeh, M. Farajtabar, D. Gorur, R. Pascanu, and H. Ghasemzadeh. Linear mode connectivity in multitask and continual learning. In Proc. ICLR , 2021. [33] V. Papyan. Measurements of three-level hierarchical structure in the outliers in the spectrum of deepnet hessians. In Proc. ICML , 2019. [34] V. Papyan. Traces of class/cross-class structure pervade deep learning spectra. Journal of Machine Learning Research , 21(252), 2020. [35] V. Papyan, X. Y. Han, and D. L. Donoho. Prevalence of neural collapse during the terminal phase of deep learning training. Proceedings of the National Academy of Sciences , 117(40), 2020. [36] A. Prabhu, P. H. S. Torr, and P. K. Dokania. Gdumb: A simple approach that questions our progress in continual learning. In Proc. ECCV , 2020. 11 [37] A. S. Rakin, Z. He, and D. Fan. Bit-flip attack: Crushing neural network with progressive bit search. In Proc. ICCV , pages 1211–1220, 2019. [38] A. S. Rakin, Z. He, and D. Fan. Tbt: Targeted neural network attack with bit trojan. In Proc. CVPR , 2020. [39] A. S. Rakin, Z. He, J. Li, F. Yao, C. Chakrabarti, and D. Fan. T-bfa: Targeted bit-flip adversarial weight attack. IEEE TPAMI , 2022. [40] S.-A. Rebuffi, A. Kolesnikov, G. Sperl, and C. H. Lampert. icarl: Incremental classifier and representation learning. In Proc. CVPR , 2017. [41] L. Sagun, L. Bottou, and Y. LeCun. Eigenvalues of the hessian in deep learning: Singularity and beyond. In arXiv:1611.07476 , 2016. [42] L. Sagun, U. Evci, V. U. Guney, Y. Dauphin, and L. Bottou. Empirical analysis of the hessian of over-parametrized neural networks. In ICLR Workshop Track , 2018. [43] J. Schwarz, W. M. Czarnecki, J. Luketina, A. Grabska-Barwinska, Y. W. Teh, R. Pascanu, and R. Hadsell. Progress & compress: A scalable framework for continual learning. In Proc. ICML ,2018. [44] J. Serrà, D. Surís, M. Miron, and A. Karatzoglou. Overcoming catastrophic forgetting with hard attention to the task. In Proc. ICML , 2018. [45] S. P. Singh and D. Alistarh. Woodfisher: Efficient second-order approximation for neural network compression. In Proc. NeurIPS , 2020. [46] J. S. Smith, L. Karlinsky, V. Gutta, P. Cascante-Bonilla, D. Kim, A. Arbelle, R. Panda, R. Feris, and Z. Kira. Coda-prompt: Continual decomposed attention-based prompting for rehearsal-free continual learning. In Proc. CVPR , 2023. [47] C. Wang, R. Grosse, S. Fidler, and G. Zhang. Eigendamage: Structured pruning in the kronecker-factored eigenbasis. In Proc. ICML , 2019. [48] L. Wang, J. Xie, X. Zhang, M. Huang, H. Su, and J. Zhu. Hierarchical decomposition of prompt-based continual learning: Rethinking obscured sub-optimality. In Proc. NeurIPS , 2023. [49] L. Wang, X. Zhang, H. Su, and J. Zhu. A comprehensive survey of continual learning: Theory, method and application. IEEE TPAMI , 2024. [50] Y. Wang, Z. Huang, and X. Hong. S-prompts learning with pre-trained transformers: An occam’s razor for domain incremental learning. In Proc. NeurIPS , 2022. [51] Y. Wang, D.-W. Zhou, and H.-J. Ye. Integrating task-specific and universal adapters for pre-trained model-based class-incremental learning. In Proc. ICCV , 2025. [52] Z. Wang, Z. Zhang, S. Ebrahimi, R. Sun, H. Zhang, C.-Y. Lee, X. Ren, G. Su, V. Perot, J. Dy, and T. Pfister. Dualprompt: Complementary prompting for rehearsal-free continual learning. In 
+
+Proc. ECCV , 2022. [53] Z. Wang, Z. Zhang, C.-Y. Lee, H. Zhang, R. Sun, X. Ren, G. Su, V. Perot, J. Dy, and T. Pfister. Learning to prompt for continual learning. In Proc. CVPR , 2022. [54] Y. Wu, Y. Chen, L. Wang, Y. Ye, Z. Liu, Y. Guo, and Y. Fu. Large scale incremental learning. In Proc. CVPR , 2019. [55] F. Yao, A. S. Rakin, and D. Fan. Deephammer: Depleting the intelligence of deep neural networks through targeted chain of bit flips. In Proc. USENIX Security Symposium , pages 1463–1480, 2020. [56] Z. Yao, A. Gholami, K. Keutzer, and M. W. Mahoney. Pyhessian: Neural networks through the lens of the hessian. In Proc. IEEE BigData , 2020. 12 [57] Y. You, I. Gitman, and B. Ginsburg. Large batch training of convolutional networks. In 
+
+arXiv:1708.03888 , 2017. [58] Y. You et al. Large batch optimization for deep learning: Training bert in 76 minutes. In Proc. ICLR , 2020. [59] F. Zenke, B. Poole, and S. Ganguli. Continual learning through synaptic intelligence. In Proc. ICML , pages 3987–3995, 2017. [60] G. Zhang, L. Wang, G. Kang, L. Chen, and Y. Wei. Slca: Slow learner with classifier alignment for continual learning on a pre-trained model. In Proc. ICCV , 2023. [61] Z. Zhu, J. Wu, B. Yu, L. Wu, and J. Ma. The anisotropic noise in stochastic gradient descent: Its behavior of escaping from sharp minima and regularization effects. In Proc. ICML , pages 7654–7663, 2019. 13 A Relaxed block-diagonal Hessian 
+
+This appendix promotes Assumption 10 (bounded cross-layer coupling) into a quantitative replace-ment for Theorems 2 and 6. 
+
+Assumption 10 (Bounded cross-layer coupling) . There exists ρ ∈ [0 , 1) such that for all ℓ̸ = ℓ′,
+
+H(ℓ,ℓ ′)
+
+> op
+
+≤ ρ
+
+q
+
+λmax (H(ℓ,ℓ ))λmax (H(ℓ′,ℓ ′)). (17) 
+
+Proposition 11 (Decomposition with cross-layer coupling) . Under Assumption 10, the second-order term in F(∆ θ) satisfies 
+
+∆θ⊤H ∆θ − X
+
+> ℓ
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ )∆θ(ℓ) ≤ 2ρ X
+
+> ℓ<ℓ ′
+
+√sℓ sℓ′ ∆θ(ℓ)
+
+> 2
+
+∆θ(ℓ′)
+
+> 2
+
+, (18) 
+
+which after Cauchy-Schwarz is bounded by ρ (P
+
+> ℓ
+
+√sℓ ∆θ(ℓ)
+
+> 2
+
+)2 − ρ P 
+
+> ℓ
+
+sℓ ∆θ(ℓ) 22 ≤ ρ (L −
+
+1) P 
+
+> ℓ
+
+sℓ ∆θ(ℓ) 22 .
+
+Proof. ∆θ⊤H∆θ = P 
+
+> ℓ,ℓ ′
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ ′)∆θ(ℓ′). Subtracting the diagonal terms gives 
+
+P 
+
+> ℓ̸=ℓ′
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ ′)∆θ(ℓ′), bounded in absolute value by P 
+
+> ℓ̸=ℓ′
+
+H(ℓ,ℓ ′)
+
+> op
+
+∆θ(ℓ) ∆θ(ℓ′) .Substituting Assumption 10, factoring the symmetric pair, and applying Cauchy-Schwarz 
+
+(P
+
+> ℓ
+
+√sℓ ∆θ(ℓ) )2 ≤ L P 
+
+> ℓ
+
+sℓ ∆θ(ℓ) 2 gives the claim. 
+
+Corollary 12. With Assumption 10, Theorem 6’s regret bound holds with κ replaced by an effective 
+
+κeff (ρ) = κ/ (1 + ρ(L − 1)) . As ρ → 0, κeff → κ. As ρ → 1, κeff → κ/L , attenuating the framework’s gain proportionally to depth-coupling. 
+
+Granularity diagnostic. For a candidate partition into L blocks, estimate ρ empirically by the largest off-diagonal block’s spectral norm divided by the geometric mean of the corresponding diagonal blocks’ top eigenvalues. A working threshold such as ρ ≤ 0.3 is not attained at any granularity we measured. On ResNet-50 the mean adjacent ρ is 1.34 for a coarse partition into 3 super-blocks, 1.27 at residual-stage level ( L = 6 ), and 0.92 per block ( L = 18 ), so coarser partitions do not lower ρ. Table 2 below gives the quantitative guidance instead, reporting how much bound content κeff retains at the measured coupling. 
+
+Measured effective condition numbers. Table 2 evaluates the corollary’s κeff (ρ) = κ/ (1 + ρ(L −
+
+1)) at the measured mean adjacent ρ of each backbone (measurement protocol in Appendix E). The bound retains substantial content on all four ResNets, with κeff between 9.4 and 27 .7. On ViT-B/16 it drops to 2.6, and only ViT-L/16 approaches the vacuous value 1 (κeff = 1 .11 ). ResNet-50 and ResNet-101 have mean adjacent ρ ≥ 1, outside the domain of Assumption 10; the closed form is monotone in ρ, and we report its value there as an extrapolation, marked †.Table 2: Effective condition number κeff = κ/ (1 + ρ(L − 1)) evaluated at the measured mean adjacent ρ per backbone. †: measured ρ ≥ 1, outside the domain of Assumption 10; the entry extrapolates the monotone closed form. 
+
+Backbone L κ mean adjacent ρ κeff 
+
+ResNet-18 6 55.1 0.975 9.4 ResNet-34 6 75.4 0.967 12.9 ResNet-50 6 195.3 1.211 † 27.7 †
+
+ResNet-101 6 181.4 1.337 † 23.6 †
+
+ViT-B/16 14 31.5 0.867 2.6 ViT-L/16 26 22.3 0.764 1.11 
+
+14 All-pairs coupling. Adjacent pairs do not tell the whole story. We measured ρℓ,ℓ ′ for every block pair on ResNet-50 (15 pairs) and ViT-B/16 (91 pairs). The mean over non-adjacent pairs, 1.80 on ResNet-50 and 0.98 on ViT-B/16, exceeds the adjacent mean in the same runs ( 1.25 and 0.81 ), so the coupling is not banded around the diagonal. Part of the magnitude is a normalization artifact: on ResNet-50 the fc block’s small sℓ inflates every entry in its column, up to 2.9. Because coupling is real and non-local, we quantify its effect on the bound through κeff and through the displacement-level probes below, not through a banded-structure argument. 
+
+Direct tightness probes. We also probe Proposition 11 on actual continual-learning displace-ments rather than on operator norms alone. For MediumCNN, ResNet-18, and ResNet-50 on Split-CIFAR-100 (3 seeds each), we take the displacement ∆θ accumulated while training task 2 and compare the full quadratic form ∆θ⊤H∆θ against its block-diagonal part. In 9 of 9 runs the gap 
+
+|∆θ⊤H∆θ − P
+
+> ℓ
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ )∆θ(ℓ)| lies within the coupling bound of Proposition 11 evaluated with the measured off-diagonal norms. Table 3 reports the ratios. The block-diagonal term captures 
+
+0.71 ± 0.16 of the full quadratic on ResNet-18 and 0.50 ± 0.08 on ResNet-50; the MediumCNN ratio is noisy because the raw magnitudes are tiny. Two caveats apply. First, 2 of the 9 runs show negative actual forgetting (backward transfer), which no positive-semidefinite quadratic model can reproduce. Second, at a 5-epoch drift distance the quadratic surrogate is rough; the trust-region caveat of Section 5 applies. Finally, the upper bound 12
+
+P 
+
+> ℓ
+
+sℓ ∆θ(ℓ) 22 sits two to three orders of magnitude above the realized quadratic. It is a worst-case ranking device, and Theorem 6 discounts it by the alignment factor χ2 
+
+> ℓ
+
+; we do not claim it is tight. Table 3: Tightness probes on the task-2 displacement (Split-CIFAR-100, 3 seeds per backbone, mean ±std). “blockdiag/full” is the block-diagonal quadratic divided by the full quadratic; “ sℓ-bound/full” is the upper bound 12
+
+P 
+
+> ℓ
+
+sℓ ∆θ(ℓ) 22 divided by the full quadratic; “bound holds” counts runs where |full − blockdiag | is within the measured coupling bound of Proposition 11. 
+
+Backbone blockdiag/full sℓ-bound/full bound holds MediumCNN 1.56 ± 2.34 2463 ± 3661 3/3 ResNet-18 0.71 ± 0.16 780 ± 399 3/3 ResNet-50 0.50 ± 0.08 954 ± 514 3/3 
+
+B Full proof of Theorem 6 
+
+We work on the quadratic surrogate of Lk near θ⋆, with g = ∇Lk(θ⋆) and Q = ∇2Lk(θ⋆) satisfying 
+
+μQI ⪯ Q ⪯ MQI. Both Q and H are block-diagonal across layers. 
+
+Per-layer KKT. At a fixed forgetting budget B > 0 and Lagrange multiplier β ≥ 0, the per-layer subproblem for the oracle is 
+
+min  
+
+> ∆θ(ℓ)
+> 12
+
+(∆ θ(ℓ))⊤Q(ℓ,ℓ )∆θ(ℓ) + g(ℓ)⊤∆θ(ℓ) + β 
+
+> 2
+
+(∆ θ(ℓ))⊤H(ℓ,ℓ )∆θ(ℓ). (19) First-order optimality gives ∆θ(ℓ)oracle = −(Q(ℓ,ℓ ) + βH (ℓ,ℓ ))−1g(ℓ). The uniform regularizer replaces the bracket by Q(ℓ,ℓ ) + βμI .
+
+Loss difference. Substituting both into the new-task quadratic surrogate ˜Lk and subtracting, 
+
+˜Lk(∆ θ⋆ 
+
+> unif
+
+)− ˜Lk(∆ θ⋆
+
+> oracle
+
+) = 12
+
+X
+
+> ℓ
+
+g(ℓ)⊤h
+
+(Q(ℓ,ℓ )+βμI )−1−(Q(ℓ,ℓ )+βH (ℓ,ℓ ))−1i
+
+g(ℓ)+R, (20) where R collects the cross terms and is non-negative by convexity. 
+
+Spectral resolution per layer. Diagonalize H(ℓ,ℓ ) = Uℓ diag( h(ℓ)1 , . . . , h (ℓ) 
+
+> dℓ
+
+)U ⊤ 
+
+> ℓ
+
+with h(ℓ)1 ≤ · · · ≤ 
+
+h(ℓ) 
+
+> dℓ
+
+. Let ˜g(ℓ) = U ⊤ 
+
+> ℓ
+
+g(ℓ) with components ˜g(ℓ) 
+
+> i
+
+. Using Q ⪰ μQI to upper-bound the inverse, 
+
+g(ℓ)⊤(Q(ℓ,ℓ ) + βμI )−1 − (Q(ℓ,ℓ ) + βH (ℓ,ℓ ))−1g(ℓ) ≥ X
+
+> i
+
+(˜ g(ℓ) 
+
+> i
+
+)2 β(h(ℓ) 
+
+> i
+
+− μ)(μQ + βh (ℓ) 
+
+> i
+
+)( μQ + βμ ) . (21) 15 Budget matching forces μ between min and max. The budget constraint ˜F(∆ θ⋆ 
+
+> unif
+
+) = B implies, after substitution, 
+
+B = 12
+
+X
+
+> ℓ
+
+X
+
+> i
+
+h(ℓ) 
+
+> i
+
+(˜ g(ℓ) 
+
+> i
+
+)2
+
+(μQ + βμ )2 . (22) The same equation with h(ℓ) 
+
+> i
+
+replaced by μ on the LHS would give the constraint of a uniform regularizer with sensitivity μ. Since the LHS averages h(ℓ) 
+
+> i
+
+weighted by (˜ g(ℓ) 
+
+> i
+
+)2, when κ > 1 this average lies strictly between min ℓ sℓ and max ℓ sℓ, so μ ∈ (min ℓ sℓ, max ℓ sℓ).
+
+Lower bound by the worst layer. Restrict the sum in Eq. 21 to the maximum-h mode of layer 
+
+ℓ ∈ L + (those with sℓ > min ℓ′ sℓ′ ). For any such layer the top mode satisfies h(ℓ) 
+
+> dℓ
+
+= sℓ > μ 
+
+when sℓ is on the larger side of μ (which happens for at least one ℓ when κ > 1). Substituting the alignment (˜ g(ℓ) 
+
+> dℓ
+
+)2 ≥ χ2 
+
+> ℓ
+
+g(ℓ) 22 and bounding the denominator by (μQ + MQ)2 from βh (ℓ) 
+
+> i
+
+≤ MQ
+
+in the relevant regime, (21) ≥ χ2 
+
+> ℓ
+
+g(ℓ) 22
+
+· β(sℓ − μ)(μQ + βs ℓ)( μQ + βμ ) ≥ μQ
+
+MQ + μQ
+
+· sℓ − μsℓ
+
+· χ2 
+
+> ℓ
+
+g(ℓ) 22
+
+sℓ
+
+. (23) Using μ ≤ max ℓ sℓ/κ = max ℓ sℓ · min ℓ sℓ/ max ℓ sℓ = min ℓ sℓ in the worst case, we get (sℓ −
+
+μ)/s ℓ ≥ (κ − 1) /κ . Plugging in the constant c0 = μQ/(MQ + μQ) yields Theorem 6’s bound. 
+
+Coupled new-task Hessian. If Q couples layers, the per-layer KKT step does not decouple cleanly. A weaker bound follows by replacing μQ with the smallest eigenvalue of the off-block-diagonal-augmented Q matrix. In the worst case c0 shrinks by a factor of L, but the (κ − 1) /κ structure survives. 
+
+C Full proof of Theorem 8 
+
+Worst-case-direction matching. On the displacement ∆θ(ℓ) = cℓv(ℓ), the oracle penalty con-tributes 12 sℓc2 
+
+> ℓ
+
+and the scalar-family penalty contributes 12 λℓc2 
+
+> ℓ
+
+. The two penalties agree on this family iff λℓ/s ℓ is independent of ℓ, hence λℓ ∝ sℓ.
+
+Average-case extension. Take ∆θ(ℓ) uniform on Sdℓ−1 at fixed norm ∆θ(ℓ) = rℓ. Then 
+
+E(∆ θ(ℓ))⊤H(ℓ,ℓ )∆θ(ℓ) = r2 
+
+> ℓ
+
+tr( H(ℓ,ℓ ))/d ℓ = r2 
+
+> ℓ
+
+str  
+
+> ℓ
+
+, while the scalar-family penalty contributes  
+
+> 12
+
+λℓr2 
+
+> ℓ
+
+. Matching gives λℓ ∝ str  
+
+> ℓ
+
+.
+
+Non-reproducibility on every direction. A scalar λℓ ∈ R has one degree of freedom per layer. The matrix H(ℓ,ℓ ) ∈ Sym dℓ has dℓ(dℓ + 1) /2 of them. The map λℓ 7 → λℓI is into the one-dimensional subspace of Sym dℓ spanned by the identity, and matching λℓI = H(ℓ,ℓ ) requires H(ℓ,ℓ ) itself to lie in that subspace. 
+
+D SLCA LR-to-λ equivalence 
+
+Consider gradient descent with step size η on the new-task quadratic surrogate ˜Lk(∆ θ) = 
+
+> 12
+
+∆θ⊤Q∆θ + g⊤∆θ, starting from ∆θ0 = 0 . The trajectory under LR scaling γℓ on layer ℓ is, per layer, 
+
+∆θ(ℓ) 
+
+> t+1
+
+= ∆ θ(ℓ) 
+
+> t
+
+− ηγ ℓ
+
+ Q(ℓ)∆θ(ℓ) 
+
+> t
+
++ g(ℓ), (24) which iterated for T steps with Q(ℓ) block-diagonal yields 
+
+∆θ(ℓ) 
+
+> T
+
+= −I − (I − ηγ ℓQ(ℓ))T (Q(ℓ))−1g(ℓ), (25) valid for ηγ ℓ < 2/λ max (Q(ℓ)) (numerical stability). The norm ∆θ(ℓ) 
+
+> T
+
+is monotone increasing in γℓ
+
+and saturates at Q(ℓ) −1g(ℓ) as T → ∞ or γℓ grows. 16 The trajectory under λ-penalized gradient descent (with no LR scaling) on the loss ˜Lk(∆ θ) +  
+
+> 12
+
+λℓ ∆θ(ℓ) 2 is 
+
+∆θ(ℓ) 
+
+> t+1
+
+= ∆ θ(ℓ) 
+
+> t
+
+− η (Q(ℓ) + λℓI)∆ θ(ℓ) 
+
+> t
+
++ g(ℓ), (26) with the same iterated form but Q(ℓ) → Q(ℓ) + λℓI. The fixed point is −(Q(ℓ) + λℓI)−1g(ℓ), which has the same direction as −(Q(ℓ))−1g(ℓ) but a smaller magnitude. 
+
+Functional equivalence. The two trajectories produce different fixed points, but for any choice of the LR-scaling parameter γℓ ∈ (0 , 1] and total step budget T , one can find a λℓ ≥ 0
+
+such that the resulting ∆θ(ℓ) 
+
+> T
+
+-norms agree. The exact match is implicit. SLCA’s design choice 
+
+γbackbone = 0 .1, γ head = 1 is therefore equivalent in displacement-norm to a two-group λ-schedule with λbackbone /λ head implicitly determined by T . The framework’s prediction concerns the sign 
+
+(smaller LR for the more-sensitive group), not an exact algebraic identity. 
+
+E Direct sℓ measurements 
+
+Procedure. For a backbone fθ and a calibration loss L(θ) = E(x,y )∼p[ℓ(fθ (x), y )] on a batch sampled from CL benchmark p, the per-layer Hessian block is H(ℓ,ℓ ) = ∇2 
+
+> θ(ℓ)
+
+L(θ). We compute its top eigenvalue by power iteration on Hessian-vector products: starting from a random v ∈ Rdℓ , iterate 
+
+v ← HVP( L, θ (ℓ), v ), v ← v/ ∥v∥, returning HVP( L, θ (ℓ), v ) after k = 15 iterations. HVP is implemented in PyTorch via ‘torch.autograd.grad(grad, params, vec)‘. The cost is O(k) HVPs per layer (two backward passes each). For ViT-B/16 we force the math SDPA kernel since the flash and memory-efficient kernels do not support double-backward. 
+
+Measured profiles. Table 4 reports the full per-layer values for both backbones, with dℓ included for context. Both architectures use ImageNet-pretrained weights from torchvision, evaluated on a batch of 32 random samples with a 100-class head (matching CIFAR-100 / Split-CIFAR-100 cardinality). Table 4: Measured per-layer top Hessian eigenvalue sℓ on a 100-class CIFAR-100-style cross-entropy minibatch.                                     
+
+> ResNet-50 ViT-B/16
+> block dℓsℓblock dℓsℓ
+> stem 9,536 39.05 patch_embed 590,592 78.21 layer1 215,808 3,167.48 block0 7,087,872 10.70 layer2 1,219,584 519.36 block1 7,087,872 2.85 layer3 7,098,368 139.32 block2-11 ∼7M each 3–7 layer4 14,964,736 57.73 head 76,900 6.61 fc 204,900 23.53
+> κ= 134 .6κ= 27 .4
+
+Stability across batches. We measure sℓ over 5 independent calibration batches per backbone. The relative ordering of layers is stable across batches, and absolute sℓ values fluctuate by ∼5–15%. The reported κ in Table 5 is the mean-over-seeds. 
+
+Backbone scan, κ vs model size. Table 5 measures κ across six standard backbones, all ImageNet-pretrained. ResNets show κ growing with depth and capacity (R18: 55, R34: 75, R50: 195, with mild saturation at R101: 181). The dominant block is consistently in the early conv stage ( layer1 
+
+or layer3 ). Vision transformers show smaller κ (∼25–30) and the dominant block varies by depth (patch embedding for ViT-B, a mid-stack block for ViT-L). Both families satisfy the LIH ( κ ≫ 1). 
+
+Off-diagonal coupling ρ. We also estimate the off-diagonal block norm H(ℓ,ℓ ′)
+
+> op
+
+between adjacent layer pairs and report ρℓ,ℓ ′ = H(ℓ,ℓ ′)
+
+> op
+
+/√sℓsℓ′ (the quantity bounded by Assumption 10). 17 Table 5: Per-layer Hessian condition number κ = max ℓ sℓ/ min ℓ sℓ measured across six ImageNet-pretrained backbones, with means taken over 5 calibration batches. Full per-layer numbers are in Appendix E. L is the number of architectural blocks used in the partition. 
+
+Backbone L Params (M) κ Most-sensitive Least-sensitive ResNet-18 6 11.2 55.1 layer1 stem ResNet-34 6 21.3 75.4 layer3 stem ResNet-50 6 23.7 195.3 layer1 fc ResNet-101 6 42.7 181.4 layer1 layer4 ViT-B/16 14 85.7 31.5 patch_embed block1 ViT-L/16 26 303.2 22.3 block9 block0 
+
+Across the six backbones the mean adjacent ρ ranges from 0.76 (ViT-L/16) to 1.34 (ResNet-101); Table 2 in Appendix A lists all six values. Values ρ > 1 indicate that Assumption 10’s quantitative bound (which requires ρ < 1) is not strictly satisfied at adjacent residual stages. The qualitative block-diagonal structure still holds, but the regret-bound degradation in Appendix A is a genuine caveat at large coupling. 
+
+Harmonized profiles across pretrainings. The ViT-B/16 profile in Table 4 uses the supervised ImageNet-1k checkpoint (IN1k-sup). Figure 4 repeats the measurement on the same architecture under two further pretrainings, ImageNet-21k supervised (IN21k) and MoCoV3 self-supervised, with an identical protocol: the same 14-block partition, the same 100-class calibration head, and a fixed calibration seed shared across the three checkpoints. Small differences between the IN1k-sup column and Table 4 come from this fixed seed. The MoCoV3 checkpoint was rebuilt from the official release; the conversion was validated with zero missing or unexpected keys on loading. Under this protocol κ is 31 .5 for IN1k-sup (matching the 5-batch mean in Table 5), 14 .6 for IN21k, and 27 .4
+
+for MoCoV3. The three profiles disagree in depth ordering: IN1k-sup and MoCoV3 peak early, at the patch embedding, while IN21k peaks late, at block10. No single fixed α therefore transfers across pretrainings; the framework conditions the schedule on the measured profile of the actual checkpoint. The MoCoV3 mid-stack is nearly flat (blocks 1–11 span 2.7–5.2), which is consistent with the near-flat sweep in Appendix G: apart from the early peak there is little heterogeneity for a depth-monotone schedule to exploit. patch_embed block0 block1 block2 block3 block4 block5 block6 block7 block8 block9 block10 block11 head 0.0 0.5 1.0 1.5 2.0        
+
+> log 10  s
+> supervised IN1k: 31.5
+> IN21k: 14.6
+> MoCo v3: 27.4
+> ViT-B/16: per-block sby pretraining (same 14-block partition)
+> supervised IN1k IN21k MoCo v3
+
+Figure 4: Per-layer sℓ (log scale) on ViT-B/16 under three pretrainings, measured with the same 14-block partition, 100-class calibration head, and a fixed calibration seed. κ: 31.5 (IN1k-sup), 14.6 (IN21k), 27.4 (MoCoV3). IN1k-sup and MoCoV3 peak at the patch embedding; IN21k peaks at block10. 
+
+Random-initialization profiles. All profiles above are measured on trained checkpoints. At random initialization the ordering inverts and the deepest blocks are hottest (3 seeds each). On ResNet-50, sℓ
+
+rises monotonically from the stem ( sstem ≈ 301 ) to the fc head ( sfc ≈ 127 ,000 ). ResNet-18 peaks at layer4 ( ≈ 32 ,000 ), and SmallCNN has κ ≈ 200 at initialization. Heterogeneity is therefore present at init; it is the depth ordering that flips, not the size of κ. The early-layer rule of thumb is a property of trained checkpoints, not of the architecture alone. This does not affect the from-scratch EWC results 18 in Appendix F: EWC anchors its penalty at the trained parameters after each task, and the trajectory measurements in Appendix O show the profile migrating during task 1 and becoming rank-stable from task 2 on, so the schedule is consumed at anchor points where the profile is already that of a trained network. 
+
+F Depth-weighted EWC on from-scratch backbones 
+
+Split-CIFAR-100 with MediumCNN. This is the discriminating from-scratch setting in our EWC experiments and is reported in the main text as Figure 2. One quantitative addition that the main-text discussion does not include is the magnitude of the forgetting trend, with forgetting climbing from 
+
+∼ 0.005 at α = 2 −2 to ∼ 0.16 at α = 2 3. The opposing avg-acc and forgetting signals do not contradict the framework. MediumCNN is trained from scratch and its per-layer sensitivities are not the shallow-dominated pattern Figure 1 measures on pretrained backbones, so the rule-of-thumb’s domain assumption fails here. The framework still applies because it predicts the optimum tracks sℓ,whatever the depth ordering of sℓ happens to be. The avg-acc preference for α > 1 on this longer task sequence is then dominated by plasticity on the new task rather than by stability on the old one. 
+
+Split-CIFAR-10 with SmallCNN. On the smaller backbone and shorter task sequence, the average-accuracy effect of layer-adaptivity is statistically marginal. The avg-acc maximum at c = 200 is at 
+
+α ∈ { 1, 2} with 3-seed std bands overlapping α = 0 .5, so a strict “non-uniform beats uniform” claim is not supported on this backbone. The forgetting and BWT panels are clearer: forgetting at α = 2 3
+
+is ∼8× higher than at α = 2 −2, so deep-layer sensitivity is real even when the avg-acc metric does not separate the schedules. 2 2 2 1 20 21 22 23                                         
+
+> (=c/1;larger deeper layers less protected)
+> 0.675 0.700 0.725 0.750 0.775 0.800 0.825 0.850 Average Accuracy (after all tasks)
+> Split-C10
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform) 222120212223
+> (=c/1;larger deeper layers less protected)
+> 0.00 0.02 0.04 0.06 0.08 0.10 0.12 Forgetting (max-acc  final-acc)
+> Split-C10
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform) 222120212223
+> (=c/1;larger deeper layers less protected)
+> 0.675 0.700 0.725 0.750 0.775 0.800 0.825 0.850 Final Avg Accuracy
+> Split-C10
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform) 222120212223
+> (=c/1;larger deeper layers less protected)
+> 0.12
+> 0.10
+> 0.08
+> 0.06
+> 0.04
+> 0.02
+> 0.00 Backward Transfer
+> Split-C10
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform)
+
+Figure 5: Depth-weighted EWC on Split-CIFAR-10 (SmallCNN, 5 tasks, 3 seeds, mean ±std bands). Same panel layout as Figure 2. 
+
+Split-CIFAR-100 with ResNet-18. On a deeper backbone the geometric schedule does not consis-tently beat uniform. The avg-acc maximum for c = 200 is at α = 1 (mean 0.55 ) with overlapping std bands at α ∈ { 0.5, 4}. This is consistent with the measured ResNet-50 per-layer sensitivities (Figure 1), which is non-monotone in depth (a layer1 spike, then decreasing). A one-parameter geometric prior λℓ ∝ γℓ−1 cannot fit a non-monotone sℓ. A non-monotone schedule ( e.g. , a per-block estimate of sℓ) would be expected to recover the gain. 19 2 2 2 1 20 21 22 23                                         
+
+> (=c/1;larger deeper layers less protected)
+> 0.2 0.3 0.4 0.5 Average Accuracy (after all tasks)
+> Split-C100, ResNet-18
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform) 222120212223
+> (=c/1;larger deeper layers less protected)
+> 0.000 0.025 0.050 0.075 0.100 0.125 0.150 0.175 Forgetting (max-acc  final-acc)
+> Split-C100, ResNet-18
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform) 222120212223
+> (=c/1;larger deeper layers less protected)
+> 0.2 0.3 0.4 0.5 Final Avg Accuracy
+> Split-C100, ResNet-18
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform) 222120212223
+> (=c/1;larger deeper layers less protected)
+> 0.175
+> 0.150
+> 0.125
+> 0.100
+> 0.075
+> 0.050
+> 0.025
+> 0.000 Backward Transfer
+> Split-C100, ResNet-18
+> c=200 c=1000 c=5000 c=20000 = 1 (uniform)
+
+Figure 6: Depth-weighted EWC on Split-CIFAR-100 with a deeper backbone (ResNet-18, 6 architec-tural blocks, 10 tasks, 3 seeds). Same panel layout as Figure 2. 
+
+G SLCA depth-weighted sweep on MoCoV3 pretraining 
+
+For comparison with the ImageNet-21k pretraining in the main text (Figure 3), we report the same depth-weighted SLCA sweep on a ViT-B/16 backbone pretrained with MoCoV3 (the pretraining used in the SLCA paper’s ablations). The full 3 × 5 bounded grid spans 80 .0–84 .8% final-task accuracy ( 87 .9–90 .4% incremental average). Default SLCA corresponds to (c = 1 , α = 1) at 
+
+84 .77% . The grid optimum is (c = 0 .5, α = 0 .92) at 84 .79% , within noise of the default. The interesting structure is row-internal: at c = 2 the row is monotone increasing in α (final-acc rises from 80 .0% at α = 0 .85 to 84 .5% at α = 1 .18 ), so when one over-regularizes the entire backbone, transferring some protection from shallow to deep blocks is the right correction. The near-flatness near 
+
+(c = 1 , α = 1) is consistent with MoCoV3 having per-layer sensitivities that the default two-group LR ratio (backbone 0.1×, head 1×) already approximates well. 
+
+Multi-seed comparison. Table 6 repeats the key configurations of both sweeps over multiple seeds, together with the literal measured-sℓ schedule (the SLCA analog of Appendix K). The SLCA trainer pins the torch seed, so the seed varies only the task/class ordering; the reported spread measures robustness to task order. On ImageNet-21k the geometric schedule beats uniform on every seed. Paired by seed, the Last-acc gain is +0 .450 (per-seed +0 .52 /+0 .56 /+0 .51 /+0 .44 /+0 .22 ), paired 
+
+t-test p = 0 .0018 ; the Wilcoxon signed-rank test gives p = 0 .0625 , its smallest attainable value at 
+
+n = 5 . The Inc-acc gain is +0 .112 (paired t, p = 0 .022 ). On MoCoV3 the paired difference is −0.18 
+
+and not significant ( p = 0 .29 ). This is the parity the measured sensitivity profiles (Appendix E) predict: default SLCA’s two-group ratio already fits the MoCoV3 profile, so a depth-monotone reweighting has no room to win. The literal measured-sℓ schedule trails uniform on both pretrainings, mildly on ImageNet-21k and severely on MoCoV3 ( −7.84 Last-acc, paired t, p = 0 .0021 ), consistent with the dynamic-range failure of the literal prescription documented in Appendix K. 
+
+H TUNA layer-wise orthogonality sweep 
+
+TUNA inserts per-layer adapters with an orthogonality penalty across tasks. The penalty has a per-layer weight λj = c/α j , fulfilling Eq. 15, with the same parametrization as Experiment 1 in the main text (here j indexes transformer blocks, L = 12 ). Sweeping α at fixed c probes whether the 20 0.85 0.90 0.95 1.00 1.05 1.10 1.15 ( l = c l L; larger deeper layers stronger)                                        
+
+> 80 81 82 83 84 85 Final-task Accuracy (%) (  )
+> c=0.5 c=1 c=2 = 1 (default)
+> 0.85 0.90 0.95 1.00 1.05 1.10 1.15 (l=clL;larger deeper layers stronger)
+> 8910 11 12 13 14 15 16 Forgetting (%) (  )
+> c=0.5 c=1 c=2 = 1 (default)
+> 0.85 0.90 0.95 1.00 1.05 1.10 1.15 (l=clL;larger deeper layers stronger)
+> 88.0 88.5 89.0 89.5 90.0 90.5 Avg Incremental Accuracy (%) (  )
+> c=0.5 c=1 c=2 = 1 (default)
+> 0.85 0.90 0.95 1.00 1.05 1.10 1.15 (l=clL;larger deeper layers stronger)
+> 16
+> 15
+> 14
+> 13
+> 12
+> 11
+> 10
+> 9
+> 8
+> BWT (%) (  )
+> c=0.5 c=1 c=2 = 1 (default)
+
+Figure 7: SLCA depth-weighted sweep on Split-CIFAR-100 (ViT-B/16 + MoCoV3, 10 tasks). Same parametrization and panel layout as Figure 3. Table 6: Multi-seed SLCA on Split-CIFAR-100 (10 tasks, ViT-B/16), mean ±std over n task-order seeds, all values in %. Last-acc and Inc-acc as in Table 1. Geometric and measured-sℓ rows use each pretraining’s best (c, α ) and best c, respectively. 
+
+Pretraining Schedule n Last-acc Inc-acc Forgetting ImageNet-21k uniform ( c = 1 , α = 1 ) 5 91 .35 ± 0.23 94 .40 ± 0.69 5.83 ± 0.42 
+
+ImageNet-21k geometric, ours ( c = 1 , α = 1 .18 ) 5 91 .80 ± 0.23 94 .51 ± 0.66 4.37 ± 0.49 
+
+ImageNet-21k measured sℓ (c = 1 ) 3 90 .96 ± 0.18 94 .45 ± 0.21 6.61 ± 0.28 
+
+MoCoV3 uniform ( c = 1 , α = 1 ) 3 84 .44 ± 0.29 90 .12 ± 0.32 9.33 ± 0.44 
+
+MoCoV3 geometric, ours ( c = 0 .5, α = 0 .92 ) 3 84 .26 ± 0.48 90 .08 ± 0.32 10 .09 ± 0.62 
+
+MoCoV3 measured sℓ (c = 0 .5) 3 76 .60 ± 0.71 86 .68 ± 0.22 20 .41 ± 0.85 
+
+optimal orthogonality protection grows or shrinks with depth in a pretrained ViT-B/16 backbone. The adapter family already restricts ∆θ(ℓ) to a 16 -dimensional subspace per transformer block, so the residual room for layer-wise reweighting is small. The result is consistent with the rule of thumb in direction but smaller in magnitude than what we see on EWC and SLCA, which is why we report it here rather than in the main text. We test on two benchmarks, namely CIFAR-100 B0-Inc10 ( 10 tasks of 10 classes) and ImageNet-R B0-Inc20 ( 20 tasks, harder distribution shift). Same four metrics as Experiment 1. 
+
+ImageNet-R B0-Inc20. Figure 8 shows the result on the more demanding ImageNet-R B0-Inc20 setting. The optimum is visibly above α = 1 , around α ∈ { 21, 22}, suggesting that on this dataset the orthogonality penalty should be relaxed on the late blocks. 
+
+CIFAR-100 B0-Inc10. The accuracy span across the (α, c ) grid on this easier benchmark is only about 0.25% , since the adapter constraint already does the bulk of the work and the residual layer-wise tuning has limited room to act. Within that small span the optimum lies away from α = 1 for every c,with the typical preference around α ∈ { 2−1, 21}.21 2 1 0 1 2 3( j = c/ j; larger deeper layers less protected)                                  
+
+> 79.40 79.45 79.50 79.55 79.60 79.65 79.70 79.75 79.80 Final Avg Acc (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1 210123(j=c/j;larger deeper layers less protected)
+> 7.2 7.3 7.4 7.5 7.6 7.7 7.8 7.9 8.0 Forgetting (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1 210123(j=c/j;larger deeper layers less protected)
+> 85.14 85.16 85.18 85.20 85.22 85.24 85.26 85.28 Avg Incremental Acc (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1 210123(j=c/j;larger deeper layers less protected)
+> 8.0
+> 7.9
+> 7.8
+> 7.7
+> 7.6
+> 7.5
+> 7.4
+> 7.3
+> 7.2
+> BWT (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1
+
+Figure 8: TUNA orthogonality sweep on ImageNet-R B0-Inc20 (ViT-B/16). Per-layer orthogonality weight λj = c/α j . Top, final average accuracy (left) and forgetting (right). Bottom, average incremental accuracy (left) and BWT (right). The optimum is visibly above α = 1 , suggesting that on this benchmark late-block orthogonality should be relaxed relative to early blocks. 
+
+I Schedule-shape comparison 
+
+The framework predicts that the per-layer optimum tracks sℓ, but in practice we replace the pre-scription with a one-parameter family. If the rule of thumb (protect shallow layers strongly, let deeper layers move) is the load-bearing piece, the specific monotone-decreasing shape should mat-ter less than the principle. We test this directly by running two additional schedule families on MediumCNN/Split-CIFAR-100 (3 seeds each): • Linear : λℓ = c ·  1 − (α − 1)( ℓ − 1) /(L − 1) , clipped to [c/ 100 , c ], with α ∈ { 1.5, 2, 3}.• Step (two-group) : λℓ = c for ℓ ≤ L/ 2 and λℓ = c/α otherwise, with α ∈ { 2, 4, 8}.Figure 10 reports the best avg-acc across each family’s α grid, alongside the geometric family already in the main text. All three monotone-decreasing schedules consistently beat uniform; the absolute gains over uniform are ∼2–7% depending on c, and the three families’ best points lie within ∼1–4% of each other. The step family is in fact the strongest at higher c, edging out geometric. The shape of the schedule is therefore a second-order choice once the rule of thumb is followed. 
+
+J Full proof of Proposition 5 
+
+Let A ∈ Rd×d be positive semidefinite with eigenvalues λ1 ≥ · · · ≥ λd ≥ 0.
+
+Left inequality. P
+
+p App = tr( A) = P
+
+i λi. The arithmetic mean of non-negative reals is at most the maximum, so 1
+
+d
+
+P
+
+p App = 1
+
+d
+
+P
+
+i λi ≤ λmax (A), with equality iff all λi are equal, i.e. , A = σI .
+
+Right inequality. All eigenvalues being non-negative implies P
+
+i λi ≥ λmax (A), hence 
+
+1
+
+d
+
+P
+
+p App ≥ λmax (A)/d , which rearranges to λmax (A)/( 1
+
+d
+
+P
+
+p App ) ≤ d. Equality holds iff exactly one eigenvalue is nonzero, i.e. , rank( A) ≤ 1.22 2 1 0 1 2 3( j = c/ j; larger deeper layers less protected)                                  
+
+> 91.05 91.10 91.15 91.20 91.25 91.30 Final Avg Acc (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1 210123(j=c/j;larger deeper layers less protected)
+> 4.50 4.55 4.60 4.65 4.70 4.75 4.80 4.85 Forgetting (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1 210123(j=c/j;larger deeper layers less protected)
+> 94.55 94.56 94.57 94.58 94.59 94.60 94.61 94.62 Avg Incremental Acc (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1 210123(j=c/j;larger deeper layers less protected)
+> 4.85
+> 4.80
+> 4.75
+> 4.70
+> 4.65
+> 4.60
+> 4.55
+> 4.50
+> BWT (%) (  )
+> c=0.0003 c=0.001 c=0.003 c=0.01 = 1
+
+Figure 9: TUNA orthogonality sweep on CIFAR-100 B0-Inc10 (ViT-B/16, 10 tasks). Per-layer orthogonality weight λj = c/α j . Same panel layout as Figure 8. c=200 c=1000 c=5000 0.0 0.1 0.2 0.3 0.4 0.5 0.6 Best avg-acc across  (3-seed mean ± std) 
+
+Schedule-shape comparison on MediumCNN / Split-C100 (dashed: uniform = 1) 
+
+> geometric linear step
+
+Figure 10: Best avg-acc per schedule family on MediumCNN/Split-CIFAR-100 (3-seed mean ± std). Bars: best over α within each family. Dashed line and shaded band: uniform EWC ( α = 1 ). All three monotone-decreasing schedules consistently beat uniform; the differences between schedule shapes are within or near the seed-to-seed std bands. Linear and step are not run at c = 20 ,000 since the rank ordering is already clear at smaller c.
+
+Intermediate values. Take At = tI + (1 − t)11 ⊤ with t ∈ [0 , 1] . Every diagonal entry equals 1, so 
+
+1
+
+d
+
+P
+
+p(At)pp = 1 . The eigenvalues of At are t + (1 − t)d (once, with eigenvector 1/√d) and t (with multiplicity d − 1, on the orthogonal complement). Thus λmax (At)/( 1
+
+d
+
+P
+
+p(At)pp ) = t + (1 − t)d,which is continuous in t and sweeps [1 , d ] as t runs from 1 down to 0.
+
+K Direct test of the prescription on EWC 
+
+Theorem 8 prescribes λℓ ∝ sℓ. The main-text experiments use a one-parameter geometric proxy. For completeness we also tested the literal prescription on EWC, using the per-layer sℓ measured on the ImageNet-pretrained checkpoint (Appendix E) directly as the schedule. Three seeds, four c values, ResNet-18 and ResNet-50 on Split-CIFAR-100. 23 Table 7: Direct measured-s schedule vs. uniform EWC on Split-CIFAR-100 (3 seeds, mean ±std). Best c per backbone in bold.                                                 
+
+> cuniform ( α= 1 )measured-sschedule
+> ResNet-50 / Split-CIFAR-100
+> 50 —0.330 ±0.117
+> 200 0.453 ±0.042 0.312 ±0.058
+> 1000 0.407 ±0.036 0.278 ±0.054
+> 5000 0.366 ±0.013 0.195 ±0.027
+> ResNet-18 / Split-CIFAR-100
+> 50 —0.510 ±0.051
+> 200 0.555 ±0.009 0.498 ±0.009
+> 1000 0.515 ±0.022 0.409 ±0.051
+> 5000 0.415 ±0.076 0.249 ±0.048
+
+The measured-s schedule underperforms uniform on both backbones, by 4–14% absolute. This is a real negative result that the framework does not, by itself, predict away. We see two factors that plausibly contribute. The first is dynamic range, in that on ResNet-50 the measured ratio slayer1 /s fc is 
+
+134 , so the literal λℓ ∝ sℓ schedule sets λlayer1 /λ fc ≈ 134 , which over-protects layer1 in absolute terms and starves the head of plasticity. The second is per-layer measurement noise, since each sℓ
+
+is estimated from a single calibration batch and the literal schedule applies the raw ratios with no smoothing across layers. Trajectory drift away from the pretraining checkpoint, where the ratios at 
+
+θ⋆ need not hold along the optimizer path, is a third candidate; the re-measurement experiment below isolates it. The one-parameter geometric proxy used in the main text trades exact-ratio matching for a regularising prior across α, and that single-slope smoothing is what we believe carries the gain. The framework’s prediction is therefore narrower than “apply λℓ ∝ sℓ literally and you win.” A correct reading is that the optimum within the scalar-per-layer family lies in the direction of sℓ, and the geometric one-parameter approximation is a robust way to sweep that direction without committing to exact per-layer ratios that depend on noisy per-batch curvature estimates. The schedule-shape comparison in Appendix I reinforces this, showing that the broad family of monotone-decreasing schedules consistently beats uniform. 
+
+Interpolated schedules. The dynamic-range and measurement-noise factors suggest smoothing the literal schedule rather than abandoning it. We test the one-parameter family λℓ ∝ (sℓ/s med )β ,where smed is the median of the measured sℓ: β = 0 recovers uniform EWC, β = 1 recovers the literal measured schedule above, and intermediate β compresses the per-layer ratios toward one. We sweep β ∈ { 0, 0.25 , 0.5, 0.75 , 1} and c ∈ { 50 , 200 , 1000 , 5000 } with 3 seeds on Split-CIFAR-100. Figure 11 reports avg-acc at the best c per cell. ResNet-18 has an interior optimum at β∗ = 0 .5
+
+(0.590 ± 0.014 vs 0.557 ± 0.021 for uniform), so a measured-s schedule beats uniform on the very backbone where the one-parameter geometric prior gains nothing (Appendix F). ResNet-50 has a boundary optimum at β = 0 and decreases monotonically in β; its extreme dynamic range (κ = 195 .3, with the non-monotone layer1 spike) defeats power scaling. Forgetting decreases monotonically in β on both backbones, the stability-plasticity direction the framework predicts, and avg-acc varies smoothly in β with no cliffs. The reading is consistent with the theory. Theorem 8 fixes the direction of the schedule from the worst-case displacement. The average-case optimum 
+
+λℓ ∝ tr( H(ℓ,ℓ ))/d ℓ (Appendix C) keeps the same ordering while compressing the dynamic range (Appendix M). The exponent β < 1 plays the same compressing role and acts as shrinkage against per-batch measurement noise. 
+
+Per-task re-measurement. The drift factor can be isolated directly. We re-measure sℓ at every task boundary and rebuild the schedule with the interpolated family above, in two arms: online β = 1 
+
+(literal) and online β = 0 .5 (smoothed). Same benchmark, seeds, and c grid; every measurement averages three calibration batches. Table 8 reports avg-acc at the best c per arm. The online-smoothed arm is the strongest ResNet-18 arm in this comparison and halves forgetting relative to uniform (0.030 vs 0.062 ). On ResNet-50, re-measurement repairs the static schedule’s failure back to uniform parity ( 0.462 ± 0.056 vs 0.453 ± 0.034 ). The static baseline on ResNet-18 also lands above the single-calibration-batch schedule of Table 7 ( 0.575 vs 0.510 ), consistent with the measurement-noise factor above. The overhead is measured rather than estimated: 216 HVPs per boundary ( 12 power 24 0.0 0.2 0.4 0.6 0.8 1.0                                                        
+
+> 0.40 0.45 0.50 0.55 0.60
+> Avg-Acc
+> uniform (= 0)
+> literal measured (= 1)
+> c=50 c=200 c=1000 c=5000
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80
+> Final-Acc
+> uniform (= 0)
+> literal measured (= 1)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.02 0.04 0.06 0.08 0.10 0.12
+> Forgetting
+> uniform (= 0)
+> literal measured (= 1)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.12
+> 0.10
+> 0.08
+> 0.06
+> 0.04
+> 0.02
+> 0.00
+> BWT
+> uniform (= 0)
+> literal measured (= 1)
+> r18: uniform-to-measured interpolation ( s)0.0 0.2 0.4 0.6 0.8 1.0
+> 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+> Avg-Acc
+> uniform (= 0)
+> literal measured (= 1)
+> c=50 c=200 c=1000 c=5000
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+> Final-Acc
+> uniform (= 0)
+> literal measured (= 1)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.00 0.02 0.04 0.06 0.08 0.10 0.12 0.14 0.16
+> Forgetting
+> uniform (= 0)
+> literal measured (= 1)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> 0.150
+> 0.125
+> 0.100
+> 0.075
+> 0.050
+> 0.025
+> 0.000
+> BWT
+> uniform (= 0)
+> literal measured (= 1)
+> r50: uniform-to-measured interpolation ( s)
+
+Figure 11: The interpolated family λℓ ∝ (sℓ/s med )β on Split-CIFAR-100 (left: ResNet-18, right: ResNet-50; 3 seeds, mean ±std, one curve per c). At the best c per cell, ResNet-18 peaks at β∗ = 0 .5
+
+(0.590 ± 0.014 vs 0.557 ± 0.021 uniform); ResNet-50 is best at β = 0 (0.441 ± 0.015 ) and decreases monotonically to 0.330 ± 0.120 at β = 1 .iterations × 6 blocks × 3 calibration batches), ≈1.5 s per boundary on ResNet-18 ( ∼15% of training wall-clock) and ≈3.6 s on ResNet-50. Together with the β sweep, this locates the causes of the negative result above: drift is real but secondary, and magnitude smoothing is primary. Table 8: Per-task re-measured schedules on Split-CIFAR-100: avg-acc at the best c per arm (3 seeds, mean ±std). Best arm per backbone in bold. 
+
+Arm ResNet-18 ResNet-50 uniform ( α = 1 ) 0.555 ± 0.008 0.453 ± 0.034 
+
+static measured 0.575 ± 0.009 0.330 ± 0.095 
+
+online β = 1 0.570 ± 0.011 0.462 ± 0.056 
+
+online β = 0 .5 0.589 ± 0.008 0.460 ± 0.033 
+
+L Forgetting swing vs measured κ
+
+Theorem 6 predicts that the regret of layer-uniform regularization grows with the layer condition number κ. We give a coarse quantitative test by plotting, for each EWC backbone, the forgetting swing :the gap between forgetting at the most-deep-protective α = 2 −2 and at the least-deep-protective 
+
+α = 2 3, taken as the maximum across c values. This is the empirical analog of the regret bound: the more sensitive the deep layers are (high κ), the more forgetting one pays for under-protecting them. 
+
+M Trace proxy vs operator-norm sensitivity 
+
+Theorem 8 sets λℓ ∝ sℓ, the top Hessian eigenvalue, because forgetting is dominated by the worst displacement direction. If one instead averages forgetting over isotropic random displacement directions, the optimum becomes λℓ ∝ tr( H(ℓ,ℓ ))/d ℓ, the average eigenvalue per layer. The two summaries can be very different (Proposition 5), and SGD’s actual trajectories preferentially follow top eigendirections [21, 61] rather than isotropic ones, so sℓ is the right summary for the regret bound. The trace summary is nevertheless useful as a cheap proxy, costing one Hutchinson HVP per layer instead of 10 –20 power iterations. Figure 13 plots both quantities side by side on ResNet-50 and ViT-B/16, each normalised by its own median for visual comparability. The takeaway: the trace proxy preserves the qualitative ordering and identifies the same most-sensitive block, but compresses the spread by a factor of several. For a practitioner choosing a depth-weighted schedule, the cheap trace estimate is a good first sweep direction; for the regret bound in Theorem 6, which depends on the operator-norm κ, the power-iteration estimate remains the right quantity. 25 0 25 50 75 100 125 150 175 200 Measured layer condition number (Appendix~F)   
+
+> 8910 11 12 13 14 15 Forgetting swing (%) over  [2  2, 2 3]
+> SmallCNN / C10 ( not measured)
+> MediumCNN / C100 ( not measured)
+> ResNet-18 / C100 ResNet-50 / C100
+> Theorem 6 prediction: forgetting swing grows with
+
+Figure 12: Per-backbone forgetting swing on Split-CIFAR-10/CIFAR-100 (forg at α = 2 3 minus forg at α = 2 −2, max across c) vs measured κ. Backbones with measured κ (ResNet-18, ResNet-50) are plotted at their true κ; SmallCNN/MediumCNN are trained from scratch and are placed on the left margin since their sℓ profile was not measured. The trend is monotone in κ on the two pretrained backbones and consistent in magnitude with the bound’s (κ − 1) /κ scaling. stem layer1 layer2 layer3 layer4 fc  
+
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> normalised by median
+
+resnet50   
+
+> s(op-norm)
+> str (trace/ d)
+> patch\_embed block0 block1 block2 block3 block4 block5 block6 block7 block8 block9 block10 block11 head
+> normalised by median
+
+vit_b_16   
+
+> s(op-norm)
+> str (trace/ d)
+
+Figure 13: Per-layer operator-norm sℓ (blue) and trace-divided-by-width str  
+
+> ℓ
+
+= tr( H(ℓ,ℓ ))/d ℓ (or-ange), each normalised by its median. Both signals identify the same dominant block ( layer1 on ResNet-50, patch_embed on ViT-B/16), but the operator norm has a sharper peak. The trace proxy is a reasonable cheap surrogate for the qualitative ordering, but understates the dynamic range of κ.
+
+N LIH on the BERT-base language backbone 
+
+The LIH measurements in the main text and Appendix E are on six standard vision backbones (ResNet-18/34/50/101, ViT-B/16, ViT-L/16). The framework is stated for any layer-partitioned neural network, but a reasonable concern is whether the shallow-dominated sℓ pattern transfers beyond computer vision. We test this on BERT-base [8]: same per-layer power-iteration procedure as Appendix E, calibration batch of 32 random token sequences (max length 64 , CLS/SEP boundary tokens preserved), 10 -class linear head on the CLS embedding, 15 power-iteration steps, 3 calibration seeds. Figure 14 reports the per-layer profile. The token-embedding block dominates with sℓ = 70 .4 ± 0.0,the head sits at 20 .8, and the twelve transformer blocks span sℓ ∈ [7 .7, 26 .3] . The measured layer condition number is κ = 9 .15 , modest compared to the 20 –200 range observed on vision backbones but still strictly above 1. The qualitative pattern matches the LIH: a small number of layers (here, the 26 embedding) dominate the loss curvature, with the rest of the architecture spread across roughly an order of magnitude. The framework’s prescription therefore extends to NLP backbones in principle, with the specific schedule depending on the per-layer profile of the chosen model. embeddings block0 block1 block2 block3 block4 block5 block6 block7 block8 block9 block10 block11 head   
+
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 log 10  s
+> bert_base (9.1)
+> mean
+
+Figure 14: Per-layer log 10 sℓ on BERT-base, evaluated on a random-token calibration batch with a 10 -class linear head on CLS. Embeddings dominate ( sembed = 70 ), with the twelve transformer blocks in [8 , 26] and the head at shead = 21 . Measured κ = 9 .15 .Two caveats. First, κ on BERT is smaller than on vision backbones; the rule-of-thumb gain from a depth-weighted regularizer should be correspondingly smaller per Theorem 6. Second, our calibration batch is random tokens rather than a real text-classification benchmark, so the absolute magnitudes will shift on a downstream task. The per-layer ordering is what the framework consumes, and it is consistent with the vision-backbone pattern: a small number of high-curvature layers, here the token embedding, dominate the loss. 
+
+A text continual-learning benchmark. The measurement above is a curvature profile, not a task-performance result. To close the loop, we ran an end-to-end benchmark on the five-dataset text-classification sequence of Huang et al. [20]: AG News, Yelp Review Full, Amazon Review Full, Yahoo Answers, and DBpedia, in that fixed order. The backbone is BERT-base with a separate classification head per task; EWC regularizes the shared encoder parameters. We use the reduced setting of IDBR [20], with 2000 training and up to 1000 test examples per class, 3 seeds, and 
+
+c ∈ { 100 , 1000 , 10000 }. Table 9 reports sequential fine-tuning and both EWC arms at the strongest regularization strength. Table 9: Five-dataset text continual learning with BERT-base (3 seeds, mean ±std). SeqFT is sequential fine-tuning without regularization; both EWC arms are shown at c = 10000 .                       
+
+> Method Avg-acc Forgetting SeqFT 0.624 ±0.010 0.158 ±0.011
+> Uniform EWC ( c= 10000 )0.728 ±0.002 0.027 ±0.006
+> Measured-sEWC ( c= 10000 )0.722 ±0.005 0.035 ±0.004
+
+EWC itself transfers to language: uniform EWC gains 10 percentage points of avg-acc over sequential fine-tuning and cuts forgetting from 0.158 to 0.027 . The measured-s schedule matches uniform within noise. The difference is between −0.6 and +0 .3 percentage points at every c and is never significant ( p ≥ 0.09 ). This null is the outcome Theorem 6 predicts. The measured κ = 9 .15 on BERT-base is the smallest backbone-level value we observe, and the regret bound in Theorem 6 is monotone non-decreasing in κ, so the predicted layer-adaptive gain is smallest exactly on this backbone. The benchmark therefore confirms the scope condition: layer-adaptive schedules pay off where the measured κ is large, and the same measurement predicts in advance where they do not. 27 O Per-task sℓ variation and ordering stability 
+
+The Layer-Importance Hypothesis (Figure 1) is implicitly a claim about the architecture: sℓ varies dramatically across layers, and this variation should be a property of the network rather than of any particular calibration batch. We test this directly on ResNet-50 by drawing the calibration batch from each Split-CIFAR-100 task in turn (10-class subsets, 32 samples per batch) and measuring per-layer 
+
+sℓ at each. Figure 15 shows the resulting trajectories. t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 Task index (Split-C100, 10 tasks of 10 classes each) 10 1  
+
+> Per-layer top eigenvalue  s (log)
+> ResNet-50: per-layer sacross Split-C100 tasks
+> stem layer1 layer2 layer3 layer4 fc
+
+Figure 15: Per-layer sℓ on ResNet-50 measured with calibration batches drawn from each of the 10 
+
+Split-CIFAR-100 tasks separately. Each line is one architectural block; the x-axis is task index. The per-block ordering ( layer1 on top, then layer3 and fc , then layer2 and layer4 , with stem at the bottom) is preserved across all 10 tasks. Absolute magnitudes vary by a factor of ∼ 2 within each block, but the rank is invariant. Two observations. First, the per-layer rank is stable: layer1 dominates on every task ( sℓ = 12 .3±1.5
+
+across tasks), with layer3 and fc consistently second-tier and stem consistently lowest. The shallow-conv-dominated pattern from Figure 1 therefore does not depend on a specific calibration batch and reads through to every task’s data slice. Second, absolute sℓ values vary within a factor of ∼ 2 across tasks, and the per-task κ values cluster in 4.5–6.4. This is much smaller than the κ = 195 reported on the same backbone with a 100-class head in Appendix E, because here each task has only 10 classes and the cross-entropy loss has correspondingly less spread. The framework’s prescription is invariant to the absolute scale of κ (it only uses the per-layer ratios), so this scale shift does not affect the rule of thumb; it does say that quoting a single κ for a backbone hides real data dependence in the absolute magnitudes. 
+
+Within-task and across-task trajectories. The measurements above vary the calibration task at a fixed trained checkpoint. A complementary question is how sℓ evolves along the training trajectory itself. We measure sℓ at 11 checkpoints during task 1 of Split-CIFAR-100 ( 3 seeds) on pretrained ResNet-50 and on from-scratch ResNet-18 and SmallCNN, and summarize rank stability as the Spearman correlation between the profile at step t and the final within-task profile. Figure 16 shows the trajectories. On pretrained ResNet-50 the correlation stays at or above 0.70 at every checkpoint: the ranking measured at θ⋆ does not go stale within a task, only the magnitudes move. The from-scratch runs are rank-unstable before roughly step 200 and stabilize thereafter. Mid-training, the top-curvature estimate on ResNet-18 and ResNet-50 can be negative; the trajectory measurements use a signed Rayleigh-quotient estimator, and we report magnitudes with a sign flag. Across task boundaries, we track a from-scratch ResNet-50 (CIFAR variant; blocks stage1 –stage3 
+
+and fc ) trained with EWC ( c = 200 ) on Split-CIFAR-100, snapshotting the profile after tasks 1, 2, 5, and 10. At initialization the profile is fc-heavy ( sℓ = 32 ,600 on fc vs 11 ,500 on stage3 ). After task 1 it has reordered to stage3-heavy ( 21 .2 vs 1.9). From task 2 onward the ranking is stable while the magnitudes grow: stage3 passes through 478 , 1,768 , and 3,201 , and fc through 20 , 81 , and 
+
+126 , after tasks 2, 5, and 10 respectively. The two views agree. Profiles anchored at a trained θ⋆ are 28 Table 10: Per-experiment compute summary. EWC and SLCA depth-weighted sweeps use 3 seeds where indicated. “Wallclock per job” is the typical end-to-end time on a single allocation; “Total” aggregates across the full grid. 
+
+Experiment # jobs Wallclock/job GPU-h (approx.) EWC sweep, SmallCNN/CIFAR-10 (3 seeds, 6 ×4 grid) 72 5–10 min 10 EWC sweep, MediumCNN/CIFAR-100 (3 seeds, 6 ×4 grid) 72 10–20 min 20 EWC sweep, ResNet-18/CIFAR-100 (3 seeds, 6 ×4 grid) 72 20–40 min 40 EWC sweep, ResNet-50/CIFAR-100 (3 seeds, 6 ×4 grid) 72 30–60 min 60 EWC measured-s, ResNet-18/CIFAR-100 (3 seeds, 4 c, Appendix K) 12 20–40 min 7EWC measured-s, ResNet-50/CIFAR-100 (3 seeds, 4 c, Appendix K) 12 30–60 min 10 EWC schedule-shape, MediumCNN/CIFAR-100 (linear+step, Appendix I) 54 10–20 min 15 EWC schedule-shape, SmallCNN/CIFAR-10 (linear+step, Appendix I) 54 5–10 min 7EWC schedule-shape, ResNet-18/CIFAR-100 (linear+step, Appendix I) 54 20–40 min 30 EWC 20-task Split-CIFAR-100 (3 seeds, 6 ×4 grid) 72 20–40 min 35 TUNA, ImageNet-R B0-Inc20 ∼24 60–120 min 36 TUNA, CIFAR-100 B0-Inc10 (Appendix H) ∼24 60–120 min 36 SLCA depth-weighted, MoCoV3 (15 configs, 90 ep/task) 15 240–360 min 75 SLCA depth-weighted, ImageNet-21k (15 configs, 20 ep/task) 15 25–40 min 8Hessian power iteration, 6 backbones (Appendix E) 6 30–60 min 4Hessian extras: per-task sℓ, empirical Fisher, granularity, BERT-base NLP 4 20–60 min 3
+
+Total reported runs ∼397 010 25 50 79 100 158 200 237 316 395 
+
+> training step
+> 8
+> 6
+> 4
+> 2
+> 0246
+> log 10  s
+> resnet18_scratch
+> stem stage1 stage2 stage3 stage4 fc (t)
+> open marker: negative Rayleigh
+> 010 25 50 79 100 158 200 237 316 395
+> training step
+> 6
+> 4
+> 2
+> 0246
+> log 10  s
+> resnet50_tv
+> stem layer1 layer2 layer3 layer4 fc (t)
+> open marker: negative Rayleigh
+> 010 25 50 79 100 158 200 237 316 395
+> training step
+> 4
+> 2
+> 024
+> log 10  s
+> smallcnn_scratch
+> conv1 conv2 conv3 fc1 fc2 (t)
+> open marker: negative Rayleigh
+> 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5
+> (t)
+> 1e7 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5
+> (t)
+> 1e7 010000 20000 30000 40000 50000
+> (t)
+
+Figure 16: Per-layer log 10 |sℓ| at 11 checkpoints during task 1 of Split-CIFAR-100 (one panel per backbone; mean over 3 seeds with seed band; open markers flag negative signed-Rayleigh curvature; dashed line: κ(t)). rank-stable, both within a task and across tasks from task 2 on, whereas profiles taken at initialization or early in from-scratch training do not predict the trained ordering. This supports re-measuring the schedule at task boundaries rather than fixing it at initialization. 
+
+P Comparison with experience replay 
+
+The main text treats replay as an orthogonal family (Section 2). Here we quantify the comparison directly. We run experience replay (ER) on Split-CIFAR-100 with the same task split, backbones, and training protocol as the EWC experiments (Section 4): class-balanced index replay over past-task data, memory budgets M ∈ { 500 , 2000 , 6200 } stored examples, replay batch size equal to the current-task batch, 3 seeds. The largest budget is chosen so that the buffer roughly matches the extra storage EWC itself carries on MediumCNN, anchor parameters plus Fisher values, i.e. , 2× the parameter count at 4 bytes each. Three observations. First, ER dominates both EWC arms on the ResNets at every budget, consistent with prior reports that replay is a strong baseline on deep networks [3, 36]. Second, the ordering reverses on the small from-scratch CNN: every EWC arm beats ER at every budget, and the geometric schedule is the best arm overall. Third, the two families compose. The ER+EWC row combines a small buffer ( M = 500 ) with the geometric schedule at α = 2 and c = 200 ; on MediumCNN this beats ER alone at every budget. Replay also carries a cost the table does not show: the buffer stores raw past-task data, which is unavailable under privacy or data-retention constraints. Layer-adaptive regularization applies unchanged in that regime and, per the last row, remains useful when storage is allowed. 29 Table 11: Average accuracy on Split-CIFAR-100 (3 seeds, mean ±std): ER at three memory budgets, the EWC arms at their best configuration, and the composition of the two families. Best c is 200 
+
+throughout; the best geometric α is 2 on MediumCNN and ResNet-50 and 4 on ResNet-18.                                                                     
+
+> Method MediumCNN ResNet-18 ResNet-50 ER ( M= 500 )0.441 ±0.012 0.658 ±0.009 0.620 ±0.027
+> ER ( M= 2000 )0.443 ±0.014 0.725 ±0.012 0.684 ±0.031
+> ER ( M= 6200 )0.493 ±0.002 0.775 ±0.012 0.720 ±0.011
+> EWC uniform (best c)0.572 ±0.004 0.555 ±0.009 0.453 ±0.042
+> EWC geometric (best α,c)0.598 ±0.023 0.542 ±0.038 0.431 ±0.023
+> ER+EWC ( M= 500 ,c= 200 ,α= 2 )0.574 ±0.005 0.593 ±0.044 0.505 ±0.017
+
+Q Broader impacts 
+
+The paper’s contribution is theoretical and diagnostic. The most direct positive impact is efficiency: a layer-adaptive regularizer that recovers the same continual-learning quality with a smaller forgetting budget reduces the compute needed to keep deployed models current with new data, an effect that compounds with the total number of model updates a system performs over its lifetime. The associated diagnostic ( κ measurement) is a single-number test for whether layer-adaptive regularization is worth using on a given backbone, which spares practitioners from running a full sweep when uniform regularization is already adequate. The paper also has a dual-use facet that we want to acknowledge directly. The per-layer top Hessian eigenvalue sℓ that our framework prescribes for protective regularization is the same per-layer sensitivity quantity that the adversarial weight-attack literature uses to identify which layers are most worth attacking with bit-flip, weight-perturbation, or trojan-implant procedures [37, 55, 6]. Our work does not introduce a new attack capability (the bit-flip literature already operates on the same quantity), but reframing sℓ as a CL hyperparameter could in principle make the per-layer sensitivity profile a more visible target for adversaries planning weight-space attacks on deployed models. We mitigate this by working only with publicly available, non-safety-critical benchmarks (Split-CIFAR-10/100, ImageNet-R) and by releasing no new model checkpoints. We recommend that practitioners who measure sℓ on production models treat the resulting per-layer profile with the same care they would apply to any other model-internal artefact that informs an attack surface. A second consideration is more diffuse. Improved continual learning makes long-running personalized systems (recommenders, assistants, on-device adapters) easier to keep current. This is a property of better CL in general rather than a specific contribution of this paper, but it interacts with privacy in the usual way: a system that retains and integrates information well across tasks also retains and integrates information well across users and time, which sharpens the existing tension between personalization quality and data minimization. Any deployment of CL methods on user data should pair the stability gains we discuss with explicit data-retention and consent policies. 
+
+R Compute resources 
+
+All experiments ran on an internal HPC cluster with NVIDIA GPUs (B200, H200, H100, A100-80GB, A100-40GB, RTXA6000) inside an NVIDIA PyTorch 25.01 enroot container, scheduled by SLURM. Per-job resources requested: 1 GPU, 4–8 CPUs, 32–64 GB RAM, 3–10 h walltime depending on workload. Approximate wallclock and total compute per experiment block, including the appendix-only sweeps: The full research effort (preliminary sweeps, debugging runs, abandoned configurations not reported here) consumed roughly 2–3× the total in Table 10, i.e. , on the order of 800 –1200 GPU-hours. A later round of experiments, including the replay comparison in Appendix P, added roughly 300 
+
+further GPU-jobs of 0.1–2 h each. 30 NeurIPS Paper Checklist 
+
+1. Claims 
+
+Question: Do the main claims made in the abstract and introduction accurately reflect the paper’s contributions and scope? Answer: [Yes] Justification: The abstract and Section 1 state the four main results (Theorems 2, 6, 8 and Proposition 5). They also state how two existing layer-adaptive CL methods (TUNA and SLCA) and our own depth-weighted EWC variant fit the scalar-per-layer family. Each claim is formalized in Section 3 and tested in Section 4. Guidelines: • The answer [N/A] means that the abstract and introduction do not include the claims made in the paper. • The abstract and/or introduction should clearly state the claims made, including the contributions made in the paper and important assumptions and limitations. A [No] or [N/A] answer to this question will not be perceived well by the reviewers. • The claims made should match theoretical and experimental results, and reflect how much the results can be expected to generalize to other settings. • It is fine to include aspirational goals as motivation as long as it is clear that these goals are not attained by the paper. 2. Limitations 
+
+Question: Does the paper discuss the limitations of the work performed by the authors? Answer: [Yes] Justification: Section 5 explicitly lists five caveats: local validity of the second-order model (trust region), block-diagonal Hessian approximation, F = H identity at exponential-family optima, functional (not algebraic) SLCA reduction, and locality of sℓ measurement. Guidelines: • The answer [N/A] means that the paper has no limitation while the answer [No] means that the paper has limitations, but those are not discussed in the paper. • The authors are encouraged to create a separate “Limitations” section in their paper. • The paper should point out any strong assumptions and how robust the results are to violations of these assumptions (e.g., independence assumptions, noiseless settings, model well-specification, asymptotic approximations only holding locally). The authors should reflect on how these assumptions might be violated in practice and what the implications would be. • The authors should reflect on the scope of the claims made, e.g., if the approach was only tested on a few datasets or with a few runs. In general, empirical results often depend on implicit assumptions, which should be articulated. • The authors should reflect on the factors that influence the performance of the approach. For example, a facial recognition algorithm may perform poorly when image resolution is low or images are taken in low lighting. Or a speech-to-text system might not be used reliably to provide closed captions for online lectures because it fails to handle technical jargon. • The authors should discuss the computational efficiency of the proposed algorithms and how they scale with dataset size. • If applicable, the authors should discuss possible limitations of their approach to address problems of privacy and fairness. • While the authors might fear that complete honesty about limitations might be used by reviewers as grounds for rejection, a worse outcome might be that reviewers discover limitations that aren’t acknowledged in the paper. The authors should use their best judgment and recognize that individual actions in favor of transparency play an impor-tant role in developing norms that preserve the integrity of the community. Reviewers will be specifically instructed to not penalize honesty concerning limitations. 3. Theory assumptions and proofs 
+
+31 Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof? Answer: [Yes] Justification: All theorems, propositions, corollaries, and definitions are numbered and cross-referenced. Assumption 1 is stated before every result that uses it. Theorem 2 and Proposition 5 are proved in full in the main text; Theorems 6 and 8 have main-text proof sketches with full proofs deferred to Appendices B and C. Guidelines: • The answer [N/A] means that the paper does not include theoretical results. • All the theorems, formulas, and proofs in the paper should be numbered and cross-referenced. • All assumptions should be clearly stated or referenced in the statement of any theorems. • The proofs can either appear in the main paper or the supplemental material, but if they appear in the supplemental material, the authors are encouraged to provide a short proof sketch to provide intuition. • Inversely, any informal proof provided in the core of the paper should be complemented by formal proofs provided in appendix or supplemental material. • Theorems and Lemmas that the proof relies upon should be properly referenced. 4. Experimental result reproducibility 
+
+Question: Does the paper fully disclose all the information needed to reproduce the main ex-perimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)? Answer: [Yes] Justification: Section 4 reports the full grid for each experiment: depth-weighted EWC sweeps over α ∈ { 0.25 , 0.5, 1, 2, 4, 8} and c ∈ { 200 , 1000 , 5000 , 20000 } on SmallCNN (5 layers) on Split-C10, MediumCNN (6 layers) on Split-C100, and ResNet-18 on Split-C100, all over 3 seeds with 2 epochs per task; TUNA orthogonality sweeps over the same (c, α ) parametrization on ViT-B/16 with C100 B0-Inc10 and ImNet-R B0-Inc20; SLCA depth-weighted sweeps over c ∈ { 0.5, 1, 2} and α ∈ { 0.85 , 0.92 , 1, 1.08 , 1.18 } on ViT-B/16 + MoCoV3 and ViT-B/16 + ImNet-21k, both on Split-C100. The remaining hyperparameters (optimizer, batch size, Fisher-sample count, milestones) are listed in the companion repository. Guidelines: • The answer [N/A] means that the paper does not include experiments. • If the paper includes experiments, a [No] answer to this question will not be perceived well by the reviewers: Making the paper reproducible is important, regardless of whether the code and data are provided or not. • If the contribution is a dataset and/or model, the authors should describe the steps taken to make their results reproducible or verifiable. • Depending on the contribution, reproducibility can be accomplished in various ways. For example, if the contribution is a novel architecture, describing the architecture fully might suffice, or if the contribution is a specific model and empirical evaluation, it may be necessary to either make it possible for others to replicate the model with the same dataset, or provide access to the model. In general. releasing code and data is often one good way to accomplish this, but reproducibility can also be provided via detailed instructions for how to replicate the results, access to a hosted model (e.g., in the case of a large language model), releasing of a model checkpoint, or other means that are appropriate to the research performed. • While NeurIPS does not require releasing code, the conference does require all submis-sions to provide some reasonable avenue for reproducibility, which may depend on the nature of the contribution. For example (a) If the contribution is primarily a new algorithm, the paper should make it clear how to reproduce that algorithm. 32 (b) If the contribution is primarily a new model architecture, the paper should describe the architecture clearly and fully. (c) If the contribution is a new model (e.g., a large language model), then there should either be a way to access this model for reproducing the results or a way to reproduce the model (e.g., with an open-source dataset or instructions for how to construct the dataset). (d) We recognize that reproducibility may be tricky in some cases, in which case authors are welcome to describe the particular way they provide for reproducibility. In the case of closed-source models, it may be that access to the model is limited in some way (e.g., to registered users), but it should be possible for other researchers to have some path to reproducing or verifying the results. 5. Open access to data and code 
+
+Question: Does the paper provide open access to the data and code, with sufficient instruc-tions to faithfully reproduce the main experimental results, as described in supplemental material? Answer: [No] Justification: The main contribution is theoretical, but every empirical figure in the paper (the per-layer Hessian measurement of Figure 1, the multi-seed depth-weighted EWC sweeps, the TUNA orthogonality sweeps, and the two SLCA depth-weighted sweeps) is produced by an anonymous companion codebase. We will release this codebase together with the camera-ready, including the launch scripts and per-task JSON outputs that generate every plot. The submission text gives the full (c, α ) grids, backbones, datasets, and seeds needed to reproduce the runs from public sources alone. Guidelines: • The answer [N/A] means that paper does not include experiments requiring code. • Please see the NeurIPS code and data submission guidelines ( https://neurips.cc/ public/guides/CodeSubmissionPolicy ) for more details. • While we encourage the release of code and data, we understand that this might not be possible, so [No] is an acceptable answer. Papers cannot be rejected simply for not including code, unless this is central to the contribution (e.g., for a new open-source benchmark). • The instructions should contain the exact command and environment needed to run to reproduce the results. See the NeurIPS code and data submission guidelines ( https: //neurips.cc/public/guides/CodeSubmissionPolicy ) for more details. • The authors should provide instructions on data access and preparation, including how to access the raw data, preprocessed data, intermediate data, and generated data, etc. • The authors should provide scripts to reproduce all experimental results for the new proposed method and baselines. If only a subset of experiments are reproducible, they should state which ones are omitted from the script and why. • At submission time, to preserve anonymity, the authors should release anonymized versions (if applicable). • Providing as much information as possible in supplemental material (appended to the paper) is recommended, but including URLs to data and code is permitted. 6. Experimental setting/details 
+
+Question: Does the paper specify all the training and test details (e.g., data splits, hyperpa-rameters, how they were chosen, type of optimizer) necessary to understand the results? Answer: [Yes] Justification: Section 4 reports architecture (SmallCNN, 5 layers; MediumCNN, 6 layers), dataset (Split-C10, 5 tasks; Split-C100, 10 tasks), epochs per task, and the full (α, c ) grid. Full hyperparameter specifications (optimizer, batch size, Fisher-sample size) are in the companion repository. Guidelines: • The answer [N/A] means that the paper does not include experiments. 33 • The experimental setting should be presented in the core of the paper to a level of detail that is necessary to appreciate the results and make sense of them. • The full details can be provided either with the code, in appendix, or as supplemental material. 7. Experiment statistical significance 
+
+Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments? Answer: [Yes] Justification: The depth-weighted EWC sweeps report mean curves with shaded ±1 std bands across 3 seeds (216 runs total). The TUNA and SLCA sweeps are single-seed grid sweeps following the protocol of the original methods. Each of the two SLCA (c, α ) grids spans 15 configs, and the trend is read across the grid rather than from per-cell error bars. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The authors should answer [Yes] if the results are accompanied by error bars, confidence intervals, or statistical significance tests, at least for the experiments that support the main claims of the paper. • The factors of variability that the error bars are capturing should be clearly stated (for example, train/test split, initialization, random drawing of some parameter, or overall run with given experimental conditions). • The method for calculating the error bars should be explained (closed form formula, call to a library function, bootstrap, etc.) • The assumptions made should be given (e.g., Normally distributed errors). • It should be clear whether the error bar is the standard deviation or the standard error of the mean. • It is OK to report 1-sigma error bars, but one should state it. The authors should preferably report a 2-sigma error bar than state that they have a 96% CI, if the hypothesis of Normality of errors is not verified. • For asymmetric distributions, the authors should be careful not to show in tables or figures symmetric error bars that would yield results that are out of range (e.g., negative error rates). • If error bars are reported in tables or plots, the authors should explain in the text how they were calculated and reference the corresponding figures or tables in the text. 8. Experiments compute resources 
+
+Question: For each experiment, does the paper provide sufficient information on the com-puter resources (type of compute workers, memory, time of execution) needed to reproduce the experiments? Answer: [Yes] Justification: Appendix R (Table 10) reports per-experiment GPU type, memory, walltime per job, and total GPU-hours, including a full-research-effort estimate that covers preliminary and abandoned runs. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The paper should indicate the type of compute workers CPU or GPU, internal cluster, or cloud provider, including relevant memory and storage. • The paper should provide the amount of compute required for each of the individual experimental runs as well as estimate the total compute. • The paper should disclose whether the full research project required more compute than the experiments reported in the paper (e.g., preliminary or failed experiments that didn’t make it into the paper). 9. Code of ethics 
+
+Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics https://neurips.cc/public/EthicsGuidelines ?34 Answer: [Yes] Justification: The paper is theoretical and the supporting experiments use only public continual-learning benchmarks (Split-C10/100, ImNet-R/A, ObjectNet, CUB-200, Cars-196). No human subjects, private data, or deployment risks are involved. Guidelines: • The answer [N/A] means that the authors have not reviewed the NeurIPS Code of Ethics. • If the authors answer [No], they should explain the special circumstances that require a deviation from the Code of Ethics. • The authors should make sure to preserve anonymity (e.g., if there is a special consid-eration due to laws or regulations in their jurisdiction). 10. Broader impacts 
+
+Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed? Answer: [Yes] Justification: Appendix Q discusses positive impacts (compute efficiency for keeping deployed models current; a single-number diagnostic that spares unnecessary sweeps), the dual-use overlap between the per-layer sensitivity sℓ used here for regularization and the same quantity used by the adversarial weight-attack literature, and the indirect privacy interaction between better continual learning and long-running personalized systems. Guidelines: • The answer [N/A] means that there is no societal impact of the work performed. • If the authors answer [N/A] or [No], they should explain why their work has no societal impact or why the paper does not address societal impact. • Examples of negative societal impacts include potential malicious or unintended uses (e.g., disinformation, generating fake profiles, surveillance), fairness considerations (e.g., deployment of technologies that could make decisions that unfairly impact specific groups), privacy considerations, and security considerations. • The conference expects that many papers will be foundational research and not tied to particular applications, let alone deployments. However, if there is a direct path to any negative applications, the authors should point it out. For example, it is legitimate to point out that an improvement in the quality of generative models could be used to generate Deepfakes for disinformation. On the other hand, it is not needed to point out that a generic algorithm for optimizing neural networks could enable people to train models that generate Deepfakes faster. • The authors should consider possible harms that could arise when the technology is being used as intended and functioning correctly, harms that could arise when the technology is being used as intended but gives incorrect results, and harms following from (intentional or unintentional) misuse of the technology. • If there are negative societal impacts, the authors could also discuss possible mitigation strategies (e.g., gated release of models, providing defenses in addition to attacks, mechanisms for monitoring misuse, mechanisms to monitor how a system learns from feedback over time, improving the efficiency and accessibility of ML). 11. Safeguards 
+
+Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)? Answer: [N/A] Justification: The paper releases no new models or datasets; it analyzes existing continual-learning methods and uses public benchmarks only. Guidelines: • The answer [N/A] means that the paper poses no such risks. 35 • Released models that have a high risk for misuse or dual-use should be released with necessary safeguards to allow for controlled use of the model, for example by requiring that users adhere to usage guidelines or restrictions to access the model or implementing safety filters. • Datasets that have been scraped from the Internet could pose safety risks. The authors should describe how they avoided releasing unsafe images. • We recognize that providing effective safeguards is challenging, and many papers do not require this, but we encourage authors to take this into account and make a best faith effort. 12. Licenses for existing assets 
+
+Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected? Answer: [Yes] Justification: All prior methods discussed (EWC, SI, MAS, TUNA, SLCA, K-FAC) and datasets used by the companion experiments (Split-C10/100, ImNet-R/A, ObjectNet, CUB-200, Cars-196) are cited with their original publications in Section 2 and the References. The companion repository documents dataset licenses for the empirical runs. Guidelines: • The answer [N/A] means that the paper does not use existing assets. • The authors should cite the original paper that produced the code package or dataset. • The authors should state which version of the asset is used and, if possible, include a URL. • The name of the license (e.g., CC-BY 4.0) should be included for each asset. • For scraped data from a particular source (e.g., website), the copyright and terms of service of that source should be provided. • If assets are released, the license, copyright information, and terms of use in the package should be provided. For popular datasets, paperswithcode.com/datasets 
+
+has curated licenses for some datasets. Their licensing guide can help determine the license of a dataset. • For existing datasets that are re-packaged, both the original license and the license of the derived asset (if it has changed) should be provided. • If this information is not available online, the authors are encouraged to reach out to the asset’s creators. 13. New assets 
+
+Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets? Answer: [N/A] Justification: The paper does not release new datasets, models, or trained checkpoints with this submission. Companion experimental code will be released separately with the camera-ready version. Guidelines: • The answer [N/A] means that the paper does not release new assets. • Researchers should communicate the details of the dataset/code/model as part of their submissions via structured templates. This includes details about training, license, limitations, etc. • The paper should discuss whether and how consent was obtained from people whose asset is used. • At submission time, remember to anonymize your assets (if applicable). You can either create an anonymized URL or include an anonymized zip file. 14. Crowdsourcing and research with human subjects 
+
+36 Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)? Answer: [N/A] Justification: The paper does not involve crowdsourcing or research with human subjects. Guidelines: • The answer [N/A] means that the paper does not involve crowdsourcing nor research with human subjects. • Including this information in the supplemental material is fine, but if the main contribu-tion of the paper involves human subjects, then as much detail as possible should be included in the main paper. • According to the NeurIPS Code of Ethics, workers involved in data collection, curation, or other labor should be paid at least the minimum wage in the country of the data collector. 15. Institutional review board (IRB) approvals or equivalent for research with human subjects 
+
+Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained? Answer: [N/A] Justification: The paper does not involve human subjects or crowdsourcing, so IRB approval is not applicable. Guidelines: • The answer [N/A] means that the paper does not involve crowdsourcing nor research with human subjects. • Depending on the country in which research is conducted, IRB approval (or equivalent) may be required for any human subjects research. If you obtained IRB approval, you should clearly state this in the paper. • We recognize that the procedures for this may vary significantly between institutions and locations, and we expect authors to adhere to the NeurIPS Code of Ethics and the guidelines for their institution. • For initial submissions, do not include any information that would break anonymity (if applicable), such as the institution conducting the review. 16. Declaration of LLM usage 
+
+Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research? Note that if the LLM is used only for writing, editing, or formatting purposes and does not impact the core methodology, scientific rigor, or originality of the research, declaration is not required. Answer: [N/A] Justification: LLMs are not part of the methodology or any core component of this research; any use of LLM tools was limited to writing and formatting, which per NeurIPS policy does not require declaration. Guidelines: • The answer [N/A] means that the core method development in this research does not involve LLMs as any important, original, or non-standard components. • Please refer to our LLM policy in the NeurIPS handbook for what should or should not be described. 37

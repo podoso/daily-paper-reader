@@ -1,0 +1,932 @@
+Title: LENS: In-Context Search via Latent Evidence Exploration over Dynamic Raw Documents
+
+URL Source: https://arxiv.org/pdf/2608.16185v2
+
+Published Time: Wed, 19 Aug 2026 00:36:06 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# LENS: In-Context Search via Latent Evidence Exploration over Dynamic Raw Documents 
+
+## Xingjun Wang, Gongsheng Li, Qi Fan, Yunlin Mao, Luyan Su, Yingda Chen †
+
+ModelScope Team, Alibaba Group Hangzhou, China {xingjun.wxj, ligongsheng.lgs, luoqifan.fq, maoyunlin.myl, suluyan.sly, yingda.chen}@alibaba-inc.com 
+
+Abstract 
+
+Large language model agents increasingly need to answer questions over dynamic raw-document collections, where files may be added or updated before evidence can be preprocessed into fixed representations. Relevant evidence may appear as spans, sections, pages, or tables whose usefulness is query-dependent. Existing retrieval-augmented approaches typically materialize the evidence space before querying through fixed chunking, embeddings, or persistent indexes. While effective for lookup, such representations impose preprocessing cost, can become stale after document updates, and commit to an evidence granularity before the query is known. We formulate in-context search as Budgeted Evidence Lo-calization over a latent evidence space induced by dynamic raw documents, and propose Latent Evidence Exploration and Search (LENS) as an index-free framework for this setting. Rather than pre-materializing the full evidence space, LENS maintains a query-conditioned belief over candidate evidence units, iteratively selecting candidates through complementary lexical, local, and exploratory proposal policies, updating the belief with observations from an LLM-based relevance ora-cle, and narrowing the search toward high-posterior evidence regions under a controllable budget. The resulting evidence is consolidated into compact, source-grounded regions of in-terest and further compressed into self-organizing knowledge clusters for reuse across semantically related queries. On a controlled 500-question evaluation with matched corpus snapshots, LENS achieves 62.4% exact match and 84.8% ev-idence recall, while a ReAct-style iterative baseline achieves 65.2% exact match but only 50.4% evidence recall. Across controlled scales, LENS consistently provides the strongest supporting-fact localization and answer grounding. On a fixed 150-question fullwiki subset over the raw Wikipedia dump with zero indexing, LENS and ReAct are nearly tied in of-ficial answer quality (43.3% vs. 42.7% EM), while LENS grounds a larger share of answers in retrieved evidence (84.0% vs. 70.7%). A no-retrieval Closed-Book reference highlights the contribution of model memory and motivates reporting retrieval gains relative to this baseline. LENS remains query-ready immediately after corpus changes, requires no prepro-cessing or persistent index, and preserves source-grounded evidence localization throughout. 
+
+> †
+
+Corresponding author. 
+
+## 1 Introduction 
+
+Large language model (LLM) agents increasingly operate over collections of raw documents that evolve faster than evidence can be reliably preprocessed into fixed representa-tions. In such settings, relevant evidence is not a stable object known before the query. It may be a paragraph span, a table entry, a section, a page, or a cross-document chain whose appropriate granularity depends on both the question and the current document state. This makes document-grounded question answering different from retrieval over a static cor-pus of pre-segmented passages. Existing retrieval-augmented approaches typically address document question answering by materializing the evidence space before querying, through chunking, dense embeddings, summaries, persistent sparse indexes, or graph-like mem-ory structures (Lewis et al. 2020; Karpukhin et al. 2020; Izacard et al. 2023). These representations are effective for static lookup, especially when the corpus is stable and pre-processing cost can be amortized. However, in dynamic raw-document collections, pre-materialization introduces a trade-off: setup and update costs must be paid before querying, indexes can become stale after document changes, and fixed chunks commit to an evidence granularity before the query reveals what evidence is needed. The central difficulty is that the evidence space induced by raw documents is latent, variable-boundary, dynamic, and structured. It is latent because answer-bearing evidence ex-ists in the documents but is not known in advance; variable-boundary because the useful evidence windows are not lim-ited to a fixed set of chunks, which makes the space discrete but combinatorially large; dynamic because document up-dates change the space itself; and structured because lexical, layout, path, and historical signals induce non-uniform priors over likely evidence regions. Treating this space as a fixed finite collection of chunks can therefore obscure the actual search problem faced by an LLM agent. We formulate this setting as Budgeted Evidence Localiza-tion over a latent evidence space induced by dynamic raw documents. The goal is not merely to return the nearest pre-computed passages, but to infer a compact source-grounded evidence set under token, latency, and oracle-call constraints. This formulation makes the cost of using an LLM as a rele-vance oracle explicit, while preserving the query-conditioned nature of evidence granularity and document freshness. arXiv:2608.16185v2 [cs.CL] 18 Aug 2026 To make this formulation practical, we propose Latent Ev-idence Exploration and Search (LENS) . LENS first forms a low-cost prior over candidate evidence regions using doc-ument signals available before any expensive oracle interac-tion. It then performs sequential exploration: each observa-tion from an LLM-based relevance oracle updates a belief over candidate evidence units and guides subsequent explo-ration toward regions with higher expected utility. Finally, LENS consolidates selected evidence into compact, source-grounded regions and organizes confirmed evidence for reuse across semantically related follow-up queries. We evaluate LENS under a dynamic raw-corpus protocol built around nested question sets and matched raw-document snapshots. This protocol measures answer quality, evidence localization, freshness under corpus growth, and query-time budget. All systems are compared under identical sampled questions and corpus boundaries, allowing paired analysis while keeping the raw-corpus setting auditable. Our contributions are as follows. First, we formulate in-context search over evolving raw-document collections as Budgeted Evidence Localization over a latent evidence space. Second, we introduce LENS, an index-free sequential exploration framework that combines low-cost priors, oracle-guided evidence refinement, budget-aware stopping, and source-grounded consolidation. Third, we design a dynamic raw-corpus evaluation protocol that jointly reports answer quality, evidence localization, freshness, budget-normalized quality, and no-retrieval reference scores. Finally, we provide mechanism evidence through source-grounding diagnostics and an ablation that isolates multi-signal prior formation from sequential exploration, rather than relying only on ag-gregate answer scores. 
+
+## 2 Background 
+
+We study document collections whose contents and bound-aries may change between queries. Files can be added, up-dated, or removed, and the evidence needed by a query may be located in spans, tables, pages, or cross-document rela-tions. This setting differs from static open-domain retrieval because both the corpus state and the appropriate evidence granularity are query-dependent. Retrieval-augmented generation typically constructs a fi-nite representation of the evidence space before a query ar-rives. Chunking, embedding indexes, sparse indexes, sum-mary trees, and document graphs all instantiate this strategy. These representations are useful when the corpus is stable, but they commit to a fixed representation before the query is known and must be rebuilt or updated when the underlying documents change. LLMs provide strong semantic relevance judgments, but each oracle interaction consumes tokens, latency, and cost. A search method over dynamic raw documents therefore needs to trade off immediate relevance, information gain, source traceability, and budget. LENS uses this view to cast in-context search as sequential evidence localization rather than as a one-shot top-k lookup problem. 
+
+## 3 Budgeted Evidence Localization 
+
+We consider a collection of raw documents that evolves over time. Let 
+
+Dt = {d(t)1 , d (t)2 , . . . , d (t) 
+
+> N
+
+} (1) denote the document collection at time t. A query q arrives after the current corpus state is fixed, and the system must answer using evidence from Dt rather than from a stale rep-resentation of Dt−1.
+
+Definition 1 (Latent Evidence Space) . For a dynamic raw-document collection Dt, the latent evidence space is 
+
+Et ≜ {(d, s, e ) | d ∈ D t, 0 ≤ s < e ≤ | d|} . (2) 
+
+Each element denotes a candidate evidence window in a raw document. 
+
+The space Et is not explicitly enumerated by LENS. It is latent because the answer-bearing region is unknown be-fore querying, variable-boundary because window bound-aries may vary at span-level resolution, which makes Et finite but combinatorially large in |d|, dynamic because Et changes with Dt, and structured because document paths, textual an-chors, compiled summaries, and prior successful searches induce non-uniform beliefs over the space. Queries impose different evidence requirements. We use an intent variable 
+
+I(q) ∈ { lookup , computation ,
+
+comparison , aggregation , summarize } (3) to indicate whether a query can be answered by a localized span, requires multiple atomic facts, or requires a higher-level synthesis. The intent induces a set of data requirements 
+
+Dreq (q, I ) = {f1, . . . , f K }, (4) a decomposition of the query into atomic facts together with optional transformation rules that combine them. Lookup queries have K = 1 , whereas comparison, computation, and aggregation queries have K > 1 and their facts may reside in different documents. Evidence localization is therefore defined per atomic fact rather than per query. 
+
+Definition 2 (Per-Fact Evidence Target) . For each fj ∈Dreq (q, I ), let Z∗ 
+
+> j
+
+∈ E t be a minimal sufficient evidence window for fj . The evidence target of the query is the collec-tion Z∗ = {Z∗ 
+
+> 1
+
+, . . . , Z ∗ 
+
+> K
+
+}, and localization is complete only when every requirement is covered. 
+
+This per-fact formulation is what makes the target well de-fined on multi-hop queries. A comparison between two enti-ties needs one fact from each of two documents, so no single contiguous window is sufficient and a query-level single-window target would not exist. Defining the target per fact keeps the inference object a single window — so that beliefs and stopping rules remain tractable — while the query-level output is a set, which is also what the system returns. For a fact fj , the ideal inference target is the posterior 
+
+P (Z∗ 
+
+> j
+
+| fj , q, Ht) ∝ P (Ht | Z∗ 
+
+> j
+
+, f j , q )
+
+· πprior (Z∗ 
+
+> j
+
+| fj , q, Dt). (5) where πprior is a query-conditioned initial belief and Ht is the history of oracle observations. Because the prior already conditions on the query, evidence about Z∗ 
+
+> j
+
+accrues through the observation likelihood. This likelihood is not available in closed form, so LENS treats an LLM as a costly relevance oracle and approximates posterior concentration through se-quential observations. A budget B limits the number of oracle calls, tokens, or wall-clock time available for a query. The output is a pair 
+
+(E∗, a ), where E∗ is a compact, source-grounded evidence set that covers the localized windows { ˆZj }j≤K and a is the synthesized answer. This distinguishes evidence localization from pure answer generation: a correct answer without trace-able evidence is insufficient for the setting considered here. 
+
+## 4 The LENS Algorithm 
+
+Figure 1 presents the overall framework. LENS first con-structs a low-cost prior over the latent evidence space, then performs budget-constrained sequential inference in a propose–observe–update loop. Finally, it consolidates high-belief regions into a compact source-grounded evidence set for answer synthesis. This separation is central: prior for-mation cheaply narrows the search domain, while sequential refinement spends oracle calls only where they are informa-tive. 
+
+4.1 Layer 1: Low-Cost Prior over Latent Evidence 
+
+Directly exploring Et is infeasible. As shown on the left of Figure 1, LENS first compresses the search space by fusing five families of signals that are available without reading the corpus through an LLM: lexical anchors, document-path structure, compiled document summaries when available, historical source-grounded evidence from prior successful searches, and lightweight corpus scans. Rather than treating such signals as independent retrieval modules, LENS uses them as approximations to a prior 
+
+πprior (z | q, Dt) ≈ X
+
+> k∈K 0
+
+wk πk(z | q, Dt), (6) where K0 denotes a family of low-cost proposal signals. This joint prior factors, by the chain rule, into a marginal– conditional pair that separates document selection from within-document localization: 
+
+πprior (z | q, Dt) = πfile (dz | q, Dt) πpos (sz , e z | dz , q ), (7) where dz is the document associated with region z. The two equations therefore describe the same object: the mix-ture in the first specifies how the signals are fused, and the factorization in the second specifies at which level each fac-tor acts. Making the decomposition explicit matters because strong file-level evidence does not automatically imply pre-cise within-document localization. 
+
+Proposition 1 (Low-cost space compression) . Let Cinit be the finite candidate document set induced by low-cost prior signals. Subsequent evidence exploration is restricted from 
+
+Et to Csearch = {(d, s, e ) | d ∈ C init , 0 ≤ s < e ≤ | d|} .Thus, before any iterative oracle budget is consumed, LENS reduces the effective search domain from the full raw-document collection to a query-conditioned subspace. 
+
+4.2 Layer 2: Budget-Constrained Sequential Inference 
+
+After prior formation, LENS enters the budgeted exploration loop shown at the center of Figure 1, which cycles through four steps while budget remains and some requirement in 
+
+Dreq (q, I ) is still uncovered: (i) propose a candidate evi-dence region zt, (ii) query the LLM relevance oracle on the raw text of the region to obtain an observation ot, (iii) update the beliefs over evidence regions, and (iv) adapt proposal weights and coverage estimates. Let Ht = {(zi, o i)}ti=1 de-note the observation history accumulated by this loop. Each observation is informative about every outstanding require-ment, so LENS maintains one belief per fact and updates all of them from the shared history: 
+
+P (Z∗ 
+
+> j
+
+| fj , q, Ht) ∝
+
+> t
+
+Y
+
+> i=1
+
+P (oi | Z∗ 
+
+> j
+
+, z i, f j , q )
+
+· πprior (Z∗ 
+
+> j
+
+| fj , q, Dt).
+
+(8) A single oracle call therefore serves all facts at once, which is why the per-fact formulation does not multiply the oracle budget by K.The next candidate should balance exploitation and explo-ration: it should use the current posteriors to refine promis-ing regions, while retaining the ability to discover evidence missed by lexical or structural priors. An ideal information-directed objective (Russo and Van Roy 2014) selects 
+
+zt+1 = arg min 
+
+> z∈C search
+
+Ψt(z),
+
+Ψt(z) = [∆ t(z)] 2
+
+I(Z∗; Oz | q, Ht) .
+
+(9) where ∆t(z) is the expected immediate relevance gap and the denominator is the expected information gain about the outstanding targets Z∗. Minimizing this information ratio is principled: it targets the trade-off between immediate rele-vance and long-run information gain that underlies regret-optimal sequential selection, so that oracle budget is spent where it is most informative about Z∗. Exact computation is intractable in raw documents, so LENS approximates this criterion with complementary proposal families: 
+
+πt(z) = λ(t) 
+
+> lex
+
+πlex (z) + λ(t)
+
+> local
+
+πlocal (z)+ λ(t)
+
+> global
+
+πglobal (z). (10) Lexical proposals exploit anchors, local proposals refine around high-belief regions, and global proposals guard against semantic omissions. Treating each proposal family as an arm, LENS adapts the mixture weights λ(t) online from observed oracle utility, closing the propose–observe– update cycle in Figure 1 without enumerating the full latent space. 
+
+4.3 Budget-Aware Stopping 
+
+The exploration loop should not continue merely because more context can be read. As depicted in Figure 1, each it-eration terminates in a stopping decision: LENS exits the LENS — Budgeted Evidence Exploration over Latent Evidence Space 
+
+> Index-free in-context search over dynamic raw documents
+> INPUTS
+
+Query q 
+
+> intent I(q):
+> lookup · computation · comparison · aggregation · summarize
+> + add / update
+
+Dynamic raw docs                   
+
+> Dt= { d1, …, dN}Latent evidence space
+> Et= { ( d,s,e) }
+> LAYER 1 · LOW-COST PRIOR
+> Lexical anchors Document-path structure Compiled document summaries Historical source-grounded evidence Lightweight corpus scans
+> πprior = Σ kwkπk
+> =πfile (d) × πpos (s,e)two-level
+> Candidate subspace Csearch
+> Csearch ⊂Et· Prop. 1: space compression
+> LAYER 2 · BUDGET-CONSTRAINED BAYESIAN SEQUENTIAL INFERENCE
+> 1
+
+Propose candidate zt     
+
+> πt= λ lex πlex + λ local πlocal + λ glob πglob
+> arms: lex · local · global
+> 2
+
+LLM Relevance Oracle      
+
+> reads raw text of Dt→observation ot
+> 3
+
+Update belief         
+
+> P(Z*|q,Ht)∝∏P(oi|Z*,zi,q)πprior
+> 4
+
+Update weights    
+
+> adapt λ(t) from oracle utility
+> history H t= { (z i, o i) } iterate while budget remains
+
+Budget-aware stopping        
+
+> GLR t≷β( t,δ)·γ( I)or budget Bexhausted
+> continue
+> γ( I): tight for computation / comparison · loose for lookup
+> CONSOLIDATION & SYNTHESIS
+> 5
+
+Consolidate evidence E*  
+
+> dedup · expand bounds · keep source traces
+> →compact source-grounded set E*
+
+Answer synthesis   
+
+> extract atomic facts →synthesize
+
+Output ( E*, a )            
+
+> source-grounded evidence + answer
+> self-correct if Dreq (q,I) unmet & budget remains
+> KNOWLEDGE SELF-ORGANIZATION
+> Persist { q, a, E *}as reusable clusters →warm priors for follow-up queries (verify against current D t).
+> persist warm prior · reuse
+> Inputs / documents Low-cost prior / knowledge Budgeted exploration loop LLM oracle / stopping Consolidation / synthesis data flow reuse (warm prior) self-correction
+
+Figure 1: Overall LENS framework. LENS forms a query-conditioned prior over candidate evidence regions, runs a budget-constrained propose–observe–update loop, and consolidates selected regions into a compact source-grounded evidence set for answer synthesis. It never pre-materializes a persistent index over the raw-document collection. loop when either the remaining budget is insufficient or ev-ery requirement is localized with sufficiently concentrated belief. Following fixed-confidence best-arm identification ideas (Garivier and Kaufmann 2016), a conceptual per-fact stopping statistic is 
+
+GLR (j)
+
+t = min 
+
+z̸ = ˆZj,t 
+
+X
+
+i≤t
+
+log P (oi | ˆZj,t , f j , q )
+
+P (oi | z, f j , q ) . (11) where ˆZj,t is the current highest-belief region for fact 
+
+fj . LENS stops when min j≤K GLR (j)
+
+t exceeds an intent-modulated threshold β(t, δ ) γ(I) — that is, when the weakest requirement is resolved — or when the budget is exhausted, where γ(I) tightens the criterion for computation and com-parison intents and relaxes it for lookup. A lookup query has a single requirement and can often stop with one compact region, whereas comparison and computation queries cannot stop until each of their K facts has its own confirmed window, which is exactly the coverage condition on Dreq (q, I ).
+
+4.4 Evidence Consolidation and Answer Synthesis 
+
+Once the loop stops, the selected regions enter the consolidation-and-synthesis stage on the right of Figure 1. Consolidation merges the per-fact windows { ˆZj }j≤K , re-moves redundant or overlapping regions, expands boundaries when necessary for interpretability, and preserves source traces, yielding a compact source-grounded evidence set 
+
+E∗. Answer synthesis then operates on E∗: for computa-tion and comparison queries, LENS separates extraction of atomic facts from answer synthesis; for lookup-style queries, a single-stage synthesis may be sufficient. When synthesis cannot satisfy Dreq (q, I ) and budget remains, LENS trig-gers the self-correction path in Figure 1: a bounded step that 
+
+Algorithm 1 LENS: Budgeted Evidence Localization 
+
+1: Input: query q, dynamic corpus Dt, budget B
+
+2: Build low-cost prior πprior (z | q, Dt) over candidate evi-dence regions 
+
+3: Derive requirements Dreq (q, I ) = {f1, . . . , f K }
+
+4: Initialize observation history H0 ← ∅ and candidate subspace Csearch 
+
+5: while budget remains and some fj is uncovered do 
+
+6: Select proposal family and sample candidate region 
+
+zt
+
+7: Query relevance oracle to obtain observation ot
+
+8: Update per-fact beliefs P (Z∗
+
+j | fj , q, Ht)
+
+9: Update proposal weights and requirement coverage 
+
+10: end while 
+
+11: Consolidate the per-fact windows into source-grounded evidence set E∗
+
+12: Synthesize answer a from E∗ and persist reusable evi-dence clusters when appropriate 
+
+13: Return: (E∗, a )
+
+relaxes the stopping threshold and re-enters the exploration loop with an expanded candidate set before re-synthesizing. The final output is the pair (E∗, a ), an answer grounded in explicit evidence regions rather than only in retrieved text snippets. 
+
+4.5 Algorithm Summary and Theoretical Properties 
+
+Algorithm 1 summarizes the inference loop. The algorithm is intentionally written at the method level rather than in implementation-specific terms. Under the abstraction above, LENS admits two analysis statements and a budget guarantee. First, low-cost priors re-duce the search domain before any iterative oracle budget is spent. Second, when the oracle relevance signal is locally stable, successive observations progressively concentrate the belief over candidate evidence regions, so that additional budget yields diminishing exploration returns. The online cost of this process is bounded independently of corpus size. 
+
+Proposition 2 (Bounded oracle complexity) . For a loop bud-get of L exploration rounds, the number of LLM oracle inter-actions performed by LENS is bounded by c0 + c1L for small constants c0, c 1 that depend only on the configuration and not on the query ( c0 = 4 , c1 = 2 in our setting). The bound is independent of the number of requirements K, because one oracle observation updates all per-fact beliefs, and indepen-dent of the number of latent evidence windows induced by 
+
+Dt.
+
+These statements are analysis guides for the method rather than tight guarantees: stricter probabilistic oracle models, position-level priors, and resampling analyses remain future work. 
+
+## 5 Related Work 
+
+Retrieval-augmented generation methods retrieve external evidence before generation and have become a standard ap-proach for knowledge-intensive tasks (Lewis et al. 2020; Karpukhin et al. 2020; Izacard et al. 2023). Dense, sparse, and hybrid systems are effective when a stable corpus can be preprocessed into persistent representations. Hierarchi-cal and graph-based retrieval systems further organize docu-ments into summaries, trees, or memory graphs (Sarthi et al. 2024; Gutiérrez et al. 2024), improving reuse and traversal when the supporting structures can be built and maintained. LENS addresses a different operating point: dynamic raw-document collections where query readiness, update cost, evidence granularity, and source traceability are part of the task rather than external deployment details. Long-context language models provide another way to avoid a persistent index by placing large amounts of raw text directly into the model context (Beltagy, Peters, and Cohan 2020; Liu et al. 2024). This reduces explicit index construction, but shifts cost to query time through high to-ken consumption and may still fail to localize the specific evidence inside long inputs. Tool-using agents can search, read, and refine their context over multiple steps (Yao et al. 2023; Asai et al. 2024), but they often lack an explicit formu-lation of evidence localization under a controllable budget. LENS treats interaction as posterior-guided evidence explo-ration over a latent evidence space, and evaluates the resulting trade-off through answer quality, source-grounded evidence localization, freshness, and lifecycle cost. 
+
+## 6 Experiments 
+
+6.1 Setup 
+
+We evaluate LENS on HotpotQA fullwiki (Yang et al. 2018), a multi-hop question answering benchmark where each ques-tion requires reasoning over two or more Wikipedia articles. We report results under two conditions: 
+
+Controlled evaluation ( Dn). From the validation split (7,405 questions) we draw frozen, proportionally stratified evaluation sets over type × difficulty strata (seed 42). Our primary controlled evaluation uses n = 500 questions paired with a matched corpus snapshot D500 containing the gold supporting articles, context distractors, and a deterministic background pool. This is the largest statistically robust scale we evaluate and enables paired comparison across all base-lines including index-dependent systems. 
+
+Open-domain fullwiki. The complete raw Wikipedia dump underlying the fullwiki validation split is stored as 15,517 JSON shards without preprocessing, chunking, or indexing. We evaluate n = 150 fixed questions on this cor-pus to measure corpus-scale robustness under the zero-index constraint. 
+
+Systems. We compare five arms: (1) LENS , the full algo-rithm with multi-signal prior, sequential exploration, budget-aware stopping, and evidence consolidation; (2) ReAct Search , a strong iterative baseline using ReAct-style (Yao et al. 2023) tool-use reasoning with the same corpus access but without LENS’s structured prior formation or budget-constrained belief updates; (3) Hybrid-RAG , a retrieval-augmented baseline combining BM25 and dense embedding retrieval with a pre-materialized index; (4) BM25-RAG , a sparse-retrieval baseline using a pre-built BM25 index; and (5) Closed-Book , a no-retrieval reference that estimates the score attributable to model parameters alone. Systems (3) and (4) require pre-materialized indexes and therefore face a lifecycle limitation under corpus changes. 
+
+Hyperparameters. All systems share one chat backend (Qwen3.7, a 35B-parameter mixture-of-experts model with 3B active parameters, fixed temperature, 120 s per-call time-out) under a 300 s per-question wall-clock cap. LENS runs its DEEP configuration with a 128K query-time token budget and at most 10 candidate files admitted to evidence extrac-tion. All runs use cold caches with no knowledge reuse. 
+
+Environment. Experiments run on a single Apple M4 Pro workstation (12 cores, 48 GB RAM, macOS 15) with no local GPU; all model calls are served by a remote OpenAI-compatible endpoint, so reported latencies include network time. At most 5 questions are evaluated concurrently. 
+
+Metrics. EM and F1 are the official answer metrics. Ev.Rec measures retrieval of gold supporting-fact documents, while Ground measures whether the final answer is traceable to re-trieved evidence. Judge is an auxiliary semantic-equivalence diagnostic from an independent model and is not used as the primary score. 
+
+6.2 Main Results: Controlled Evaluation 
+
+Table 2 reports the primary controlled evaluation. ReAct Search attains the highest answer score (65.2% EM, 78.9% F1), while LENS remains close on answer quality (62.4% EM, 76.9% F1) and provides substantially stronger evi-dence localization. LENS achieves 84.8% evidence recall and 96.8% grounded answers, compared with 50.4% and 71.8% for ReAct. This separates two evaluation dimensions: ReAct more often produces the exact answer string, whereas LENS more reliably localizes and traces the supporting ev-idence. Relative to Closed-Book, LENS gains 27.2 pp EM Snapshot Samples Articles Evidence Background                                 
+
+> D125 125 5,416 250 4,062
+> D250 250 10,808 500 8,106
+> D500 500 21,424 996 16,068 System ( D500 )Ready Rebuild Index(s) Storage LENS yes no 0.0 0ReAct yes no 0.0 0BM25-RAG no yes 4.0 10.0MB Hybrid-RAG no yes 5.7 54.9MB
+
+Table 1: Snapshot construction and lifecycle audit. The up-per block reports deterministic Dn corpus sizes; the lower block reports D500 query readiness, rebuild requirement, in-dex time, and index storage.                         
+
+> System EM F1 Ev.Rec Ground ReAct Search 65.2 78.9 50.4 71.8 LENS 62.4 76.9 84.8 96.8
+> Hybrid-RAG 38.4 51.1 80.8 92.2 BM25-RAG 28.8 42.3 71.8 95.8 Closed-Book 35.2 47.0 0.0 0.0
+
+Table 2: Controlled evaluation on D500 (%, n=500). EM/F1 are official answer metrics; Ev.Rec is supporting-fact docu-ment recall; Ground is the percentage of answers traceable to retrieved evidence. and ReAct gains 30.0 pp, so retrieval benefits are reported against a no-retrieval reference rather than assumed from answer correctness alone. 
+
+6.3 Open-Domain Fullwiki Results 
+
+Table 3 reports results on the full raw Wikipedia corpus. LENS and ReAct are effectively tied on official answer qual-ity (43.3% vs. 42.7% EM), while LENS grounds more an-swers in retrieved evidence (84.0% vs. 70.7%). Closed-Book reaches 38.7% EM, so fullwiki retrieval gains are modest but positive: +4.6 pp for LENS and +4.0 pp for ReAct. BM25-RAG and Hybrid-RAG require separate full-dump indexing and are evaluated through the controlled/lifecycle arms. 
+
+6.4 Evidence Recall Leadership 
+
+Table 4 presents evidence recall across all controlled evalua-tion scales. LENS is the top evidence-localization system at every scale, with 84.8–89.1% evidence recall. Its lead over ReAct is 43.0 pp on D125 , 38.0 pp on D250 , and 34.4 pp on D500 . Hybrid-RAG also retrieves substantial evidence, but its answer quality remains far below LENS and ReAct, indicating that locating candidate evidence and synthesizing the exact multi-hop answer are separable failure modes. 
+
+6.5 Corpus Staleness and Lifecycle Robustness 
+
+The stale-index arm measures what happens when an in-dex built on D125 is reused after the corpus expands to 
+
+D250 . BM25-RAG and Hybrid-RAG are index-dependent and therefore lose most of their ability to answer newly added                 
+
+> System EM F1 Ev.Rec Ground LENS 43.3 57.5 45.0 84.0
+> ReAct Search 42.7 57.3 50.4 70.7 Closed-Book 38.7 49.7 0.0 0.0
+
+Table 3: Open-domain fullwiki results (%, n=150, fixed sam-ple IDs). LENS and ReAct search the raw Wikipedia dump (15,517 shards) with zero indexing; Closed-Book reads no corpus.                   
+
+> System D125 D250 D500
+> LENS 89.1 85.9 84.8
+> Hybrid-RAG 81.3 77.8 80.8 BM25-RAG 71.6 71.1 71.8 ReAct Search 46.1 47.9 50.4 Closed-Book 0.0 0.0 0.0
+
+Table 4: Evidence recall (%) across controlled evaluation scales. LENS consistently provides the strongest supporting-fact localization, while Closed-Book has no evidence trace by design. questions: EM drops by 28.0 and 28.8 pp, and evidence recall drops by 70.1 and 69.6 pp. ReAct and LENS are index-free, so they can query the expanded corpus immediately; their EM changes are small (+0.8 pp and -2.4 pp), and LENS retains nearly all supporting-fact recall (84.7% to 83.9%). Table 1 shows the corresponding lifecycle condition: index-heavy systems are not query-ready after corpus growth and require rebuilding, while LENS and ReAct remain query-ready. 
+
+6.6 Cost and Statistical Checks 
+
+Paired McNemar tests on official EM do not show a signifi-cant LENS–ReAct answer-quality difference on D500 (62.4% vs. 65.2%, p = 0 .1143 ) or fullwiki dev-150 (43.3% vs. 42.7%, p = 1 .0000 ). Query-time budget shows the expected trade-off: on D500 , ReAct uses 11.8K tokens per query, while LENS uses 16.5K but improves evidence recall by 34.4 pp and grounding by 25.0 pp. Auxiliary JudgeAcc follows EM and is not used as a primary score. 
+
+6.7 Ablation Study 
+
+Table 6 isolates two LENS components on the fixed fullwiki subset. Removing sequential exploration produces the clear-est degradation: EM falls from 43.3% to 38.0%, F1 from 57.5% to 50.9%, and evidence recall from 45.0% to 31.0%. Removing the multi-signal prior does not reduce EM on this subset, but it lowers F1 and changes the cost profile. 
+
+## 7 Discussion and Conclusions 
+
+Across controlled corpora, LENS is the strongest evidence-localization system: on D500 it trails ReAct by 2.8 pp EM, but leads by 34.4 pp evidence recall and 25.0 pp ground-ing. On fullwiki dev-150, the two systems are effectively tied in official EM/F1 while LENS retains stronger ground-ing. These results support a precise claim: LENS is not an Exact Match (%) Evidence Recall (%) System Fresh Stale ∆ Fresh Stale ∆                        
+
+> BM25-RAG 30.4 2.4 −28 .070.1 0.0 −70 .1
+> Hybrid-RAG 42.4 13.6 −28 .875.1 5.5 −69 .6
+> ReAct Search 72.0 72.8 +0 .854.1 48.3 −5.7
+> LENS 69.6 67.2 −2.484.7 83.9 −0.8
+
+Table 5: Staleness robustness under corpus expansion (D125 → D250 , ∆n = 125 ). Index-heavy systems reuse an index built on D125 while answering newly added D250 ques-tions; index-free systems query the updated corpus directly. Negative gaps indicate stale degradation; the table measures freshness/lifecycle robustness rather than fresh-corpus an-swer quality.                 
+
+> Configuration EM F1 Ev.Rec Ground LENS (Full) 43.3 57.5 45.0 84.0 w/o Multi-signal Prior 43.3 55.9 45.4 85.3
+> w/o Sequential Exploration 38.0 50.9 31.0 82.0
+
+Table 6: Ablation study on the fullwiki evaluation ( n=150 fixed sample IDs). Ev.Rec is supporting-fact document recall; Ground is the percentage of answers traceable to retrieved evidence. EM-dominant answer generator, but an index-free evidence localization method that makes answers more traceable to current raw sources. This distinction matters because EM is a narrow string-match measure. It penalizes acceptable paraphrases and aliases, and it can reward a correct answer that is produced from model memory rather than from retrieved evidence. The Closed-Book reference makes this visible: a non-retrieval model already reaches 35.2% EM on D500 and 38.7% EM on fullwiki. We therefore treat EM/F1 as primary answer-quality metrics, but interpret them together with Ev.Rec and Ground when evaluating systems intended for auditable, source-grounded search. LENS’s advantages appear on three dimensions. First, it localizes evidence more reliably than ReAct across D125 ,
+
+D250 , and D500 , indicating that the sequential search loop finds supporting documents rather than only plausible an-swers. Second, it keeps a high grounding rate, which is es-sential when users need to inspect the source trail. Third, the stale-index arm shows a lifecycle advantage: BM25-RAG and Hybrid-RAG lose 28.0–28.8 pp EM and nearly all evidence recall when a D125 index is used on new D250 questions, whereas index-free systems remain query-ready over the up-dated corpus. This is a freshness and cost-structure advan-tage, not a claim that LENS always improves fresh-corpus EM. The present evidence is still bounded. HotpotQA em-phasizes lookup and comparison over encyclopedic text, so richer document layouts, aggregation intents, table evidence, and warm-reuse behavior remain future work. Within this scope, LENS demonstrates competitive answer quality, sub-stantially stronger source traceability, and immediate query readiness over changing raw documents—the operating point targeted by Budgeted Evidence Localization. 
+
+## References 
+
+Asai, A.; Wu, Z.; Wang, Y.; Sil, A.; and Hajishirzi, H. 2024. Self-rag: Learning to retrieve, generate, and critique through self-reflection. In International conference on learning rep-resentations , 9112–9141. Beltagy, I.; Peters, M. E.; and Cohan, A. 2020. Long-former: The long-document transformer. arXiv preprint arXiv:2004.05150 .Garivier, A.; and Kaufmann, E. 2016. Optimal best arm iden-tification with fixed confidence. In Conference on Learning Theory , 998–1027. Gutiérrez, B. J.; Shu, Y.; Gu, Y.; Yasunaga, M.; and Su, Y. 2024. HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models. In Advances in Neural Information Processing Systems , 59532–59569. Izacard, G.; Lewis, P.; Lomeli, M.; Hosseini, L.; Petroni, F.; Schick, T.; Dwivedi-Yu, J.; Joulin, A.; Riedel, S.; and Grave, E. 2023. Atlas: Few-shot learning with retrieval augmented language models. Journal of Machine Learning Research ,24(251). Karpukhin, V.; Oguz, B.; Min, S.; Lewis, P.; Wu, L.; Edunov, S.; Chen, D.; and Yih, W.-t. 2020. Dense passage retrieval for open-domain question answering. In Proceedings of the 2020 conference on empirical methods in natural language processing (EMNLP) , 6769–6781. Lewis, P.; Perez, E.; Piktus, A.; Petroni, F.; Karpukhin, V.; Goyal, N.; Küttler, H.; Lewis, M.; Yih, W.-t.; Rocktäschel, T.; Riedel, S.; and Kiela, D. 2020. Retrieval-Augmented Gen-eration for Knowledge-Intensive NLP Tasks. In Advances in Neural Information Processing Systems , 9459–9474. Liu, N. F.; Lin, K.; Hewitt, J.; Paranjape, A.; Bevilacqua, M.; Petroni, F.; and Liang, P. 2024. Lost in the Middle: How Language Models Use Long Contexts. Transactions of the Association for Computational Linguistics , 12: 157–173. Russo, D.; and Van Roy, B. 2014. Learning to Optimize via Information-Directed Sampling. In Advances in Neural Information Processing Systems .Sarthi, P.; Abdullah, S.; Tuli, A.; Khanna, S.; Goldie, A.; and Manning, C. 2024. Raptor: Recursive abstractive processing for tree-organized retrieval. In International Conference on Learning Representations , 32628–32649. Yang, Z.; Qi, P.; Zhang, S.; Bengio, Y.; Cohen, W.; Salakhut-dinov, R.; and Manning, C. D. 2018. HotpotQA: A dataset for diverse, explainable multi-hop question answering. In 
+
+Proceedings of the 2018 conference on empirical methods in natural language processing , 2369–2380. Yao, S.; Zhao, J.; Yu, D.; Du, N.; Shafran, I.; Narasimhan, K.; and Cao, Y. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In International Conference on Learning Representations .Technical Supplement 
+
+Scope. The main paper is self-contained. This supplement records the reviewer-critical formal material and the audit trail behind the latest reported experiments: proofs of the two propositions, per-fact localization and stopping details, the D125 /D 250 /D 500 dynamic raw-corpus protocol, stale-index and lifecycle checks, fullwiki and sample-context di-agnostics, ablations, and semantic-judge rescore summaries. Row-level records remain in the code-and-data package; ta-bles here are compact projections of those artifacts. 
+
+## A Notation 
+
+Table 7 collects the symbols used in the main paper and in the proofs below. All symbols are as defined in the main paper; nothing here redefines them. 
+
+Symbol Meaning 
+
+Dt raw-document collection at time t, N =
+
+|D t|
+
+ℓd length of document d in indexable units 
+
+Et latent evidence space, all windows (d, s, e )
+
+I(q) query intent 
+
+Dreq (q, I ) requirement set {f1, . . . , f K }
+
+Z∗ 
+
+> j
+
+minimal sufficient window for fact fj
+
+Z∗ per-query target {Z∗ 
+
+> 1
+
+, . . . , Z ∗ 
+
+> K
+
+}
+
+πprior query-conditioned initial belief 
+
+πfile , π pos file-level and position-level factors 
+
+Cinit candidate document set, m = |C init |Csearch candidate window subspace 
+
+Ht observation history {(zi, o i)}ti=1 
+
+o(j) 
+
+> i
+
+component of oi pertaining to fact fj
+
+L aggregate exploration-round allowance 
+
+B query budget (calls, tokens, wall-clock) 
+
+γ(I) intent-modulated stopping factor 
+
+E∗, a consolidated evidence set, answer 
+
+Table 7: Notation. 
+
+## B Proof of Proposition 1 
+
+Proposition 1 (Low-cost space compression, restated) . Let 
+
+Cinit be the finite candidate document set induced by low-cost prior signals. Subsequent evidence exploration is restricted from Et to Csearch = {(d, s, e ) | d ∈ C init , 0 ≤ s < e ≤
+
+ℓd}. Thus, before any iterative oracle budget is consumed, LENS reduces the effective search domain from the full raw-document collection to a query-conditioned subspace. Proof. The claim has three parts: that the restriction is well defined and strict, that it is quantitatively a reduction, and that it is available before any raw-document observation round is executed. 
+
+(i) The restriction is well defined. For a document d of length ℓd, the windows of d are the pairs (s, e ) with 0 ≤
+
+s < e ≤ ℓd, that is, the 2-subsets of {0, 1, . . . , ℓ d}. Hence d
+
+contributes 
+
+w(d) = 
+
+ℓd + 1 2
+
+
+
+= ℓd(ℓd + 1) 2 (12) elements, and 
+
+|E t| = X
+
+> d∈D t
+
+w(d), |C search | = X
+
+> d∈C init
+
+w(d). (13) Because Cinit ⊆ D t by construction, every element of Csearch 
+
+is an element of Et, so Csearch ⊆ E t, with strict inclusion whenever Cinit ⊊ Dt. Both sets are finite since ℓd < ∞ for every d.
+
+(ii) Layer 2 acts only on Csearch . The information-directed objective of the main paper (Russo and Van Roy 2014) takes its arg min over z ∈ C search , and the proposal mixture πt that approximates it is a convex combination of πlex , π local , π global ,each of which is supported on Csearch . A convex combination of measures supported on a set is supported on that set, so 
+
+supp( πt) ⊆ C search for every t. Consequently no proposal, and therefore no observation, is ever drawn from Et \ C search :the effective domain of the sequential stage is Csearch , not Et.
+
+(iii) The reduction precedes raw-document observations. 
+
+Write m = |C init | and N = |D t|. Combining the two sums with (12), 
+
+|C search ||E t| =
+
+P 
+
+> d∈C init
+
+ℓd(ℓd + 1) 
+
+P 
+
+> d∈D t
+
+ℓd(ℓd + 1) . (14) If document lengths lie in [ℓmin , ℓ max ], bounding the numer-ator above and the denominator below gives 
+
+|C search ||E t| ≤ mN · ℓmax (ℓmax + 1) 
+
+ℓmin (ℓmin + 1) , (15) which reduces to m/N when document lengths are com-parable. It remains to verify that Cinit is fixed before the sequential stage observes candidate document content. By the definition of Layer 1, Cinit is induced by the signal fam-ily K0, whose members are lexical anchors, document-path structure, compiled summaries when already available, his-torical source-grounded evidence from prior searches, and lightweight corpus scans. Each is computed from the query, the corpus, or persisted artifacts without enumerating Et and without asking the LLM to judge candidate document win-dows. Query-only calls used to parse anchors or requirements are accounted in the constant term of Appendix C; they do not observe raw-document candidates. Hence the domain re-duction in (15) is available before the first exploration round, and before the iterative allowance L is touched. 
+
+Corollary 1 (Magnitude of the reduction in our protocol) .
+
+With the file-admission width m = 10 used in all reported controlled runs and comparable article lengths, (15) gives 
+
+|C search |/|E t| ≈ 1.8 × 10 −3 for D125 (N = 5 ,416 ), 9.3 ×
+
+10 −4 for D250 (N = 10 ,808 ), and 4.7 × 10 −4 for D500 
+
+(N = 21 ,424 ). The reduction is roughly three orders of magnitude and improves as the corpus grows, since m is a fixed configuration constant while N increases. Remark 1 (The price of compression) . Proposition 1 is a statement about cost, not about sufficiency, and it is worth stating its cost explicitly. All posterior mass in Layer 2 is confined to Csearch : if Z∗ 
+
+> j
+
+/∈ C search for some requirement 
+
+fj , then P (Z∗ 
+
+> j
+
+| fj , q, Ht) = 0 for all t, and no amount of round budget can recover fj . Compression therefore converts a factor-N/m saving into a recall ceiling determined by the quality of πfile . The not-retrieved class of the failure taxonomy isolates this ceiling, while the controlled results show that the sequential loop can still produce higher supporting-fact recall than ReAct and index-heavy RAG under the reported protocol. The bounded self-correction path partially lifts the ceiling by re-entering the loop with an enlarged candidate set, which is why self-correction is a recall mechanism and not merely a synthesis retry. 
+
+## C Proof of Proposition 2 
+
+We first fix the accounting convention, then prove the bound. 
+
+Definition 3 (Oracle interaction) . An oracle interaction is one LLM request issued by the search pipeline on behalf of a single query. Requests issued by the evaluation harness — for instance answer scoring — are not part of the search pipeline and are excluded, as they are in the reported telemetry. 
+
+Throughout, L denotes the aggregate exploration-round al-lowance: the total number of rounds executed across the ini-tial loop and the at most one bounded self-correction re-entry. This is the quantity the implementation caps with a shared round counter, so re-entry draws from the same allowance rather than from a fresh one. 
+
+Proposition 2 (Bounded oracle complexity, restated) . For an aggregate loop budget of L exploration rounds, the num-ber of oracle interactions performed by LENS on a query is bounded by c0 + c1L, where c0, c 1 depend only on the con-figuration and not on the query; in our configuration c0 = 4 
+
+and c1 = 2 . The bound is independent of the number of requirements K and independent of |E t|.Proof. Partition the oracle interactions issued on a query by the stage of Algorithm 1 that issues them. The stages are disjoint and exhaustive by construction of the pipeline, so the total is the sum of the per-stage counts. 
+
+Stage S1 (anchor extraction, unconditional). Prior forma-tion fuses the five families of K0. Four of them — path structure, compiled summaries, historical evidence, and cor-pus scans — are computed without the LLM, as used in the proof of Proposition 1. Lexical anchor extraction issues exactly one request. Count: 1.
+
+Stage S2 (requirement decomposition, unconditional). De-riving Dreq (q, I ) = {f1, . . . , f K } from q and I(q) is a single request whose output is the entire requirement set, indepen-dent of the resulting K. Count: 1.
+
+Stage S3 (exploration rounds, at most L iterations). 
+
+Each round issues exactly two requests: one proposal-and-observation request, which reads the raw text of the proposed regions and returns the observation ot; and one coverage 
+
+request, which evaluates the accumulated evidence against the outstanding requirements and returns the pair (complete, missing). No other request is issued inside a round. Count: 2
+
+per round, hence at most 2L in total. 
+
+Stage S4 (answer synthesis, unconditional). Synthesis over 
+
+E∗ is a single request. Count: 1.
+
+Stage S5 (answer-span calibration, conditional). At most one request. Count: ≤ 1.Summing, the total number of oracle interactions is at most 
+
+1|{z} 
+
+> S1
+
++ 1|{z} 
+
+> S2
+
++ 2 L|{z} 
+
+> S3
+
++ 1|{z} 
+
+> S4
+
++ 1|{z} 
+
+> S5
+
+= 4 + 2 L, (16) so c0 = 4 and c1 = 2 . Both constants are properties of the pipeline configuration; neither depends on q.
+
+Independence of K. The only stages whose count could plausibly scale with the number of requirements are S2 and S3. S2 returns the whole set in one request. In S3, the cover-age request evaluates all outstanding requirements in a sin-gle prompt, and the proposal-and-observation request returns one observation ot that is scored jointly against all outstand-ing requirements; by Lemma 1 below, that single observation suffices to update all K per-fact beliefs. Therefore the per-round count is 2 for every K ≥ 1, and (16) contains no factor of K.
+
+Independence of |E t| and of |C search |. No stage enumerates 
+
+Et or Csearch . The exact information-directed arg min over 
+
+Csearch is never computed; it is replaced by sampling from the mixture πt, which requires one draw per round irrespective of the cardinality of the support. Hence the right-hand side of (16) is free of any term in N , ℓd, or |C search |, and the online oracle cost of a query does not grow with corpus size. 
+
+Remark 2 (A second, independent bound) . Equation (16) bounds the call count induced by the control flow. The ag-gregate token budget supplies an independent stopping con-dition rather than an additional source of calls: before every request the implementation checks whether the remaining token budget can accommodate that request under the con-figured per-request context cap. If the check fails, the request is not issued and the loop exits. Thus token budgeting can only reduce the realized count below (16); it cannot make the count grow with K or with corpus size. In all reported runs the call-count bound is the active theoretical constraint, and no execution was recorded as budget-exceeded. 
+
+Remark 3 (Empirical check, and why the bound is loose) .
+
+At the configuration used for all controlled dynamic results, 
+
+L = 3 , so (16) evaluates to 4 + 2 · 3 = 10 oracle interactions per question. The table-level budget summaries for LENS report average oracle calls of 4.00 on G125 , 4.00 on G250 ,and 4.04 on G500 , with zero budget-exceeded records. The bound therefore holds with substantial slack. The slack is ex-pected and is not evidence that the accounting is wrong: (16) is a worst case over control flow, whereas most questions ter-minate through a short-circuit — the coverage check reports completion, or an intent-gated direct-analysis path resolves the query before the loop is exhausted. Proposition 2 should be read as a guarantee that the online cost cannot blow up with corpus size or requirement count, not as a prediction of the mean. 
+
+## D Per-Fact Localization and Stopping 
+
+The main paper localizes evidence per atomic fact and maintains one belief per fact, updating all of them from a shared observation history. This section records the condi-tional statement under which the per-fact update is exact and explains why the stopping rule aggregates by the weakest requirement. An observation returned by the oracle on a proposed region zi is structured: it reports, for each outstanding requirement, whether zi supplies that requirement. Write 
+
+oi = ( o(1)  
+
+> i
+
+, . . . , o (K) 
+
+> i
+
+) for its components. The proposed re-gions z1, . . . , z t are treated as realized actions of the adaptive policy and are conditioned on in the likelihood below; this is the standard conditioning convention for adaptive data col-lection. 
+
+Lemma 1 (Exact factorization of the joint posterior) . As-sume (A1) prior independence across requirements : πprior (Z∗ |
+
+q, Dt) = QKj=1 πprior (Z∗ 
+
+> j
+
+| fj , q, Dt); and (A2) component-wise conditional independence of ob-servations given the realized proposals : P (oi |
+
+Z∗, z i, q, Hi−1) = QKj=1 P
+
+
+
+o(j) 
+
+> i
+
+| Z∗ 
+
+> j
+
+, z i, f j , q 
+
+
+
+for ev-ery i.Then the joint posterior over Z∗ factorizes across require-ments, 
+
+P (Z∗ | q, Ht) = 
+
+> K
+
+Y
+
+> j=1
+
+P  Z∗ 
+
+> j
+
+| fj , q, Ht
+
+ , (17) 
+
+and each factor is exactly the per-fact belief of the main paper. Proof. Condition on the realized proposal sequence z1: t. By the chain rule, 
+
+P (Z∗ | q, Ht) ∝
+
+" tY
+
+> i=1
+
+P (oi | Z∗, z i, q, Hi−1)
+
+#
+
+πprior (Z∗ | q, Dt),
+
+(18) where proposal probabilities are not likelihood factors for Z∗
+
+after conditioning on the chosen regions. Substituting (A2) into the product and (A1) into the prior, and exchanging the two finite products, 
+
+P (Z∗ | q, Ht) ∝
+
+> t
+
+Y
+
+> i=1
+> K
+
+Y
+
+> j=1
+
+P
+
+
+
+o(j) 
+
+> i
+
+| Z∗ 
+
+> j
+
+, z i, f j , q 
+
+
+
+×
+
+> K
+
+Y
+
+> j=1
+
+πprior (Z∗ 
+
+> j
+
+| fj , q, Dt)=
+
+> K
+
+Y
+
+> j=1
+
+" tY
+
+> i=1
+
+P
+
+
+
+o(j) 
+
+> i
+
+| Z∗ 
+
+> j
+
+, z i, f j , q 
+
+
+
+× πprior (Z∗ 
+
+> j
+
+| fj , q, Dt) . (19) Each bracketed term depends on Z∗ 
+
+> j
+
+alone. Since the candi-date space is finite in the paper’s raw-document abstraction, the normalizing sum over Z∗ factorizes into the product of the K per-fact normalizers. The j-th normalized factor is therefore precisely P (Z∗ 
+
+> j
+
+| fj , q, Ht), establishing (17). 
+
+Corollary 2 (One call, K updates) . Under (A1)–(A2), a single oracle interaction on region zi returns the full vector oi
+
+and therefore supplies the sufficient statistic for updating all 
+
+K marginals. The per-round oracle count is thus independent of K, which is the step used in the proof of Proposition 2. Remark 4 (Where the assumptions bind) . (A1) fails when re-quirements are logically coupled, for example when the value of one fact restricts where the other can occur. LENS does not attempt to represent such coupling inside the localization belief: coupling is handled at synthesis time by the transfor-mation rules attached to Dreq (q, I ). (A2) is an idealization of a structured LLM judgment; a single oracle response could correlate its per-requirement verdicts. The exactness claim is therefore conditional. Without these assumptions, the per-fact update should be read as a tractable approximation, while the oracle-count statement in Proposition 2 still holds as a control-flow bound because the implementation asks for the full vector oi in one request. 
+
+Stopping by the weakest requirement. The main paper stops when min j≤K GLR (j) 
+
+> t
+
+exceeds β(t, δ ) γ(I). By Def-inition 2 of the main paper, localization is complete only when every requirement is covered. Let Aj be the event that the currently favoured window ˆZj,t is the true Z∗ 
+
+> j
+
+. The event of interest is T 
+
+> j≤K
+
+Aj , and a conjunction is certified by its weakest conjunct; the corresponding statistic is therefore 
+
+min j GLR (j) 
+
+> t
+
+. Using max j or a mean would allow the loop to halt while some requirement remains unresolved, which is exactly the multi-hop failure mode that a query-level single-window target would hide. 
+
+Intent modulation. Suppose each per-fact test errs with probability at most δ0. By a union bound, 
+
+Pr 
+
+hS 
+
+> j≤K
+
+¯Aj
+
+i
+
+≤ X
+
+> j≤K
+
+Pr[ ¯Aj ] ≤ Kδ 0. (20) To attain an overall failure probability at most δ, it is sufficient to set δ0 = δ/K , so the per-fact threshold should be at least 
+
+β(t, δ/K ). The multiplicative factor γ(I) ≥ 1 is chosen as a conservative intent-level surrogate satisfying 
+
+β(t, δ ) γ(I) ≥ β(t, δ/K (I)) (21) for the requirement count induced by the intent class. Lookup intents have K = 1 and can use γ = 1 ; comparison, compu-tation, and aggregation intents induce K > 1 and therefore require a tighter criterion. In implementation, GLR (j) 
+
+> t
+
+is con-ceptual because LLM likelihoods are unavailable in closed form; the realized policy halts when the coverage check re-ports all requirements satisfied or when L is exhausted. The analysis explains the shape of the stopping rule rather than claiming calibrated numerical confidence. 
+
+## E Dynamic Evaluation Protocol 
+
+The protocol is designed to make every comparison au-ditable: systems answer identical frozen questions over byte-identical corpus snapshots, and every stage is bound by sample-ID, frozen-order, and corpus checksums. The lat-est reported controlled evaluation uses nested question sets 
+
+G125 ⊂ G250 ⊂ G500 and matched snapshots D125 ⊂
+
+D250 ⊂ D500 .
+
+Sampling. The population is the HotpotQA fullwiki vali-dation split with 7,405 questions. Sampling uses the eight cells of type × supporting -fact count , seed 42 , and a stratum-balanced frozen order. G125 and G250 are prefixes of the frozen G500 parent order. The realized maximum absolute deviation from the population distribution is 0.70 percentage points for G125 and 0.30 percentage points for G250 , with no empty stratum. Full sample IDs and hashes are shipped with the artifact package; Table 8 reports short hash prefixes for readability. 
+
+Stage Samples Sample hash Order hash 
+
+G125 125 a54c27b0 7c0bad56 
+
+G250 250 0b98ccda 69ae9f6c 
+
+G500 500 4fc0115e b9788e58 
+
+Table 8: Frozen binding audit. Hashes are shortened to eight characters; the package records the full sample-ID and frozen-order checksums. 
+
+Corpus construction. Each snapshot contains the support-ing evidence articles for its questions, the context distractors shipped with those questions, and a deterministic background pool selected at a 3:1 ratio to question-linked articles. Doc-uments are materialized as one extensionless raw-text file per article. This article-level materialization is necessary for the raw-corpus protocol: shard-level materialization would make the apparent corpus size depend on dump packaging rather than on evidence-bearing articles. 
+
+Snapshot n Articles Ev. Dist. Bg. 
+
+D125 125 5,416 250 1,104 4,062 
+
+D250 250 10,808 500 2,202 8,106 
+
+D500 500 21,424 996 4,360 16,068 
+
+Table 9: Snapshot composition. Ev., Dist., and Bg. are evi-dence, context-distractor, and background articles. The D500 
+
+evidence count is below 2n because some questions share evidence articles. Full corpus checksums are recorded in the artifact package. The snapshots satisfy append-only growth: no existing ar-ticle is edited or removed between stages. The corpora are not oracle corpora; distractors and background articles out-number evidence articles, and publication-ready tables are emitted only when all compared systems share the same sample-ID, frozen-order, and corpus binding. 
+
+## F Experimental Result and Lifecycle Audit 
+
+Stage System EM Ev.Rec 
+
+D125 LENS 64.0 89.1 
+
+D125 ReAct Search 61.6 46.1 
+
+D125 Hybrid-RAG 36.0 81.3 
+
+D125 BM25-RAG 27.2 71.6 
+
+D125 Closed-Book 34.4 0.0 
+
+D250 LENS 66.4 85.9 
+
+D250 ReAct Search 67.6 47.9 
+
+D250 Hybrid-RAG 38.8 77.8 
+
+D250 BM25-RAG 30.4 71.1 
+
+D250 Closed-Book 33.6 0.0 
+
+D500 LENS 62.4 84.8 
+
+D500 ReAct Search 65.2 50.4 
+
+D500 Hybrid-RAG 38.4 80.8 
+
+D500 BM25-RAG 28.8 71.8 
+
+D500 Closed-Book 35.2 0.0 
+
+Table 10: Controlled-scale quality audit (%). Ev.Rec is supporting-fact document recall. Closed-Book is included as a no-retrieval reference and therefore has no evidence re-call. Table 10 is the compact supplement view of the controlled dynamic results. It shows the main pattern behind the paper’s interpretation: ReAct is competitive or stronger on exact-match answer quality, while LENS consistently gives the strongest supporting-fact localization across all three con-trolled scales. 
+
+System Rdy Rbld Idx(s) Store Tok/Q Lat(s) LENS yes no 0.0 0 16.5K 68.9 ReAct Search yes no 0.0 0 11.8K 54.7 BM25-RAG no yes 4.0 10.0MB 1.2K 11.3 Hybrid-RAG no yes 5.7 54.9MB 1.4K 14.3 
+
+Table 11: D500 lifecycle and query-budget audit. Rdy is im-mediate query readiness after corpus materialization, Rbld is whether a persistent index rebuild is required, Idx is index build time, Store is index storage, Tok/Q is tokens per query, and Lat is query latency. 
+
+System Metric Fresh Stale Gap BM25-RAG EM 30.4 2.4 28.0 BM25-RAG Ev.Rec 70.1 0.0 70.1 Hybrid-RAG EM 42.4 13.6 28.8 Hybrid-RAG Ev.Rec 75.1 5.5 69.6 ReAct Search EM 72.0 72.8 -0.8 ReAct Search Ev.Rec 54.1 48.3 5.7 LENS EM 69.6 67.2 2.4 LENS Ev.Rec 84.7 83.9 0.8 
+
+Table 12: Stale-index audit for the D125 → D250 transition. Index-heavy systems reuse a D125 index on newly added 
+
+D250 questions; index-free systems query the updated corpus directly. The lifecycle and staleness tables separate two claims. Ta-ble 11 measures readiness and cost structure on the fresh 
+
+D500 corpus. Table 12 measures freshness under corpus growth. The latter is not a fresh-corpus quality compari-son: it asks whether a system remains usable when its pre-materialized index is stale.                          
+
+> System EM F1 Ev.Rec Ground Calls
+> Fullwiki dev-150 (raw dump, zero indexing)
+> Closed-Book 38.7 49.7 0.0 0.0 0.00 ReAct Search 42.7 57.3 50.4 70.7 7.01
+> Sample-context dev-150 (diagnostic control)
+> ReAct Search 54.7 69.9 37.2 63.3 4.94 LENS 52.7 67.6 78.2 86.7 4.00
+
+Table 13: Fullwiki and sample-context diagnostics on the fixed dev-150 sample IDs. Calls is average oracle calls per question. The sample-context rows are diagnostic controls and are not presented as the primary raw-corpus result.                 
+
+> Configuration EM F1 Ev.Rec Ground LENS full 43.3 57.5 45.0 84.0 w/o Multi-signal Prior 43.3 55.9 45.4 85.3 w/o Sequential Exploration 38.0 50.9 31.0 82.0
+
+Table 14: Fullwiki ablation audit on the fixed dev-150 sam-ple IDs. The full LENS row is the main-paper reference configuration; the two ablation rows are the matched abla-tion run. Sequential exploration is the main contributor to answer quality and evidence recall.             
+
+> System ( D500 )Official EM JudgeAcc ReAct Search 65.2 87.0 LENS 62.4 85.2 BM25-RAG 28.8 64.0 Hybrid-RAG 38.4 61.6 Closed-Book 35.2 50.8
+
+Table 15: Auxiliary semantic-judge audit on D500 . JudgeAcc is used as a diagnostic only; official EM/F1 remain the pri-mary answer-quality metrics. 
+
+## G Prompt Interfaces, Taxonomy, and Extra Analyses 
+
+Prompt interfaces. For page economy, the supplement specifies prompt interfaces rather than duplicating long ver-batim templates. The executable templates in the code-and-data package implement the same typed interfaces: re-quirement decomposition maps (q, I (q)) to {f1, . . . , f K };proposal-and-observation maps a candidate region and out-standing requirements to the vector oi; coverage checking maps accumulated evidence to a complete/missing deci-sion; synthesis maps E∗ and transformation rules to the answer; answer-span calibration optionally normalizes the final span. The evaluation judge prompt is separated from system prompts and uses a dedicated judge configuration, so answer scoring is not counted in the search oracle budget of Definition 3. 
+
+Failure taxonomy. Each question is assigned to exactly one class in the following order. First, a question is correct 
+
+if official exact match succeeds. Second, among incorrect cases, it is retrieved-but-unanswered if a gold evidence doc-ument or sentence was retrieved but no answer was produced. Third, it is answered-but-wrong if sufficient gold evidence was retrieved but the produced answer is not exact-match correct. Remaining cases are not-retrieved . This order is mu-tually exclusive and exhaustive, and it separates discovery failures from synthesis failures. The connection to Remark 1 is direct: not-retrieved cases are the observable footprint of the recall ceiling induced by file-level compression, whereas answered-but-wrong cases occur after discovery has suc-ceeded. 
+
+Artifact consistency. The dynamic tables are projections of the same run family: D125 , D250 , and D500 share the nested frozen-order protocol, and the stale-index arm records the from-corpus and to-corpus checksums for each row. Full-wiki and sample-context dev-150 diagnostics share the fixed sample-ID checksum, making their differences attributable to corpus scope rather than to sample changes. The ablation table keeps the main-paper full LENS row as the reference configuration and uses the matched ablation artifact for the two ablated rows. Additional ablation or sensitivity tables should be included only when their frozen artifacts share the same binding checksums as the main runs.

@@ -1,0 +1,392 @@
+Title: Boosting Knowledge-based Visual Question Answering with Structured Context Reasoning
+
+URL Source: https://arxiv.org/pdf/2608.21431v1
+
+Published Time: Tue, 25 Aug 2026 00:02:50 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Boosting Knowledge-based Visual Question Answering with Structured Context Reasoning 
+
+Qiyou Liu 1, Yong Zhang 2, Jianjie Luo 1,∗, Zhenguo Yang 1, Yi Yu 3
+
+> 1
+
+School of Computer Science, Guangdong University of Technology, Guangzhou, China 
+
+> 2
+
+School of Artificial Intelligence, Shenzhen University, Shenzhen, China 
+
+> 3
+
+Graduate School of Advanced Science and Engineering, Hiroshima University, Hiroshima, Japan globarstarliu@gmail.com, yongzhang@szu.edu.cn, {jianjieluo, yzg }@gdut.edu.cn, yiyu@hiroshima-u.ac.jp 
+
+Abstract —Knowledge-based Visual Question Answering aims to answer questions about an image by integrating external knowledge with visual and textual information. Recent ap-proaches often rely on in-context learning to prompt Large Language Models (LLMs) with multimodal context in a zero-shot or few-shot manner. However, we observe that directly concatenating heterogeneous visual descriptions and retrieved knowledge into long, unstructured prompts often degrades rea-soning performance, due to both excessive irrelevant context and the lack of explicit relational structure. In this paper, we propose an LLM-based Structured Context Reasoning (SCoRe) framework that infers both explicit and implicit relationships for prediction. SCoRe consists of three stages: Context Acquisition, which generates diverse visual notes and retrieves explicit knowl-edge via an efficient two-stage multimodal retrieval strategy; Context Selection, which filters relevant visual, explicit, and implicit knowledge using LLM-guided selection; and Context Compression, which performs Relational Logic Distillation (RLD) to transform raw text into explicit entity-relation triplets. These relational triplets serve as a concise and structured prompt for final answer prediction. Extensive experiments on the OK-VQA and A-OKVQA benchmarks demonstrate that SCoRe consistently outperforms state-of-the-art methods. 
+
+Index Terms —Knowledge-based Visual Question Answering, Structured Context Reasoning. 
+
+I. I NTRODUCTION 
+
+Knowledge-based Visual Question Answering (KB-VQA) answers questions by integrating external knowledge with visual and textual information. Compared with conventional VQA, KB-VQA often involves implicit concepts and multi-step reasoning, making effective organization of heterogeneous information crucial for accurate prediction. Recent works [1]–[4] increasingly leverage Large Language Models (LLMs) to address KB-VQA in zero-shot or few-shot settings by concatenating image descriptions, retrieved knowl-edge, and task instructions into a single prompt, as illustrated in Fig. 1 (a). Although being effective in some cases, this unstructured prompting paradigm presents inherent limitations. First, the prompt often contains redundant or weakly relevant information, which distracts the model from key evidence. Second, unstructured context fails to explicitly represent re-lationships among entities, forcing LLMs to implicitly infer complex logical dependencies during reasoning. These issues are particularly pronounced in KB-VQA, where answering questions often depends on understanding relations rather than 
+
+> *
+
+J. Luo is the corresponding author. Retrieve          
+
+> Question : Why would we suspect that this is a lake and not an ocean? Knowledge Rationale LLM Feedback ...
+> Instruction : Please answer questions according to the given context...
+> Visual Notes: A calm beach with calm wate...
+> Relationships: calm lake featuring sailboats; scene includes white boat...
+> Instruction : Given all relationships between entities in the image. Please answer questions...
+> Prompt
+> Prompt
+> Prediction Prediction
+> (a) Unstructured Context
+> (b) Structured Context (ours)
+> ... [ Question ]... [ Question ]
+> LLMs QA Model
+> Context Acquisition Context Selection Context Compression
+> RLD Retrieve
+> Pretrained Img2Text Models
+> Memory
+> Input
+
+Fig. 1. Two paradigms for LLM-based KB-VQA: (a) Unstructured context reliance, where raw evidence is concatenated into flat, redundant prompts; (b) Our structured context reasoning, which distills multimodal inputs into relational triplets through progressive acquisition, selection, and compression. 
+
+isolated facts. Several prior methods attempt to alleviate these problems through knowledge selection [5], rationale extraction [6], or heuristic filtering [7]. However, such approaches still operate over a flat textual context and do not explicitly model relational structure. To this end, we propose Structured Context Reasoning (SCoRe), a framework that explicitly transforms heteroge-neous multimodal inputs into compact relational representa-tions tailored for LLM-based reasoning, as illustrated in Fig. 1 (b). Instead of treating context as a flat sequence of text, SCoRe progressively constructs a structured reasoning sub-strate through three stages. First, the Context Acquisition stage generates diverse visual notes and retrieves explicit external knowledge using an efficient two-stage multimodal retrieval strategy. Second, the Context Selection stage leverages LLMs to identify and retain only information that is relevant to the question, while also eliciting implicit knowledge aligned with the visual content. Finally, the Context Compression stage implements Relational Logic Distillation (RLD) guided through a systematic logical decomposition process, which distills flat text into structured entity-relation triplets, yielding a compact and logic-oriented context for answer prediction. Experiments on OK-VQA and A-OKVQA demonstrate that SCoRe consistently outperforms state-of-the-art zero-shot and arXiv:2608.21431v1 [cs.CV] 17 Aug 2026 few-shot methods. The results indicate that explicitly structur-ing context into relational representations improves reasoning effectiveness beyond simply increasing or filtering textual context. We show that context structure, rather than context quantity, is the key factor for effective KB-VQA. In summary, our contributions are as follows:  
+
+> •
+
+We propose SCoRe, a structured context reasoning frame-work for KB-VQA that reformulates heterogeneous mul-timodal information into compact relational representa-tions, enabling more effective LLM-based reasoning.  
+
+> •
+
+We design a two-stage progressive multimodal retrieval strategy that significantly reduces the retrieval search space while preserving high recall of relevant knowledge.  
+
+> •
+
+We propose RLD, a logic-driven inference mechanism that models entity relations to transform evidence into a structured, reasoning-oriented context.  
+
+> •
+
+We conduct extensive experiments on OK-VQA and A-OKVQA, achieving consistent improvements over strong baselines and validating the effectiveness of structured context representations for KB-VQA. II. R ELATED WORK 
+
+Knowledge-based VQA. Knowledge-based VQA integrates external knowledge with multimodal inputs to answer ques-tions. Traditional methods [8], [9] relied on supervised learn-ing with retrieved knowledge (e.g., Wikipedia), but faced limitations in retrieval accuracy and generalization. With the rise of Large Language Models (LLMs) and Large Vision-Language Models (LVLMs), quite a few methods [1], [7] have started to use LLMs or LVLMs as reasoning models, leveraging the knowledge they contain to infer answers. The basic method [2] directly used image descriptions to prompt LLMs. For questions that required comprehensive reasoning, the LLMs may struggle to arrive at answers based solely on image descriptions. The subsequent method KGenVQA [5] leveraged LLMs to generate relevant knowledge, then combined the image descriptions to answer the question. This may lead to the introduction of a large amount of redundant information. The method DIETCOKE [6] leveraged the LLMs to extract rational sentences from the context. This helped LLMs focus more effectively on key information, but improper extraction may lead to the loss of some important details. These methods based on LLMs all employed unstructured context, which resulted in incoherent logic. Moreover, methods such as DIETCOKE [6] relied solely on the LLMs’ knowl-edge for question answering, whereas we retrieve explicit knowledge following the PREFLMR [10] and combine it with LLMs’ knowledge to predict the answer. 
+
+Relation Extraction. Relation Extraction (RE) identifies structured entity dependencies to provide a logical founda-tion for reasoning. MUMRC [11] recasts multimodal triplet extraction as machine reading comprehension, while TEVLA [12] utilizes generative text augmentation for robust vision-language alignment. Recent LLM-based methods like QA4RE [13] elicit zero-shot extraction by aligning RE with common instruction tasks, and OSLLM [14] improves consistency via a retrieve-reason-refine framework. Additionally, ERA-Cot [15] underscores that analyzing entity relationships is vital for enhancing logical depth. Unlike methods focused on standalone extraction accuracy, our SCoRe framework im-plements Relational Logic Distillation as a systematic logical decomposition process. It distills heterogeneous evidence into structured relational triplets, effectively alleviating cognitive overload and facilitating final answer prediction in KB-VQA. III. M ETHODOLOGY 
+
+In this section, we introduce SCoRe in detail. SCoRe includes three stages: Context Acquisition (CA), Context Se-lection (CS), and Context Compression (CC). Specifically, the CA stage is responsible for retrieving explicit knowledge and converting image information into multi-aspect visual notes. The CS stage retrieves implicit knowledge and extracts the relevant information to obtain a concise context. Subsequently, the CC stage combines such information to extract structured relations. Finally, the QA model produces answers using these relations. The overview of SCoRe is shown in Fig. 2. 
+
+A. Context Acquisition 
+
+The Context Acquisition stage aims to construct a compre-hensive but decomposed evidence pool from both visual inputs and external knowledge sources. 
+
+Visual Evidence. To preserve complementary visual cues, we represent the image using three parallel views: object-level attributes, image captions, and OCR-extracted text. Object attributes are extracted using a pre-trained detector, captions are generated via question-guided captioning, and OCR strings are obtained from the image text. Together, these components form a set of visual notes that explicitly separate different types of visual evidence. 
+
+Explicit Knowledge Retrieval. Consistent with previous work, we employ the Google Search corpus and Wikipedia as explicit knowledge bases for OK-VQA and A-OKVQA, respectively. To address the retrieval efficiency bottleneck caused by the massive scale of the Wikipedia, we design a two-stage progressive multimodal retrieval strategy, as illustrated in Fig. 3. Specifically, we first utilize a text encoder FL and a visual encoder FV to encode the question q and the image 
+
+i, respectively. After that, through a mapping layer FM , the original visual features are projected into the text feature space to obtain aligned visual features. The text features and the aligned visual features are concatenated along their dimensions to form a cross-modal query vector Q:
+
+Q = Concat (FL(q), F M (FV (i))) ∈ R(lq +li)×dL , (1) where lq denotes the sequence length of question q, and li
+
+denotes the sequence length of the mapped visual features. First Stage: Title-level multimodal coarse retrieval. Using the same text encoder FL as used for question encoding, we encode title t (t ∈ T itle ) to generate a title feature vector: 
+
+T = FL(t) ∈ Rlt×dL , (2) where lt denotes the sequence length of title t. Based on the late interaction mechanism, finegrained relevance scores Relational Logic Distillation 
+
+Structured Context Reasoning 
+
+> Multimodal Retrieval
+
+Context Acquisition Context Selection Context Compression Prediction      
+
+> Implicit Visual Answer
+> LLMs
+> QA Model
+> Pretrained Img2Text Models
+> Top-k Visual Notes
+> KB
+> Visual Notes
+> Explicit Top-k Knowledge
+> Entity Extraction Relation Extraction & Relation Refinement Entity Key Entity Relation Entities ... ... ... ... Fig. 2. The proposed LLM-based Structured Context Reasoning (SCoRe) method.
+
+between the query vector Q and each title t are computed as: 
+
+S(q, t ) = S(( q, i ), t ) = 
+
+> lQ
+
+X
+
+> x=1
+> lT
+
+max  
+
+> y=1
+
+QxT T 
+
+> y
+
+, (3) where lQ = lq + li denotes the sequence length of the query vectors, Qx denotes the x-th query embedding vector, and Ty
+
+denotes the y-th embedding vector. The relevance scores for all titles are sorted in descending order, and the top k1 titles corresponding to the highest scores are selected to form the candidate title set: 
+
+Ttop-k1 = arg max   
+
+> T′⊆T itle
+> |T′|=k1
+
+{S(q, t ) | t ∈ T itle } . (4) Finally, we extract the union of all candidate passage subsets 
+
+Pcandidate corresponding to the M samples: 
+
+Pcandidate =
+
+> M
+
+[
+
+> m=1
+
+[
+
+> t∈Ttop-k1
+
+Pt
+
+ . (5) At this point, the size of Pcandidate is much smaller than that of the full passage set P assage , yielding an efficient compression of the retrieval scope. Second stage: Paragraph-level multimodal fine-grained re-trieval. We take Pcandidate as the retrieval target, reuse the same relevance metric, and achieve precise recall of the target knowledge paragraphs. Specifically, we encode p (p ∈
+
+Pcandidate ) using text encoder FL:
+
+P = FL(p) ∈ Rlp×dL , (6) where lp denotes the sequence length of p. Applying the rele-vance scoring function defined in the first stage, the relevance score between the query vector Q and paragraph feature P is computed as: 
+
+S(q, p ) = S(( q, i ), p ) = 
+
+> lQ
+
+X
+
+> x=1
+> lP
+
+max  
+
+> y=1
+
+QxP T 
+
+> y
+
+, (7) where Py denotes the y-th embedding vector. Finally, the relevance scores of the candidate paragraphs are sorted in de-scending order, and the knowledge paragraphs corresponding to the top-k2 scores are selected to form the target knowledge fragment set for a single sample as: 
+
+Ptop-k2 = arg max   
+
+> P′⊆Pcandidate
+> |P′|=k2
+
+{S(q, p ) | p ∈ Pcandidate } , (8) where Ptop-k2 represents the target knowledge paragraph set. Stage 1 
+
+Multimodal Retrieval 
+
+Subtitle Set 
+
+... 
+
+> top-k1
+> Titles
+> KB
+
+Titles 
+
+Mapping 
+
+Pcandidate 
+
+> KB
+> top-k2
+> Passages
+
+Stage 2   
+
+> Image Question
+> Fig. 3. The two-stage progressive multimodal retrieval strategy.
+
+B. Context Selection 
+
+The Context Selection stage focuses on reducing evi-dence redundancy while preserving question-relevant seman-tics. LLMs are utilized to select visual knowledge and explicit knowledge from visual notes and top-k2 explicit knowledge passages, respectively. Generally, for an image Ii corresponding to question 
+
+Qi, along with the caption Ci, objects Oi, OCR string 
+
+Si, and explicit knowledge passages P i 
+
+> top-k2
+
+obtained from the CA stage, the selected visual knowledge is V K i =
+
+LLM [P(Ci, O i, S i, Q i)] , the selected explicit knowledge is 
+
+EK i = LLM [P(Ci, Q i, P i 
+
+> top-k2
+
+)] , where P denotes the prompt template for this scene. Specifically, we feed both image captions and the question to retrieve implicit knowledge from LLMs to ensure alignment: IK i = LLM [P(Ci, Q i)] .
+
+C. Context Compression 
+
+To bridge the gap between unstructured evidence and logical reasoning, we propose Relational Logic Distillation (RLD) in the Context Compression stage. The RLD is operationalized through a systematic logical decomposition procedure, which guides the LLM to transform textual evidence into explicit relational structures. RLD consists of three key steps: entity extraction, relation extraction, and relation refinement. In the first step, we initialize the entity set EV i using the detected objects Oi:
+
+EV i = {e1
+
+> V i
+
+, ..., e kV i } ↔ Oi. (9) To avoid missing critical entities, we then use an LLM to sepa-rately extract the explicit and implicit knowledge entities from the sentence as follows: EEi = LLM [P(V K i, EK i)] , E Ii =
+
+LLM [P(IK i)] . In consequence, the final explicit entity list can be expressed as Eei = EV i ∪ EEi , the implicit entity list can be expressed as Eii = EV i ∪ EIi .In the second step, we extract the explicit and implicit relationships between entity pair (ep, e q ) where ep̸ = eq . The relation is denoted as triplets (ep, r, e q ) where r is the relation of entities ep and eq . Specifically, for the i-th sample, its corresponding entity set Eei and Eii , the initial explicit relation set ER init i = {..., (ep, r E , e q ), ... } (ep, eq ∈ Eei and ep̸ = eq )and the implicit relation set IR init i = {..., (ep, r I , e q ), ... } (ep,
+
+eq ∈ Eii and ep̸ = eq ) are formulated as: 
+
+ER init i = LLM [P(( V K i, EK i), E ei )] , (10) 
+
+IR init i = LLM [P(IK i, E ii )] . (11) Therefore, the initial relations Rinit i = ER init i ∪ IR init i .In the final relation refinement step, we utilize an LLM to extract a list of key entities from the image caption and the question, and then filter the initial relation set by removing irrelevant relational triples. Specifically, for the visual knowl-edge V K i corresponding to question Qi, the key entity list can be denoted as: KE i = LLM [P(V K i, Q i)] . The final relations can be expressed as: 
+
+Ri = (ep, r, e q ) (ep, r, e q ) ∈ Rinit i ∧ [ep, e q ∈ KE i
+
+∨ (∃ek ∈ KE i, (ep
+
+> ∗
+
+↔ ek) ∨ (eq
+
+> ∗
+
+↔ ek))] , (12) where ∗
+
+↔ denotes that the two entities can reach each other through one or more relations. 
+
+D. Prediction 
+
+In the final phase, the QA model predicts the answer by conditioning on the structured relation set Ri and the question 
+
+Qi. By replacing unstructured context with explicit relational representations, the model can focus on reasoning over entity dependencies rather than on organizing raw information. IV. E XPERIMENTS 
+
+A. Experiment Settings 
+
+Datasets. We conduct experiments on the two popular KB-VQA datasets: Outside Knowledge VQA (OK-VQA) [25] and Augmented OK-VQA (A-OKVQA) [26]. Following EF-VQA [4], experimental evaluations are performed on the test set of OK-VQA, and the validation set of A-OKVQA. 
+
+Implementation Details. DeepSeek-V3 is used as the con-text processor, while Mistral-7B and Gemma-7B are employed as the QA models. For DeepSeek-V3, we set the temperature to 0.7 and the presence penalty to 0.2. For Mistral-7B and Gemma-7B, we adopt a greedy decoding strategy. DeepSeek-V3 is accessed via API, whereas Mistral-7B and Gemma-7B are locally deployed on two RTX 3090 24 GB GPUs. We use VinVL [27] for object detection, apply the captioning method from PNP-VQA [16] to generate question-guided captions, and extract image text with the Google OCR API. In addition,                                                                                                                         
+
+> TABLE I COMPARISON WITH SOTA METHODS ON THE OK-VQA AND A-OKVQA
+> DATASETS . T HE BEST SCORES ARE HIGHLIGHTED IN BOLD ,AND THE SECOND BEST SCORES ARE HIGHLIGHTED IN UNDERLINE .Method QA Shot OK-VQA A-OKVQA Model Number
+> LLM-based Zero-shot Methods
+> PICa [1] GPT-3 175 B017.1 -PNP-VQA [16] UnifiedQA 11 B035.9 -Img2LLM [2] OPT 175 B045.6 42.9 LAMOC [17] FLAN-T5-XXL 11 B040.3 37.9 RQ prompt [18] GPT-3 175 B046.4 43.2 Emu [19] Llama 13 B038.2 -ZVQAF [20] FLAN-T5 11 B040.5 37.1 KGenVQA [5] UnifiedQA 11 B045.4 39.1 EF-VQA [4] GPT-3.5 175 B043.7 42.1 L2A [21] GPT-3.5-turbo 046.2 48.5 PLLMKI [22] Llama 7B028.4 24.8 DIETCOKE [6] Gemma 7B047.6 47.3 DIETCOKE [6] Mistral 7B049.2 47.5
+> SCoRe (ours) Gemma 7B049.4 50.3
+> SCoRe (ours) Mistral 7B052.1 52.4
+> LLM-based Few-shot Methods
+> PICa [1] GPT-3 175 B140.8 -PICa [1] GPT-3 175 B445.4 -PICa [1] GPT-3 175 B16 48.0 -MM-R [23] GPT-4-32k 20 40.0 -VCTP [3] OPT 66 B844.6 46.4 PCPA [24] Llama 7B16 53.6 52.3 PLLMKI [22] Llama 7B854.1 52.9 EF-VQA [4] GPT-3.5 175 B848.4 48.6 EF-VQA [4] GPT-3.5 175 B16 51.2 50.1
+> SCoRe (ours) Mistral 7B453.2 53.0
+> SCoRe (ours) Mistral 7B854.8 53.6
+> SCoRe (ours) Mistral 7B16 55.7 54.9
+
+we adopt the pre-trained PREFLMR [10] as the backbone for multimodal retrieval. 
+
+Baselines. The methods we compare are categorized as follows: (1) LLM-based zero-shot methods: PNP-VQA [16], Img2LLM [2], LAMOC [17], RQprompt [18], Emu [19], ZVQAF [20], KGenVQA [5], L2A [21], and DIETCOKE [6]. (2) LLM-based few-shot methods: PICa [1], MM-R [23], VCTP [3], PCPA [24], PLLMKI [22], and EF-VQA [4]. We follow official evaluation protocols and report VQA scores for the datasets. The accuracy metric is defined as 
+
+V QA score = min (1 , T (a)/3) , where T (a) is the number of times the predicted answer appears in groundtruth. Notably, we choose the direct answer evaluation of A-OKVQA dataset. 
+
+Zero-shot Settings. We follow Img2LLM [2] to generate QA pairs from image captions as demonstrations for zero-shot scenario. Throughout the entire process, the answer and any other samples remain untouched. 
+
+Few-shot Settings. We select the top-n training samples as exemplars based on the average cosine similarity between CLIP-based image and question embeddings for reasoning. 
+
+B. Performance of the Approaches 
+
+The experimental results summarized in Table I show that SCoRe consistently outperforms all baselines across both zero-shot and few-shot settings on OK-VQA and A-OKVQA. In the zero-shot scenario, SCoRe (Mistral-7B) achieves 52.1% Fig. 4. The Pseudo Recall of intermediate outputs. TABLE II ABLATION STUDY RESULTS OF KEY MODULES ON OK-VQA DATASET .VN EKP CS CC OK-VQA           
+
+> ✓47.5
+> ✓✓49.0
+> ✓✓✓51.2
+> ✓✓✓✓52.1
+
+and 52.4%, surpassing the previous best method, DIETCOKE, by a substantial margin. For the few-shot settings, SCoRe demonstrates steady performance gains as the shot count increases. At 16-shot, it reaches peak accuracies of 55.7% and 54.9%, establishing a new state-of-the-art. These consistent improvements across multiple benchmarks and settings under-score that transforming heterogeneous context into structured relational representations is more effective for knowledge-intensive reasoning than relying on unstructured text. We also compare the time cost of SCoRe and DIETCOKE on Mistral-7B. SCoRe takes approximately 17.5 seconds per sample, whereas DIETCOKE requires 29.5 seconds. For visual question answering tasks, such time costs are acceptable while achieving improved accuracy. 
+
+C. Ablation Studies 
+
+Effectiveness of Proposed Modules. We conduct an abla-tion study on the OK-VQA dataset to validate the effectiveness of each module in SCoRe. As shown in Table II, we gradu-ally incorporate each component to evaluate the performance improvement. Using only visual notes (VN) yields 47.5%. Adding explicit knowledge passages (EKP) further improves the result to 49.0%. With the introduction of the CS module, the score increases to 51.2%. Finally, equipping with the CC module achieves the best performance of 52.1%. These results demonstrate that each proposed module contributes to the final performance, and the full model with all components delivers the optimal reasoning ability. 
+
+Effects of Parameters. We use the Pseudo Recall (PR) to evaluate the impact of k1 and k2 on the retrieval results, where the PR is defined as the proportion of knowledge passages that contain the correct answer among all the retrieved passages. Experimental results on A-OKVQA validation set (1145 sam-ples) are presented in Table III and Table IV. Table III shows that performance is already strong when k1=1 and improves steadily as the number of titles increases. Beyond k1=50 the                                       
+
+> TABLE III THE PSEUDO RECALL ACROSS DIFFERENT k1AND k2.top-kk1=1 k1=10 k1=20 k1=50 k1=100 k1=200
+> k2=5 (PR@5) 55.02 56.41 58.77 63.58 63.58 64.62
+> k2=10 (PR@10) 66.72 68.64 68.90 73.71 74.14 75.19
+> k2=20 (PR@20) 76.76 78.07 77.99 81.74 82.88 82.88 TABLE IV THE NUMBER OF CANDIDATE PASSAGES FOR DIFFERENT k1.ALL k1=1 k1=10 k1=20 k1=50 k1=100 k1=200 Num 21,015,324 8,746 72,969 135,835 294,726 560,324 988,434
+
+gain tapers off, and PR@20 is almost identical for k1=100 and 
+
+k1=200. Balancing efficiency and accuracy, we set k1=200, 
+
+k2=10. Table IV lists the counts of candidate passages for different k1 values. We observe that our method compresses the retrieval counts by tens to hundreds of times while still delivering promising results. 
+
+Information Loss of Intermediate Output. As SCoRe adopts a pipeline-based architecture, each stage of content generation or extraction inevitably alters and partially loses information. Fig. 4 shows the PR of intermediate outputs, including Visual Notes (VN), Explicit Knowledge Passages (EKP), CA (VN + EKP), Visual Knowledge (VK), Explicit Knowledge (EK), Implicit Knowledge (IK), CS (VK + EK + IK), Explicit Relations (ER), Implicit Relations (IR), ER + IR, and CC (refined ER + IR). As can be seen from the figure, the PR at the initial CA stage is approximately 10 percentage points higher than that at the final CC stage on two datasets. However, the actual performance of the CA is lower than the CC. This is because CA contains substantial redundant and noisy information, which impairs the model’s judgment. In contrast, the structured information in the CC stage enables the model to better understand the relations between entities, thereby deriving accurate answers. 
+
+D. Case study 
+
+As shown in Fig. 5, we select some representative cases from OK-VQA to compare SCoRe with KGenVQA (a-b, zero-shot) and EF-VQA (c-d, few-shot). Baselines relying on unstructured implicit knowledge often suffer from noisy or incorrect reasoning. In contrast, SCoRe extracts structured relation triplets via context reasoning, integrating visual, ex-plicit and implicit knowledge. SCoRe outputs accurate answers (e.g., “snow”, “celebration”) by capturing key info and logical connections, verifying its superiority in KB-VQA. Despite its effectiveness, SCoRe occasionally encounters limitations, as illustrated in the failure cases. In Fig. 6 (a), although the explicit knowledge correctly retrieves “1892”, the model outputs “1886” due to a conflict between explicit and implicit relations. The LLM’s internal knowledge regarding the formula’s invention (1886) overrides the specific brand founding date (1892) present in the retrieved context, leading to an incorrect reasoning priority. In Fig. 6 (b), the model pro-vides a generic answer “birds” instead of specific species like “cardinal”. This failure is attributed to insufficient finegrained Answer: cold temperatures                  
+
+> Relations: people are standing on snowy slope, ..., snow conditions are popular with skiers, ...
+> Answer: snow
+> Answer: sheep are ruminants
+> Relations: young boy is sitting on white sheep, white sheep are near water, white sheep have...
+> Answer: fake
+> Answer: dog collar
+> Relations: black dog has purple collar, ..., leash is attached to collar, leash is for controlling or...
+> Answer: leash
+> Question: What is the purpose of the red deco-rations in this photo?
+> Answer: decoration purpose
+> Relations: street is decorated with red flags, ..., red flags are popular decorations for Chinese New Year...
+> Answer: celebration
+> Groundtruth:
+> leash; collar
+> Question: What long strap is attached to the object around the animal's neck?
+> Groundtruth: fake; statue; not real
+> Groundtruth: snow; snowfall; snow and cold
+> Question: What con-ditions are necessary for this sport?
+> Question: Why the sheep doesn't need food?
+
+Ours KGenVQA Ours KGenVQA 
+
+> Groundtruth:
+> chinese new yea r; light; celebration
+
+Ours EF-VQA Ours EF-VQA    
+
+> (a) (b) (c) (d)
+
+Fig. 5. The qualitative comparison of KGenVQA with zero-shot settings (a-b) and EF-VQA with few-shot settings (c-d). Relations: store booth has Coca-Cola signs, ..., Coca Cola company was founded in 1892, drink was first created in 1886, Coca-Cola was founded on 1886...        
+
+> Answer: 1886
+> Question: When was the cola brand on the signs founded?
+> Groundtruth: 1892
+> Ours
+> (a)
+> Relations: small gray and brown birds are perched on thin brown branches, ..., Finches are tiny birds, birds are found in urban areas, birds are perched on...
+> Answer: birds
+> Question: What kind of birds are those?
+> Groundtruth: cardinal, robins, sparrow
+> Ours
+> (b)
+
+Fig. 6. Qualitative case study of SCoRe failure modes. 
+
+visual knowledge, while the SCoRe framework identifies the presence of birds and their basic colors, it lacks the specialized ornithological features (e.g., subtle beak shapes or plumage patterns) necessary for precise taxonomic classification. V. C ONCLUSION 
+
+In this paper, we propose an LLM-based Structured Con-text Reasoning (SCoRe) framework, which extracts structured relationships for knowledge-based visual question answering. SCoRe addresses two pivotal challenges by structured context reasoning to refine the original information: 1) Excessive inputs cognitively overload LLMs, and 2) Difficulty in rea-soning over unstructured input. In addition, SCoRe introduces a two-stage progressive multimodal retrieval strategy that dramatically improves retrieval efficiency while maintaining high accuracy. Extensive experiments demonstrate that SCoRe outperforms state-of-the-art methods. ACKNOWLEDGMENTS 
+
+This work is supported by the Guangdong Basic and Applied Basic Research Foundation (No.2024A1515010237), and a grant from CMA Communication and Outreach Centre (China Meteorological News Press) Meteorological Converged Media Technology Innovation and Application Open Labora-tory (No. QXRM-ZD-2508). REFERENCES [1] Z. Yang, Z. Gan, J. Wang, X. Hu, Y. Lu, Z. Liu, and L. Wang, “An empirical study of gpt-3 for few-shot knowledge-based vqa,” in AAAI ,2022. [2] J. Guo, J. Li, D. Li, A. M. H. Tiong, B. Li, D. Tao, and S. Hoi, “From images to textual prompts: Zero-shot visual question answering with frozen large language models,” in CVPR , 2023. [3] Z. Chen, Q. Zhou, Y. Shen, Y. Hong, Z. Sun, D. Gutfreund, and C. Gan, “Visual chain-of-thought prompting for knowledge-based visual reasoning,” in AAAI , 2024. [4] P. Qiang, H. Tan, and X. Li, “Enhancing few-shot kb-vqa with panoramic image captions guided by large language models,” Neurocomputing ,2025. [5] R. Cao and J. Jiang, “Knowledge generation for zero-shot knowledge-based vqa,” in EACL , 2024. [6] M. Li, H. Li, Z. Du, and B. Li, “Diversify, rationalize, and combine: Ensembling multiple qa strategies for zero-shot knowledge-based vqa,” in EMNLP , 2024. [7] Z. Shao, Z. Yu, M. Wang, and J. Yu, “Prompting large language models with answer heuristics for knowledge-based visual question answering,” in CVPR , 2023. [8] W. Lin and B. Byrne, “Retrieval augmented visual question answering with outside knowledge,” in EMNLP , 2022. [9] J. Wu, J. Lu, A. Sabharwal, and R. Mottaghi, “Multi-modal answer validation for knowledge-based vqa,” in AAAI , 2022. [10] W. Lin, J. Mei, J. Chen, and B. Byrne, “PreFLMR: Scaling up fine-grained late-interaction multi-modal retrievers,” in ACL , 2024. [11] Q. Chen, D. Zhang, S. Li, and G. Zhou, “A unified mrc framework with multi-query for multi-modal relation triplets extraction,” in ICME , 2023. [12] J. Chen, Q. Guo, K. C. Cheung, M. Liang, and D. Chen, “Tevla: Text-oriented enhancement for vision-language alignment in relation extraction,” in ICME , 2025. [13] K. Zhang, B. Jimenez Gutierrez, and Y. Su, “Aligning instruction tasks unlocks large language models as zero-shot relation extractors,” in ACL ,2023. [14] J. Zhou, Y. Shan, M. Wu, F. Hu, L. Zheng, and X. Wang, “Osllm: A retrieve-reason-refine framework for multi-domain relation extraction with large language models,” in ICME , 2025. [15] Y. Liu, X. Peng, T. Du, J. Yin, W. Liu, and X. Zhang, “Era-cot: Improving chain-of-thought through entity relationship analysis,” in 
+
+ACL , 2024. [16] A. M. H. Tiong, J. Li, B. Li, S. Savarese, and S. C. Hoi, “Plug-and-play vqa: Zero-shot vqa by conjoining large pretrained models with zero training,” in EMNLP , 2022. [17] Y. Du, J. Li, T. Tang, W. X. Zhao, and J.-R. Wen, “Zero-shot visual question answering with language model feedback,” in ACL , 2023. [18] Y. Lan, X. Li, X. Liu, Y. Li, W. Qin, and W. Qian, “Improving zero-shot visual question answering via large language models with reasoning question prompts,” in ACM MM , 2023. [19] Q. Sun, Q. Yu, Y. Cui, F. Zhang, X. Zhang, Y. Wang, H. Gao, J. Liu, T. Huang et al. , “Emu: Generative pretraining in multimodality,” in 
+
+ICLR , 2024. [20] C. Liu, C. Wang, Y. Peng, and Z. Li, “Zvqaf: Zero-shot visual question answering with feedback from large language models,” Neurocomputing ,2024. [21] X. Xing, P. Xiong, L. Fan, Y. Li, and Y. Wu, “Learning to ask denotative and connotative questions for knowledge-based vqa,” in EMNLP , 2024. [22] Z. Hu, P. Yang, F. Liu, Y. Meng, and X. Liu, “Prompting large language models with knowledge-injection for knowledge-based visual question answering,” Big Data Mining and Analytics , 2024. [23] M. Khademi, Z. Yang, F. V. Frujeri, and C. Zhu, “Mm-reasoner: A multi-modal knowledge-aware framework for knowledge-based visual question answering,” in EMNLP , 2023. [24] Z. Hu, P. Yang, Y. Jiang, and Z. Bai, “Prompting large language model with context and pre-answer for knowledge-based vqa,” Pattern Recognition , 2024. [25] K. Marino, M. Rastegari, A. Farhadi, and R. Mottaghi, “Ok-vqa: A visual question answering benchmark requiring external knowledge,” in 
+
+CVPR , 2019. [26] D. Schwenk, A. Khandelwal, C. Clark, K. Marino, and R. Mottaghi, “A-okvqa: A benchmark for visual question answering using world knowledge,” in ECCV , 2022. [27] P. Zhang, X. Li, X. Hu, J. Yang, L. Zhang, L. Wang et al. , “Vinvl: Revisiting visual representations in vision-language models,” in CVPR ,2021.

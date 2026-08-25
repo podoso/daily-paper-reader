@@ -1,0 +1,1013 @@
+Title: Socialized Division and Collaboration: Rethinking Class-Incremental Learning under Optimization Conflicts
+
+URL Source: https://arxiv.org/pdf/2608.21044v1
+
+Published Time: Mon, 24 Aug 2026 00:47:31 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Socialized Division and Collaboration: Rethinking Class-Incremental Learning under Optimization Conflicts 
+
+# Xinjie Yao, 1 Zhihe Fan, 2 Yunqi Zhu, 3 Jiaqi Zhou, 4 Dengyu Zhao, 4 Zhoupeng Guo, 5 Yan Fan, 6
+
+# Guosong Jiang, 4 Pengfei Zhu 4,5 ∗ 
+
+> 1
+
+Faculty of Information Engineering and Automation, Kunming University of Science and Technology  
+
+> 2
+
+School of Sports Training, Tianjin University of Sport  
+
+> 3
+
+School of Computer Science and Engineering, University of New South Wales  
+
+> 4
+
+School of Artificial Intelligence, Tianjin University  
+
+> 5
+
+School of Automation, Southeast University  
+
+> 6
+
+National University of Defense Technology 
+
+Abstract 
+
+Class-incremental learning is commonly instantiated as a single-model paradigm, where a unified model sequentially adapts to an unbounded stream of sessions. While effective under mild distributional shifts, this formulation becomes strained when successive sessions induce incompatible op-timization directions, leading to destructive interference and catastrophic forgetting. We argue that such forgetting reflects a structural limitation of enforcing heterogeneous learning dynamics within a single parameter space. Motivated by so-cial solidarity theory, we propose Socialized Division and Collaboration (SDC) as a reformulation of continual learning that decomposes session learning across specialized models in response to optimization conflicts, while enabling coordi-nated collaboration. To support this formulation with a prin-cipled allocation mechanism, we introduce an energy-based session–model compatibility criterion grounded in Helmholtz free energy, which guides adaptive session allocation and model evolution under conflicting objectives. This framework integrates session assignment, model evolution, and collabo-rative inference into a unified pipeline, offering an alternative to monolithic continual learning formulations and highlight-ing a broader design principle for learning under persistent optimization conflicts. 
+
+# Introduction 
+
+In machine societies, system level progress depends on con-tinual learning and reliable knowledge integration. Classical class incremental learning (CIL) trains a single model se-quentially over an unbounded stream of sessions (Zhou et al. 2024; Zhang et al. 2025). This monolithic update paradigm, however, becomes fragile as sessions accumulate and their distributions diverge. Under substantial distribution shifts or conflicting objectives, CIL often fails to satisfy compet-ing constraints simultaneously, resulting in incompatible pa-rameter updates and catastrophic forgetting. Human societal evolution highlights what is fundamentally missing. Early so-cieties were organized around mechanical solidarity, where similar roles and shared knowledge made collective func-tioning straightforward. As societies expanded, they evolved toward organic solidarity, in which specialization and inter-dependence became essential (Durkheim 1997). The driving force of this transition was not increased individual capacity, 
+
+> ∗
+
+Corresponding author. Copyright © 2027, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Figure 1: Social solidarity in human society versus socialized solidarity in machine society. but structured division of labor coupled with the systematic integration of collective intelligence (Yao et al. 2024). In CIL, Low-Rank Adaptation (LoRA) (Hu et al. 2022) partially reflects this principle by separating parameter up-dates across sessions. By constraining updates to low rank subspaces, LoRA reuses historical optimization directions to accommodate new data and mitigate forgetting. Never-theless, this separation remains implicit and local. It neither resolves inter session interference when optimization direc-tions conflict, nor provides a principled mechanism to align heterogeneous sessions with models of different learning ca-pacities (Wu et al. 2025). When sessions induce divergent gradients, distributional constraints prevent a single parame-terization from retaining all knowledge, and existing variants fall short of genuine division and collaboration. More broadly, current paradigms (Yao et al. 2025; Li et al. 2025c) rarely achieve structural division. Most approaches perform separation at the data or parameter level, while the learning process remains dominated by session specific opti-mization directions and the models be systematically divided and collaboratively integrated (Zhang et al. 2024) so that the system can stably retain and refine prior knowledge while continuously assimilating new sessions? A careful examina-tion of existing work reveals two unresolved issues. 1: How to dynamically assign sessions to models? 
+
+2: How to balance specialization and collaboration? 
+
+Guided by social solidarity theory, which assigns roles ac-arXiv:2608.21044v1 [cs.AI] 21 Aug 2026 cording to individual strengths, we propose the Socialized Division and Collaboration (SDC) paradigm. SDC reframes CIL as the evolution of a multi model societal system, in which sessions are explicitly allocated to models that can learn them with minimal interference, and knowledge is in-tegrated through structured collaboration. By quantifying an affinity energy between sessions and models, SDC enables dynamic session allocation and division aware collaborative inference, thereby reducing forgetting and improving system level performance. To instantiate SDC, we design the framework grounded in Helmholtz free energy. SDC consists of three core compo-nents: session division, model evolution, and collaborative inference. Sessions are assigned to models by minimizing Helmholtz free energy, which serves as a unified measure of session model compatibility. Models then evolve on their allocated sessions, and the system performs full classifica-tion through collaboration among specialized models, collec-tively alleviating catastrophic forgetting. These contributions are detailed as follows: 
+
+• We propose SDC as a practical paradigm for CIL, re-framing continual learning through explicit division and structured collaboration. 
+
+• We discuss that shared low-rank learning has an inherent bottleneck under heterogeneous sessions, which can be strictly reduced through division. 
+
+• We realize SDC through the energy selection coevolu-tion framework for dynamic grouping and division-aware collaboration. 
+
+# Related Work 
+
+Class-Incremental Learning 
+
+Class-Incremental Learning (CIL) is a canonical continual learning setting in which a model must incrementally acquire new classes while retaining previously learned knowledge. To address catastrophic forgetting, a wide range of approaches have been proposed, which can be broadly grouped into three categories. (1) Rehearsal-based methods (Lee et al. 2025; Wu et al. 2025; Hu et al. 2019; Shin et al. 2017) mitigate forgetting by storing or generating representative samples from earlier classes and replaying them alongside data from newly introduced classes. (2) Regularization-based meth-ods (Cui et al. 2025; Li et al. 2025a; Zenke, Poole, and Ganguli 2017; Aljundi et al. 2018) discourage forgetting by constraining parameter updates for new classes, typically through importance-weighted penalties that limit changes to parameters critical for previously learned knowledge. 
+
+(3) Parameter-isolation methods (Aljundi, Chakravarty, and Tuytelaars 2017; Li et al. 2025b; Wang et al. 2023b; Yang et al. 2023) reduce interference by allocating class- or session-specific parameter subsets within a shared architec-ture, enforcing structural separation between representations learned at different stages. Despite their algorithmic diversity, most existing CIL ap-proaches operate under a single-model learning paradigm. In class-incremental settings, the optimization objectives in-duced by newly introduced classes often conflict with rep-resentations formed for earlier classes. When all classes are optimized within a shared parameter space, such conflicts are difficult to resolve and manifest as persistent interference between old and new knowledge. As learning proceeds over many increments, these unresolved conflicts accumulate, ul-timately resulting in catastrophic forgetting. 
+
+CIL with Foundation Models 
+
+CIL with foundation models leverages large-scale pre-trained models to facilitate knowledge transfer across ses-sions and alleviate catastrophic forgetting in continual learn-ing. By exploiting strong and transferable representations ac-quired during pre-training, these approaches aim to improve performance across successive incremental sessions. Exist-ing methods can be broadly categorized into two groups. (1) Prompt-based adaptation methods (Wang et al. 2022b,a; Smith et al. 2023; Hong, Kim, and Kim 2025) integrate Vision Transformers with prompt tuning, where session-specific prompts are selectively activated or composed to adapt a shared backbone, enabling continual adaptation while retaining previously learned knowledge. (2) LoRA-based methods (Liang and Li 2024; Wu et al. 2025; Liu and Chang 2025) support parameter-efficient continual learning by injecting session-specific information through low-rank adaptations while keeping the foundation backbone frozen, thereby reducing interference and training overhead. Despite these advances, foundation model–based contin-ual learning methods remain fundamentally constrained by the single-model paradigm. As new sessions are introduced, heterogeneous optimization objectives are forced to coexist within a shared parameter space, leading to accumulating knowledge conflicts that limit effective retention. This struc-tural limitation is not unique to foundation models, but also characterizes traditional continual learning approaches. To overcome this bottleneck, we adopt a collaborative multi-model perspective with explicit division of labor, allowing different models to specialize in compatible sessions and thereby alleviating cross-session interference. 
+
+# Division-Aware CIL 
+
+This section characterizes cross-session inconsistency as the dominant source of error in low-rank adaptation and exam-ines how free energy width governs this term at the level of session groups. These theoretical observations motivate a division-aware view of CIL and provide the foundation for the method developed in the next section. The full proofs of the theorems are provided in the appendix. 
+
+Problem setup: We consider a sequential stream of ses-sions {1, . . . , N }, where each session i is associated with a session-specific optimal update matrix ∆W ⋆i . Our objective is to establish that grouping sessions according to a free en-ergy score Fi produces more coherent session groups with smaller within-group radii. As a result, the cross-session in-consistency term εS is reduced, leading to a tighter upper bound on the approximation error. 
+
+Definition 1 (Chebyshev center and radius) . Let S ⊆{1, . . . , N } denote a set of session indices, where each ses-sion i ∈ S is associated with a session-specific optimal update matrix ∆W ⋆i . Under the operator norm ∥ · ∥ op , the Chebyshev center of the set {∆W ⋆i }i∈S is defined as 
+
+∆W ⋆S ∈ arg min  
+
+> X
+
+max  
+
+> i∈S
+
+∥∆W ⋆i − X∥op , (1) 
+
+and the corresponding Chebyshev radius is 
+
+εS := min  
+
+> X
+
+max  
+
+> i∈S
+
+∥∆W ⋆i − X∥op . (2) The Chebyshev radius εS measures the maximal disper-sion of session-specific optimal updates within the set S
+
+around an optimally chosen reference point. A larger εS in-dicates weaker within-set alignment and greater difficulty for parameter sharing, whereas a smaller εS corresponds to stronger alignment and more favorable sharing conditions. 
+
+Theorem 2 (Low-rank approximation with heterogeneity floor) . Building on prior work (Wu et al. 2025), suppose Assumption 10 holds. Let ∆W [k] denote the rank-k approx-imation of ∆W ⋆ obtained by retaining the top-k principal components. Under standard spectral separation and opti-mization conditions, there exist numerical constants c and c′
+
+such that, with high probability, gradient descent produces iterates satisfying 
+
+∥Aik Bik −∆W [k]∥op ≤ ϵσ 1 +εS , ∀k = 1 , 2, . . . , j. (3) 
+
+Remark 3 (Irreducible heterogeneity floor) . The bound in Theorem 2 decomposes the approximation error into an op-timization term and an irreducible heterogeneity term εS .While the optimization term can be reduced through train-ing, εS depends solely on cross-session inconsistency within the sharing set and therefore constitutes a fundamental bot-tleneck for shared low-rank adaptation. 
+
+Assumption 4 (Free energy Lipschitz consistency) . There exists a constant LF > 0 such that for any unordered session pair {p, q } (with p̸ = q), 
+
+Pr 
+
+
+
+∥∆W ⋆p −∆W ⋆q ∥op ≤ LF |Fp −Fq |+ηδ
+
+
+
+≥ 1−δ. (4) 
+
+where δ ∈ (0 , 1) is a confidence level and ηδ ≥ 0 is a residual term. 
+
+Definition 5 (Free energy grouping) . Let the session indices 
+
+{1, . . . , N } be partitioned into L disjoint groups {Gℓ}Lℓ=1 
+
+according to their free energy scores {Fi}. The partition is called a free energy grouping with width τ if, for every group 
+
+Gℓ, all session pairs (p, q ) ∈ Gℓ satisfy: 
+
+Lemma 6 (Group-level error control under free energy grouping) . Assume Assumption 4 and Assumption 10 hold. Under the free energy width condition in Definition 5, for any group Gℓ define δℓ :=  |Gℓ|
+
+> 2
+
+δ. Then there exists an event EGℓ
+
+with Pr( EGℓ ) ≥ 1 − δℓ such that, on EGℓ ,                
+
+> max
+> i∈Gℓ
+> ∥AiBi−∆W[: jℓ]
+> Gℓ∥op ≤ϵ σ 1(∆ W⋆Gℓ) + εGℓ
+> ≤ϵ σ 1(∆ W⋆Gℓ) + ( LFτ+ηδ).
+
+(5) 
+
+In contrast, without grouping, the global worst-case session satisfies 
+
+max  
+
+> 1≤i≤N
+
+∥AiBi − ∆W [: j]1: N ∥op ≤ ϵ σ 1(∆ W ⋆ 
+
+> 1: N
+
+) + ε1: N . (6) 
+
+Remark 7 (Effect of grouping on heterogeneity) . Lemma 6 shows that free energy grouping replaces the global incon-sistency term ε1: N with smaller within-group heterogeneity terms εGℓ , which is the key mechanism through which group-ing improves the worst-case error bound. 
+
+Theorem 8 (Strict improvement via free energy grouping) .
+
+Under the conditions of Lemma 6, suppose 0 < ϵ < 12 and the grouping width τ satisfies 
+
+LF τ + ηδ < (1 − 2ϵ) ε1: N . (7) 
+
+Then the grouped bound is strictly tighter than the global sharing bound, i.e., 
+
+max 
+
+> ℓ
+
+ ϵ σ 1(∆ W ⋆Gℓ ) + εGℓ
+
+ < ϵ σ 1(∆ W ⋆ 
+
+> 1: N
+
+) + ε1: N . (8) 
+
+Remark 9 (Implication for division-aware learning) . The-orem 8 formally establishes that free energy grouping can strictly improve the worst-case approximation guarantee by controlling cross-session inconsistency. When the grouping width is sufficiently small, structured division replaces global sharing with localized consistency, yielding provably sharper error bounds. 
+
+# Methodology 
+
+To address the optimization conflicts inherent in class-incremental learning, we propose the Socialized Division and Collaboration (SDC) framework, illustrated in Figure 2. Rather than forcing all incremental sessions to be absorbed by a single model, SDC reformulates continual learning as a structured system with explicit division of labor and con-trolled collaboration. SDC is instantiated through a three-stage design. First, a Helmholtz free energy selector performs principled session division by grouping incoming sessions according to their en-ergetic compatibility, thereby preventing severe cross-session interference at the source. Second, in the decoupled evolu-tion stage, specialized and parameter-efficient modules adapt to their assigned session groups, allowing knowledge to evolve without corrupting unrelated representations. Finally, a collaboration-aware training objective enables structured integration among specialized modules, ensuring that com-plementary expertise can be jointly leveraged at inference time. Together, these components form a coherent mecha-nism that mitigates catastrophic forgetting while supporting continual knowledge accumulation. 
+
+Helmholtz free energy selector (HFES): To resolve opti-mization conflicts at their origin, we adopt an energy-based assignment mechanism that allows each incoming session to be claimed by the model with which it is most compatible. The core idea is to quantify the alignment between sessions and models through Helmholtz free energy and to derive a principled compatibility score for model selection. For an input x and model k, we define the energy of class y as 
+
+Ek(x, y ) = −hk(x)[ y], (9) where hk(x) denotes the logits produced by model k. The corresponding Helmholtz free energy is defined as 
+
+Fk(x) = − log X
+
+> y∈Y k
+
+exp   − Ek(x, y ). (10) Figure 2: Overview of the proposed Socialized Division and Collaboration (SDC) framework. SDC consists of a Helmholtz free energy selector for session division, a model evolution module for specialized learning, and a collaboration module for structured integration, jointly enabling division-aware and collaboration-aware continual learning. Since Fk(x) is negative and lower values indicate stronger overall evidence under the induced Gibbs distribution, we introduce a compatibility score defined by 
+
+Sk(x) ≜ −Fk(x), (11) where larger values correspond to stronger alignment be-tween the session and the model. Given a session dataset Di, we evaluate its compatibility with each model by aggregating sample-level scores, 
+
+S(k) 
+
+> i
+
+= Ex∼D i [Sk(x)] , (12) and assign the session to the model that maximizes scores, 
+
+j⋆i = arg max  
+
+> k
+
+S(k) 
+
+> i
+
+. (13) The selected model then exclusively updates its parame-ters on Di, thereby establishing ownership of the session. As learning proceeds, this energy-based assignment induces stable specialization across models and enforces an implicit division of labor. 
+
+Division-aware model evolution (DME): After session as-signment by the Helmholtz free energy selector, each session is routed to a dedicated expert model and contributes only to the evolution of that expert. To ensure parameter efficiency and prevent catastrophic forgetting, the shared backbone W0
+
+is kept frozen, and adaptation is realized through sequen-tial low-rank updates. For a given expert, model evolution proceeds over sessions {1, . . . , N } as 
+
+W (n) = W0 +
+
+> n
+
+X
+
+> i=1
+
+∆Wi, (14) where each update ∆Wn = AnBn is a rank-r matrix learned exclusively from the data of session n. Importantly, each 
+
+∆Wn is constrained to capture novel update directions rel-ative to previously learned ones, ensuring that successive low-rank updates complement rather than overwrite earlier knowledge. This formulation can be viewed as a structured, expert-local sequential low-rank approximation of session-specific update directions. By restricting updates to aligned subspaces within each expert and avoiding cross-expert interference, the model incrementally captures dominant variations induced by new sessions while preserving previously acquired rep-resentations. Crucially, this evolution mechanism builds on the stable session grouping induced by free energy-based as-signment, ensuring that low-rank updates remain consistent with the expert’s optimization trajectory. 
+
+Division-based collaboration (DC): The final stage enables system-level collaboration by jointly leveraging the evolved and decoupled expert models. While the preceding stages ensure that sessions are compatibly assigned and experts are independently optimized, this stage governs how specialized expertise is integrated without violating the established divi-sion of labor. Crucially, collaboration is induced during training through a division-preserving objective defined at the system level. Rather than jointly Fine-Tuning all sessions within a single model, we optimize a composite objective that aggregates the losses of all experts: 
+
+Ltotal =
+
+> K
+
+X
+
+> k=1
+
+Lk, (15) Method ImageNet-R CIFAR-100 CUB-200                                                      
+
+> ACC ( ↑)AAA ( ↑)ACC ( ↑)AAA ( ↑)ACC ( ↑)AAA ( ↑)Fine-Tuning(Shuttleworth et al. 2025) 60.57 72.31 69.49 80.35 51.43 69.74 L2P (Wang et al. 2022b) 71.26 76.13 83.18 87.69 65.18 76.12 DualPrompt (Wang et al. 2022a) 68.22 73.81 81.48 86.41 68.00 79.40 CODA-Prompt (Smith et al. 2023) 74.05 78.14 86.31 90.67 71.92 78.76 InfLoRA (Liang and Li 2024) 74.75 80.67 86.75 91.72 70.82 81.39 SD-LoRA (Wu et al. 2025) 77.34 82.04 88.01 92.54 77.48 85.59
+> SDC(Ours) 85.96 (+8 .62) 88.61 (+6 .57) 95.08 (+7 .07) 96.58 (+4 .04) 84.93 (+7 .45) 90.88 (+5 .29)
+
+Table 1: Performance of different methods on ImageNet-R, CIFAR-100 and CUB-200. The 1 st and 2 nd best results are highlighted in bold and underlined, respectively. where Lk denotes the empirical loss over sessions assigned to expert k. This formulation couples experts only at the objec-tive level, while parameter updates remain strictly localized within each model. As a result, collaboration emerges naturally at inference time: multiple experts can be jointly activated to produce predictions without parameter merging or post-hoc coordina-tion, yielding a coherent system that balances specialization and collaboration. In summary, SDC operates as a unified three-stage pipeline encompassing division, evolution, and collaboration. For clarity, we provide explicit training and inference procedures in Algorithm 1 and Algorithm 2. Algorithm 1: Training for SDC.  
+
+> 1:
+
+Input: backbone W0, session dataset {D i}Ni=1 , compat-ibility score function S(·; ·), LoRA rank r 
+
+> 2:
+
+Output: expert adapters {(Ak, B k)}Kk=1  
+
+> 3:
+
+Initialize K adapters {(Ak, B k)}Kk=1 with rank r 
+
+> 4:
+
+Initialize empty session ownership sets {S k}Kk=1  
+
+> 5:
+
+for i = 1 to N do  
+
+> 6:
+
+Compute scores {S(k) 
+
+> i
+
+}Kk=1 for session datasets Di 
+
+> 7:
+
+Select expert index k⋆i ← arg max k∈{ 1,...,K } S(k) 
+
+> i
+> 8:
+
+Assign session datasets Di to expert k⋆i 
+
+> 9:
+
+Update adapter (Ak⋆i , B k⋆i ) on session dataset Di 
+
+> 10:
+
+Add Di to ownership set Sk⋆i 
+
+> 11:
+
+end for 
+
+Algorithm 2: Inference for SDC.  
+
+> 1:
+
+Input: test sample x, backbone W0, expert adapters 
+
+{(Ak, B k)}Kk=1 , compatibility score function S(·; ·) 
+
+> 2:
+
+Output: prediction ˆy 
+
+> 3:
+
+Compute compatibility scores {Sk(x)}Kk=1  
+
+> 4:
+
+Select expert index k⋆ ← arg max k∈{ 1,...,K } Sk(x) 
+
+> 5:
+
+Compute prediction ˆy ← f (x; W0 + Ak⋆ Bk⋆ )
+
+# Experiments 
+
+We evaluate Socialized Division and Collaboration (SDC) on three widely adopted benchmarks: ImageNet-R (Boschini et al. 2022), CIFAR-100 (Krizhevsky and Hinton 2009), and CUB-200 (Wah et al. 2011). Beyond reporting overall per-formance, our experiments are designed to examine how ex-plicit division of labor and structured collaboration influence knowledge evolution and forgetting in CIL. All experiments are implemented in PyTorch and conducted on two NVIDIA RTX 4090 GPUs. 
+
+Implementation Details 
+
+We compare SDC with several state-of-the-art (SOTA) meth-ods, including Fine-Tuning, L2P (Wang et al. 2022b), Dual-Prompt (Wang et al. 2022a), CODA-Prompt (Smith et al. 2023), InfLoRA (Liang and Li 2024) and SD-LoRA (Wu et al. 2025). All datasets are divided into 10 incremental sessions, ACC measures accuracy, AAA measures forgetting rate, and the formal definitions of the evaluation metrics can be found in the appendix.More experiments and details of implementation refer to appendix. 
+
+Division and Collaboration Are All You Need 
+
+As shown in Table 1, SDC achieves the best performance across all three benchmarks. Notably, these improvements hold across diverse domains and class distributions, indicat-ing that the gains are systematic rather than dataset-specific. 
+
+Neither division nor collaboration alone is sufficient: 
+
+A closer analysis exposes fundamental structural limitations in existing approaches. Single-model methods such as SD-LoRA mitigate catastrophic forgetting by decoupling ses-sions, yet all updates remain confined within a shared param-eter space. As session heterogeneity increases, this constraint inevitably induces representational interference and leads to diminishing returns. Conversely, traditional ensemble meth-ods benefit from collaboration across models, but the lack of explicit session assignment leaves optimization conflicts unresolved during model evolution, which undermines both scalability and stability. 
+
+Division-aware collaboration resolves both limitations: 
+
+By assigning each session to the most compatible model via a free energy-based criterion, SDC eliminates optimization conflicts at their source. This principled division of labor al-lows models to specialize without interference, while struc-tured collaboration enables complementary knowledge to be effectively integrated. As a result, SDC delivers substantial and robust performance improvements together with strong suppression of forgetting. Specialization-Complementarity Trade-Off 
+
+As shown in Table 2 and Figure 3, our results reveal a clear trade-off between model specialization and inter-session complementarity. On ImageNet-R and CUB-200, increasing the number of models beyond a dataset-dependent threshold leads to higher forgetting rates. To fundamentally investigate this threshold, we conducted a data-driven semantic clus-tering analysis on the datasets. The results demonstrate that the underlying feature spaces naturally partition into three highly cohesive macro-clusters, effectively proving that K=3 is the optimal capacity threshold to balance specialization and complementarity.More experiments and details of the semantic clustering analysis refer to appendix .                      
+
+> Method ImageNet-R CIFAR-100 CUB-200
+> ACC ( ↑) AAA ( ↑) ACC ( ↑) AAA ( ↑) ACC ( ↑) AAA ( ↑)SDC-M2 83.99 87.02 93.36 95.87 83.94 90.26 SDC-M3 85.96 88.61 95.08 96.58 84.93 90.88
+> SDC-M4 85.85 88.29 96.13 97.40 84.80 89.50
+
+Table 2: Effect of the number of models on SDC performance. The 1 st and 2 nd best results are highlighted in bold and underlined, respectively. 
+
+Figure 3: Detailed accuracy of each session on ImageNet-R. 
+
+Session-driven division of labor: Crucially, in CIL sce-narios, data arrives sequentially, requiring the learning sys-tem to adapt to the evolving task distribution. Accordingly, the model’s capacity ( K) within our framework is fundamen-tally task-driven. To theoretically validate this environment-dependent nature, we conducted a retrospective semantic correlation analysis on the complete datasets. This analysis reveals that the underlying feature spaces of the three evalu-ated benchmarks naturally partition into exactly three highly cohesive macro-clusters. Therefore, the optimal performance observed at K = 3 is a direct reflection of the specific seman-tic boundaries inherent to these datasets. Extending this prin-ciple to broader real-world applications, the value of K must explicitly correspond to the specific demands of the task sce-nario. Highly heterogeneous environments require a larger 
+
+K to isolate disjoint tasks and ensure strict specialization, whereas more homogeneous streams favor a smaller K to prevent the fragmentation of shared knowledge. Ultimately, SDC establishes a flexible division-and-collaboration mech-anism, demonstrating that robust continual learning naturally aligns the system’s structural capacity with the inherent com-plexity and semantic diversity of the session stream. 
+
+Analysis of Division Strategy Effects 
+
+To elucidate the underlying mechanism of SDC, we com-pare three session division strategies: (i) uniform random division, (ii) imbalanced division (an extreme 1:9 split), and (iii) our free energy-guided division. Comprehensive eval-uations across all datasets are detailed in appendix . The results reveal a consistent pattern: imbalanced and random divisions suffer from pronounced performance degradation due to broken complementarity and unaligned model capac-ities. In contrast, our division-aware collaboration achieves the strongest performance by assigning each session to the most compatible model. 
+
+Free energy-guided assignment is essential for division: 
+
+The results reveal a clear and consistent pattern. Imbalanced division leads to pronounced performance degradation, indi-cating that specialization without sufficient complementarity exacerbates catastrophic forgetting. Uniform random divi-sion yields only marginal improvements and remains sub-stantially inferior to division-aware collaboration, as it fails to align sessions with appropriate model capacity. In con-trast, free energy-guided assignment achieves the strongest performance by allocating each session to the model whose optimization characteristics are most compatible. 
+
+Ablation Study 
+
+We conduct a series of ablation experiments to disentangle and quantify the individual contributions of the division-collaboration mechanism and the model evolution compo-nent in SDC. The results, summarized in Table 3, provide clear evidence for the necessity of each module.                   
+
+> Method HFES DME ACC ( ↑)AAA ( ↑)
+> SDC
+> ××70.62 76.32
+> ×✓79.86 84.62
+> ✓×82.15 86.15
+> ✓✓85.96 (+3 .81) 88.61 (+2 .46)
+
+Table 3: Ablation study on ImageNet-R. The 1 st and 2 nd best results are highlighted in bold and underlined, respectively. Removing both HFES and DME causes severe degrada-tion, as sessions compete within an undifferentiated param-eter space, exacerbating knowledge conflicts. Using only the DME module yields moderate improvements by absorbing new knowledge, but unresolved cross-session optimization conflicts constrain further gains. Conversely, employing only the HFES module substantially improves performance via ef-fective session-to-model matching, yet experts remain sub-optimal without localized evolution. Finally, combining both modules delivers the strongest results: HFES aligns sessions (a) Gradient update of the SDC on the ImageNet-R 
+
+> (b) Gradient update of the SD-LoRA on the ImageNet-R
+
+Figure 4: Comparing the gradient updates of different meth-ods. with compatible models, while DME ensures full adapta-tion. Together, they synergistically underpin the superior and stable performance of SDC. 
+
+Key Factors of CIL 
+
+To directly examine how optimization conflicts manifest at the parameter-update level, we conduct a comparative anal-ysis on ImageNet-R. Figure 4 visualizes gradient magnitude heatmaps across incremental sessions for SDC (Figure 4a) and SD-LoRA (Figure 4b), where rows correspond to net-work layers and columns to incremental sessions. 
+
+Optimization conflict as a key factor of instability in                         
+
+> Learnable Stored Method GFLOPs Parameters Features (M) (M) L2P(Wang et al. 2022b) 70.14 0.48 0DualPrompt(Wang et al. 2022a) 70.26 0.06 0CODA-Prompt(Smith et al. 2023) 70.61 0.38 0HiDe-Prompt(Wang et al. 2023a) 70.36 0.08 0.10 InfLoRA(Liang and Li 2024) 35.12 0.37 0.10 SD-LoRA(Wu et al. 2025) 35.12 0.37 0SDC (Ours) 16.94 0.37 0
+
+Table 4: Comparison of computational cost, learnable pa-rameters, and memory overhead across different methods. 
+
+CIL: Figure 4b shows that SD-LoRA suffers from sharp, high-magnitude gradient spikes, indicating abrupt parame-ter corrections driven by cross-session interference and in-compatible objectives—a direct precursor to forgetting. Con-versely, SDC (Figure 4a) exhibits a smooth, uniformly dis-tributed gradient evolution without localized spikes. This confirms that SDC successfully resolves optimization con-flicts at their source, enabling stable updates and robust knowledge retention. 
+
+Computational Efficiency and Resource Analysis 
+
+We further evaluate the computational cost and resource footprint of different methods, with a detailed comparison reported in Table 4. 
+
+SDC achieves a favorable accuracy-efficiency balance: 
+
+As demonstrated in Table 4, SDC achieves strong perfor-mance with significantly lower computational and storage costs compared to existing methods. Unlike prior continual learning approaches that often sacrifice accuracy for effi-ciency, SDC avoids this trade-off. By merging division-aware session assignment with lightweight, parameter-efficient model evolution, SDC drastically cuts redundant computa-tion and prevents unnecessary parameter growth. This equi-librium makes SDC highly suitable for resource-constrained, real-time scenarios where both predictive accuracy and op-erational efficiency are vital. The findings confirm that SDC boosts learning stability and performance while operating with a much smaller computational footprint. 
+
+# Conclusion 
+
+This work introduces SDC as a practical paradigm for CIL, reframing continual learning from monolithic model updates to a structured system with explicit division of labor and controlled collaboration. From a theoretical perspective, we show that shared low-rank adaptation under heterogeneous sessions is fundamentally constrained by an irreducible in-consistency bottleneck. Crucially, this limitation does not stem from insufficient model capacity, but from conflicting optimization directions across sessions, and can be strictly al-leviated through principled division. Guided by this insight, we instantiate SDC with an energy selection coevolution framework, which dynamically assigns sessions to compat-ible models and enables division-aware collaboration dur-ing learning and inference.Our analysis establishes that the model’s capacity ( K) must be dynamically scaled based on the semantic diversity of the session scenario. This design achieves strong empirical performance while preserving pa-rameter efficiency and substantially mitigating forgetting. Appendix 
+
+The appendix contains comprehensive details on the imple-mentations and experimental results referenced in the main paper, along with supplementary theoretical analysis and in-depth discussions. It is organized as follows: 
+
+• In Implementation Details, we offer a thorough overview of the methods compared in the main paper, accompanied by a detailed description of the datasets utilized. 
+
+• In Theoretical Analysis, we present the full set of experi-mental results, accompanied by an in-depth analysis that thoroughly evaluates the model’s performance. 
+
+• In Full Experimental Results, we provide detailed theo-retical proofs for the main results, including assumptions, lemmas, and theorems that formally justify the free energy grouping mechanism and its tighter optimization bounds. 
+
+# Implementation Details 
+
+In this section, we offer a detailed description of the methods compared in the main paper, as well as the datasets used. For classification as the primary session,the model is trained on 30 epochs using the AdamW optimizer with a batch size of 128. The learning rate is set to 8 × 10 −3 with a cosine learning rate scheduler and 4 warmup epochs. We applied weight decay of 5 × 10 −4 and gradient clipping of 1.0. The training process incorporates various data augmentation and regularization techniques, including mixup with a mix scale of 0.2, cutmix with a scale of 0.3, and random erase with a probability of 0.1. 
+
+Compared Methods 
+
+In this subsection, we provide an overview of the methods compared in the main paper, outlining their key characteris-tics. The methods considered are as follows: 
+
+• Fine-Tuning (Shuttleworth et al. 2025): Reveals that LoRA introduces high-rank “intruder dimensions” absent in full Fine-Tuning, showing these dimensions cause lo-calized forgetting and accumulate harmfully in continual learning. 
+
+• L2P (Wang et al. 2022b): introduces dynamic prompt learning to guide pretrained models without session iden-tity or rehearsal, enabling effective session-invariant and session-specific knowledge management for rehearsal-free continual learning. 
+
+• DualPrompt (Wang et al. 2022a): Learns complemen-tary session-invariant and session-specific prompts to guide pretrained models, achieving strong rehearsal-free continual learning without storing past data. 
+
+• CODA-Prompt (Smith et al. 2023): Introduces decom-posed attention-based prompting that assembles input-conditioned prompts to enhance plasticity and reduce for-getting in rehearsal-free continual learning. 
+
+• HiDe-Prompt (Wang et al. 2023a): Decomposes prompt-based continual learning into hierarchical compo-nents and optimizes them jointly, enabling robust session-specific adaptation and superior performance under self-supervised pretraining. 
+
+• InfLoRA (Liang and Li 2024): Interference-Free Low-Rank Adaptation is a parameter-efficient fine-tuning (PEFT) method proposed for continual learning. 
+
+• SD-LoRA (Wu et al. 2025): Decouples the magni-tude and direction of LoRA updates to achieve scal-able, rehearsal-free class-incremental learning, offering strong stability–plasticity trade-offs with high parameter efficiency. 
+
+Datasets 
+
+Our experiments are conducted on three standard class-incremental learning benchmarks, each chosen to represent a different level of inter-class heterogeneity. 
+
+CIFAR-100 (Krizhevsky and Hinton 2009): This dataset comprises 60,000 images across 100 classes and is character-ized by a high degree of inter-class heterogeneity,therefore, the four models achieved the best results on this dataset.The related results are shown in Table 7. We follow its standard partition, which allocates 50,000 images to the training set and 10,000 images to the testing set. 
+
+ImageNet-R (Boschini et al. 2022): This dataset contains 30,000 artistic renditions (e.g., paintings, sketches) of 200 ImageNet classes, exhibiting relatively low inter-class het-erogeneity. The dataset was partitioned using a 9:1 ratio, resulting in a training set of 27,000 images and a testing set of 3,000 images. 
+
+CUB-200 (Wah et al. 2011): The Caltech-UCSD Birds-200-2011 (CUB-200) dataset consists of 11,788 images across 200 fine-grained bird species, leading to very low inter-class variance. Following the same 9:1 split methodol-ogy, we divided the dataset into 10,610 training images and 1,178 testing images. 
+
+Semantic Correlation Analysis of Datasets 
+
+To determine the optimal value of K, we conducted a data-driven analysis on the inherent semantic structures of ImageNet-R, CUB-200, and CIFAR-100. 
+
+Methodology: We extracted high-dimensional semantic features for all classes using a pre-trained ResNet-50 and computed the L2-normalized class centroids. The inter-class semantic alignments were measured using cosine similar-ity. We then applied Agglomerative Hierarchical Clustering with Ward’s minimum variance method to uncover the latent structural groupings within the feature space. 
+
+Data-Driven Observations: As shown in Figure 5, we present the correlation heatmaps for the three datasets. To ef-fectively highlight fine-grained inter-class relations, the col-ormap is dynamically normalized using a Two-Slope normal-ization centered at the median of off-diagonal correlations. The reordered correlation matrices distinctly exhibit three dominant, highly cohesive semantic macro-clusters (high-lighted by the dense red block-diagonal structures). 
+
+Conclusion: The visualizations clearly demonstrate that on these three datasets,the data naturally partitions into three major semantic groups. Driven strictly by this inherent data distribution, we established K=3 as the optimal macro-cluster quantity for our experiments. Figure 5: Data-driven semantic correlation heatmaps of class centroids across CIFAR-100, CUB-200, and ImageNet-R. The distinct block-diagonal patterns (red blocks) naturally emerge under Ward’s clustering and Two-Slope normalization, demon-strating that the underlying data inherently partitions into three major semantic groups. This inherent distribution strictly dictates our choice of K = 3 .
+
+Metrics 
+
+ACC: It metric measures the overall performance by com-puting the average accuracy across all N sessions upon the completion of CIL: ACC = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+ACC (Sk). (16) 
+
+AAA: It further accumulates the average accuracy of all encountered sessions after training on each new session. Mathematically, it is defined as the mean of step-wise av-erage accuracies across all training stages: AAA = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+1
+
+k
+
+> k
+
+X
+
+> i=1
+
+ACC k(Si)
+
+!
+
+. (17) where S = {S1, S 2, ..., S N } denotes the complete set of 
+
+N sessions in class-incremental learning (CIL), ACC (Sk)
+
+represents the accuracy on the k-th session Sk after finishing all N sessions, and ACC k(Si) denotes the accuracy on the 
+
+i-th session Si (1 ≤ i ≤ k) after training on the first k sessions. 
+
+# Theoretical Analysis 
+
+Below, we collect additional assumptions and auxiliary lem-mas that serve as technical ingredients for the analysis in Section . 
+
+Assumption 10. For any session subset S ⊆ { 1, . . . , N },there exists a trained low-rank approximation ∆W [: jS ] 
+
+> S
+
+such that for any i ∈ S,
+
+AiBi − ∆W [: jS ] 
+
+> Sop
+
+≤ ϵ σ 1(∆ W ⋆S ) + εS , (18) 
+
+where σ1(·) denotes the largest singular value and 
+
+εS := min  
+
+> X
+
+max  
+
+> k∈S
+
+∥∆W ⋆k − X∥op . (19) 
+
+Moreover, the accuracy parameter satisfies 
+
+ϵ ≤ 1
+
+m + n + r , (20) 
+
+where r is the LoRA rank and (m, n ) are the matrix dimen-sions. 
+
+Assumption 11. Fix a confidence level 1−δ. Let the quantile residual ηδ be defined at level 1 − δ. We assume that 
+
+ηδ < (1 − 2ϵ) ε1: N . (21) 
+
+Lemma 12. For any finite set {∆W ⋆i }i∈S under ∥ · ∥ op , we have 
+
+εS ≤ diam( S), (22) 
+
+where 
+
+diam( S) := max  
+
+> p,q ∈S
+
+∥∆W ⋆p − ∆W ⋆q ∥op . (23) 
+
+εS := min  
+
+> X
+
+max  
+
+> i∈S
+
+∥∆W ⋆i − X∥op . (24) 
+
+Proof. Fix i0 ∈ S and choose X = ∆ W ⋆i0 . Then 
+
+max  
+
+> i∈S
+
+∥∆W ⋆i − X∥op = max  
+
+> i∈S
+
+∥∆W ⋆i − ∆W ⋆i0 ∥op 
+
+≤ max  
+
+> p,q ∈S
+
+∥∆W ⋆p − ∆W ⋆q ∥op 
+
+= diam( S).
+
+(25) Taking the minimum over centers X yields the desired result. 
+
+Lemma 13. Let S satisfy the within-set width condition 
+
+∀p, q ∈ S, |Fp − Fq | ≤ τ. (26) 
+
+Under Assumption 4, there exists an event ES such that 
+
+Pr( ES ) ≥ 1 − δS , δS := 
+
+|S|
+
+2
+
+
+
+δ, (27) 
+
+and on ES ,
+
+diam( S) ≤ LF τ + ηδ . (28) 
+
+Consequently, on ES one has 
+
+εS ≤ diam( S) ≤ LF τ + ηδ . (29) Proof. For each unordered pair {p, q } ⊆ S, define the event 
+
+Ep,q := ∥∆W ⋆p − ∆W ⋆q ∥op ≤ LF |Fp − Fq | + ηδ .
+
+(30) By Assumption 4, Pr( Ep,q ) ≥ 1 − δ.Let 
+
+ES := \
+
+> {p,q }⊆ S
+
+Ep,q . (31) By the union bound, 
+
+Pr( ES ) ≥ 1 − X
+
+> {p,q }⊆ S
+
+Pr( Ecp,q ) ≥ 1 −
+
+|S|
+
+2
+
+
+
+δ, (32) which proves (27). On ES , for all p, q ∈ S,
+
+∥∆W ⋆p − ∆W ⋆q ∥op ≤ LF |Fp − Fq | + ηδ
+
+≤ LF τ + ηδ , (33) where the last inequality uses (26). Taking the maximum over 
+
+p, q ∈ S yields (28). Finally, (29) follows from Lemma 12. 
+
+Lemma 14. Under the assumptions of Lemma 6, if 
+
+LF τ + ηδ < ε 1: N + ϵ
+
+
+
+σ1
+
+ ∆W ⋆
+
+> 1: N
+
+ − max  
+
+> ℓ
+
+σ1
+
+ ∆W ⋆Gℓ
+
+
+
+,
+
+(34) 
+
+then the strict improvement condition (8) holds; that is, group-wise training yields a strictly tighter worst-case upper bound than sharing a single adapter across all sessions. Proof. By Lemma 6, for any group Gℓ we have 
+
+max 
+
+> i∈Gℓ
+
+AiBi − ∆W [: jℓ]  
+
+> Gℓop
+
+≤ ϵ σ 1
+
+ ∆W ⋆Gℓ
+
+ + εGℓ ,εGℓ ≤ LF τ + ηδ .
+
+(35) Hence 
+
+max  
+
+> ℓ
+
+max 
+
+> i∈Gℓ
+
+AiBi − ∆W [: jℓ] 
+
+> Gℓop
+
+≤ max 
+
+> ℓ
+
+
+
+ϵ σ 1
+
+ ∆W ⋆Gℓ
+
+ + εGℓ
+
+
+
+≤ ϵ max  
+
+> ℓ
+
+σ1
+
+ ∆W ⋆Gℓ
+
+ + ( LF τ + ηδ ).
+
+(36) On the other hand, without grouping we have 
+
+max  
+
+> 1≤i≤N
+
+AiBi − ∆W [: j]1: N op ≤ ϵ σ 1
+
+ ∆W ⋆
+
+> 1: N
+
+ + ε1: N . (37) If condition (34) holds, then 
+
+ϵ max  
+
+> ℓ
+
+σ1
+
+ ∆W ⋆Gℓ
+
+ + ( LF τ + ηδ ) < ϵ σ 1
+
+ ∆W ⋆
+
+> 1: N
+
+ + ε1: N .
+
+(38) Combining (36) and (37), we see that the grouped worst-case bound is strictly smaller than the ungrouped worst-case bound, which is exactly condition (8). This completes the proof. 
+
+Lemma 15. Under the spectral norm, we always have 
+
+σ1(∆ W ⋆ 
+
+> 1: N
+
+) − max  
+
+> ℓ
+
+σ1
+
+ ∆W ⋆Gℓ
+
+ ≥ − ε1: N − max  
+
+> ℓ
+
+εGℓ
+
+≥ − 2ε1: N .
+
+(39) 
+
+Proof. Recall that σ1(W ) = ∥W ∥op . For any group Gℓ and any i ∈ Gℓ, by the triangle inequality, 
+
+∥∆W ⋆Gℓ ∥op ≤ ∥ ∆W ⋆i ∥op + ∥∆W ⋆i − ∆W ⋆Gℓ ∥op 
+
+≤ max 
+
+> k∈Gℓ
+
+∥∆W ⋆k ∥op + εGℓ . (40) Taking the maximum over ℓ on both sides yields 
+
+max  
+
+> ℓ
+
+∆W ⋆Gℓ op ≤ max  
+
+> 1≤k≤N
+
+∥∆W ⋆k ∥op + max  
+
+> ℓ
+
+εGℓ . (41) Therefore, 
+
+∥∆W ⋆ 
+
+> 1: N
+
+∥op − max  
+
+> ℓ
+
+∆W ⋆Gℓ op 
+
+≥ ∥ ∆W ⋆ 
+
+> 1: N
+
+∥op − max  
+
+> 1≤k≤N
+
+∥∆W ⋆k ∥op 
+
+− max  
+
+> ℓ
+
+εGℓ .
+
+(42) For any k, the reverse triangle inequality gives 
+
+∥∆W ⋆ 
+
+> 1: N
+
+∥op − ∥ ∆W ⋆k ∥op ≥ − ∥ ∆W ⋆ 
+
+> 1: N
+
+− ∆W ⋆k ∥op ,
+
+(43) hence 
+
+∥∆W ⋆ 
+
+> 1: N
+
+∥op − max  
+
+> 1≤k≤N
+
+∥∆W ⋆k ∥op 
+
+≥ − max  
+
+> 1≤k≤N
+
+∥∆W ⋆ 
+
+> 1: N
+
+− ∆W ⋆k ∥op 
+
+= − ε1: N .
+
+(44) Substituting (44) into (42) yields 
+
+∥∆W ⋆ 
+
+> 1: N
+
+∥op −max  
+
+> ℓ
+
+∆W ⋆Gℓ op ≥ − ε1: N −max  
+
+> ℓ
+
+εGℓ . (45) Finally, since Gℓ ⊆ { 1, . . . , N }, we have εGℓ ≤ ε1: N for all 
+
+ℓ, and thus 
+
+∥∆W ⋆ 
+
+> 1: N
+
+∥op − max  
+
+> ℓ
+
+∆W ⋆Gℓ op ≥ − 2ε1: N . (46) Converting ∥ · ∥ op back to σ1(·) completes the proof. Below, we provide the omitted proofs from Sections . 
+
+Proof of Lemma 6 
+
+Proof. Fix any group index ℓ. Applying Assumption 10 with 
+
+S = Gℓ yields that for every i ∈ Gℓ,
+
+AiBi − ∆W [: jℓ]  
+
+> Gℓop
+
+≤ ϵ σ 1
+
+ ∆W ⋆Gℓ
+
+ + εGℓ . (47) Taking the maximum over i ∈ Gℓ gives the first inequality in (5). Next, by the width condition and Lemma 13 (applied to 
+
+S = Gℓ), on the event EGℓ we have 
+
+εGℓ ≤ LF τ + ηδ , (48) which implies the second inequality in (5). Similarly, applying Assumption 10 with S = {1, . . . , N }
+
+and taking the maximum over 1 ≤ i ≤ N yields the corre-sponding global bound. Proof of Theorem 8 
+
+Proof. By the lower bound in Lemma 15, see (39), we have 
+
+ε1: N + ϵ
+
+
+
+σ1(∆ W ⋆ 
+
+> 1: N
+
+) − max  
+
+> ℓ
+
+σ1(∆ W ⋆Gℓ )
+
+
+
+≥ ε1: N − 2ϵ ε 1: N
+
+= (1 − 2ϵ) ε1: N .
+
+(49) If condition (7) holds, then it necessarily follows that 
+
+LF τ + ηδ < ε 1: N + ϵ
+
+
+
+σ1(∆ W ⋆ 
+
+> 1: N
+
+) − max  
+
+> ℓ
+
+σ1(∆ W ⋆Gℓ )
+
+
+
+,
+
+(50) which coincides with the requirement of Lemma 14, namely condition (34). Therefore the strict improvement condi-tion (8) is satisfied, which completes the proof. 
+
+# Full Experimental Results 
+
+In this section, we present additional experimental results, including analyses of division-collaboration and parameters. 
+
+Analysis of Division and Collaboration 
+
+We further investigate the robustness of SDC against varying task granularities by testing it under two distinct continual learning scenarios on the ImageNet-R dataset, a short se-quence with 5 sessions ( N = 5 ) and a highly fragmented long sequence with 20 sessions ( N = 20 ). These tests ex-plicitly demonstrate how the synergy of principled division and structured collaboration scales across different curricu-lum pacings. As shown in Table 5, under the 5-session configura-tion, SDC achieves state-of-the-art performance with 87.24% ACC and 89.59% AAA. Notably, it outperforms the strongest baseline, SD-LoRA, by a substantial margin of 8.09 points in ACC and 6.58 points in AAA. This leap indicates that when the task stream is partitioned into fewer, larger chunks containing more overlapping semantic concepts, SDC ef-fectively isolates the heterogeneous optimization directions while ensuring immediate and seamless knowledge integra-tion among experts.                     
+
+> Method ACC ( ↑)AAA ( ↑)Fine-Tuning 64.92 75.57 L2P 73.04 76.94 DualPrompt 69.99 72.24 CODA-Prompt 76.63 80.30 HiDe-Prompt 74.77 78.15 InfLoRA 76.95 81.81 SD-LoRA 79.15 83.01
+> SDC 87.24 (+8 .09) 89.59 (+6 .58)
+
+Table 5: Performance of different methods on the ImageNet-R (number of session=5). The 1 st and 2 nd best results are highlighted in bold and underlined, respectively. Table 6 presents the results for the challenging 20-session setting. As the number of sequential sessions increases, the risk of catastrophic forgetting naturally escalates due to the extended chain of weight updates, which is clearly evidenced by the severe performance drop in naive Fine-Tuning (plung-ing to 49.95% ACC). Despite this extreme sequence length, SDC demonstrates exceptional resilience, achieving 79.23% ACC and 83.25% AAA. It maintains a decisive absolute lead of 3.97 points and 3.03 points over SD-LoRA, respectively.                     
+
+> Method ACC ( ↑)AAA ( ↑)Fine-Tuning 49.95 65.32 L2P 68.97 74.16 DualPrompt 65.23 71.30 CODA-Prompt 69.38 73.95 HiDe-Prompt 73.59 77.93 InfLoRA 69.89 76.68 SD-LoRA 75.26 80.22
+> SDC 79.23 (+3 .97) 83.25 (+3 .03)
+
+Table 6: Performance of different methods on the ImageNet-R (number of session=20). The 1 st and 2 nd best results are highlighted in bold and underlined, respectively. Table 7 investigates how the number of expert models af-fects the specialization–complementarity trade-off in SDC. Increasing the number of models from two to three consis-tently improves both ACC and AAA across all datasets: the gains are 1.97/1.59 points on ImageNet-R, 1.72/0.71 points on CIFAR-100, and 0.99/0.62 points on CUB-200, respec-tively. This indicates that two experts provide insufficient capacity to isolate the heterogeneous optimization directions induced by different incremental sessions. Introducing a third expert enables a more effective division of labor, allowing se-mantically compatible sessions to be grouped together while preserving sufficient interactions among experts. The effect of adding a fourth model is dataset dependent. CIFAR-100 continues to benefit from a larger expert pool, achieving its best performance with four models, whereas ImageNet-R and CUB-200 exhibit slight degradation relative to the three-model setting. In particular, SDC-M3 achieves the best results on ImageNet-R and CUB-200, suggesting that exces-sive division can fragment related sessions across multiple experts and weaken the complementary knowledge sharing that is needed for robust continual learning. Thus, the optimal number of experts is determined by the intrinsic semantic di-versity and distributional complexity of the session stream, rather than by a fixed architectural preference. Overall, these observations show that SDC should employ enough experts to separate incompatible sessions, while avoiding unneces-sary fragmentation of compatible knowledge.                      
+
+> Method ImageNet-R CIFAR-100 CUB-200 ACC( ↑) AAA( ↑) ACC( ↑) AAA( ↑) ACC( ↑) AAA( ↑)SDC-M2 83.99 87.02 93.36 95.87 83.94 90.26 SDC-M3 85.96 88.61 95.08 96.58 84.93 90.88 SDC-M4 85.85 88.29 96.13 97.40 84.80 89.50
+
+Table 7: Effect of the number of models on SDC performance. Division strategy ImageNet-R CIFAR-100 CUB-200 
+
+ACC ( ↑) AAA ( ↑) ACC ( ↑) AAA ( ↑) ACC ( ↑) AAA ( ↑)Uniform random division 84.58 87.04 92.34 94.75 82.79 88.15 Imbalanced division 83.06 86.12 91.64 94.72 82.13 87.83 Division-aware collaboration 85.96 88.61 95.08 96.58 84.93 90.88 
+
+Table 8: Effect of division strategies in SDC on multiple datasets. The 1 st and 2 nd best results are highlighted in bold and underlined, respectively. 
+
+Ablation Study 
+
+As shown in Table 8, we evaluate the impact of different task division strategies across the ImageNet-R, CIFAR-100, and CUB-200 datasets. The experimental results demonstrate a consistent performance hierarchy across all benchmarks. Our proposed division-aware collaboration scheme, optimized via Helmholtz free energy, universally achieves the high-est ACC and AAA scores. For example, on CIFAR-100, it outperforms the uniform random division strategy by 2.74 points in ACC and 1.83 points in AAA. While uniform ran-dom division provides a reasonable baseline by evenly dis-tributing the workload, it ignores the underlying semantic relationships between incremental sessions, leading to sub-optimal expert specialization. Conversely, the imbalanced al-location strategy simulated using an extreme 1:9 distribution ratio,yields yields the poorest results across the board. This severe performance degradation occurs because it heavily overloads a single expert while starving the remaining ca-pacity of meaningful optimization opportunities. Ultimately, these findings confirm that the Helmholtz free energy for-mulation successfully groups semantically compatible tasks, striking an optimal balance between parameter utilization and expert specialization.                                       
+
+> Method HFES DME ImageNet-R CIFAR-100 CUB-200
+> ACC AAA ACC AAA ACC AAA
+> SDC
+> ××70.62 76.32 89.54 93.67 75.64 83.19
+> ×✓79.86 84.62 89.74 93.68 78.09 84.43
+> ✓×82.15 86.15 94.68 95.98 83.97 90.08
+> ✓✓85.96 88.61 95.08 96.58 84.93 90.88
+
+Table 9: Ablation study of HFES and DME modules across datasets. The 1 st and 2 nd best results are highlighted in bold 
+
+and underlined, respectively. As shown in Table 9,we further conducted ablation ex-periments on the CIFAR-100 and CUB-200 datasets to verify the effectiveness of the HFES and DME mod-ules.Experimental results show consistent trends across all three datasets:introducing only the DME module yields mod-erate performance gains;employing only the HFES module leads to more significant improvements;when both HFES and DME are activated together, the model achieves the best performance on all datasets, demonstrating that they can ef-fectively complement each other and jointly enhance model performance. 
+
+# References 
+
+Aljundi, R.; Babiloni, F.; Elhoseiny, M.; Rohrbach, M.; and Tuytelaars, T. 2018. Memory Aware Synapses: Learning What (not) to Forget. In European Conference on Computer Vision , 144–161. Aljundi, R.; Chakravarty, P.; and Tuytelaars, T. 2017. Ex-pert Gate: Lifelong Learning with a Network of Experts. In 
+
+Computer Vision and Pattern Recognition , 7120–7129. Boschini, M.; Bonicelli, L.; Porrello, A.; Bellitto, G.; Pen-nisi, M.; Palazzo, S.; Spampinato, C.; and Calderara, S. 2022. Transfer Without Forgetting. In European Conference Com-puter Vision , volume 13683, 692–709. Cui, Y.; Liu, L.; Yu, Z.; Huang, G.; and Hong, X. 2025. Few-Shot Audio-Visual Class-Incremental Learning with Tempo-ral Prompting and Regularization. In AAAI Conference on Artificial Intelligence , volume 39, 16118–16126. Durkheim, É. 1997. The Division of Labor in Society . New York: Free Press. Hong, K.; Kim, G.-h.; and Kim, E. 2025. RainbowPrompt: Diversity-Enhanced Prompt-Evolving for Continual Learn-ing. In IEEE/CVF International Conference on Computer Vision , 1130–1140. Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations , 1–20. Hu, W.; Lin, Z.; Liu, B.; Tao, C.; Tao, Z.; Ma, J.; Zhao, D.; and Yan, R. 2019. Overcoming Catastrophic Forgetting via Model Adaptation. In International Conference on Learning Representations , 1–13. Krizhevsky, A.; and Hinton, G. 2009. Learning Multiple Lay-ers of Features from Tiny Images. In Handbook of Systemic Autoimmune Diseases , volume 1, 4–64. Lee, Y. L.; Lee, C.-Y.; chen Chiu, W.; and Tsai, Y.-H. 2025. Exemplar Masking for Multimodal Incremental Learning. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2942–2951. Li, D.; Chen, Z.; Shao, M.; Chen, X.; Hong, S.; Qi, J.; and Sun, H. 2025a. Non-Exemplar Class-Incremental Learning via Prototype Correction and Hierarchical Regularization for Specific Emitter Identification. IEEE Transactions on Intel-ligent Transportation Systems , 26(8): 12632–12646. Li, D.; Zeng, Z.; Dai, W.; and Suganthan, P. N. 2025b. Complementary Learning Subnetworks Towards Parameter-Efficient Class-Incremental Learning. IEEE Transactions on Knowledge and Data Engineering , 37(6): 3240–3252. Li, J.; Wang, Y.; Zhu, P.; Lin, W.; Yao, X.; and Hu, Q. 2025c. Graphs Help Graphs: Multi-Agent Graph Socialized Learning. In Advances in Neural Information Processing Systems , 1–28. Liang, Y.-S.; and Li, W.-J. 2024. InfLoRA: Interference-Free Low-Rank Adaptation for Continual Learning. In IEEE/CVF Conference on Computer Vision and Pattern Recognition ,23638–23647. Liu, X.; and Chang, X. 2025. LoRA Subtraction for Drift-Resistant Space in Exemplar-Free Continual Learning. In 
+
+IEEE/CVF Conference on Computer Vision and Pattern Recognition , 15308–15318. Shin, H.; Lee, J. K.; Kim, J.; and Kim, J. 2017. Contin-ual Learning with Deep Generative Replay. In Advances in Neural Information Processing Systems , 2990–2999. Shuttleworth, R.; Andreas, J.; Torralba, A.; and Sharma, P. 2025. LoRA vs Full Fine-tuning: An Illusion of Equivalence. In Advances in Neural Information Processing Systems , 1– 24. Smith, J. S.; Karlinsky, L.; Gutta, V.; Cascante-Bonilla, P.; Kim, D.; Arbelle, A.; Panda, R.; Feris, R. S.; and Kira, Z. 2023. CODA-Prompt: COntinual Decomposed Attention-Based Prompting for Rehearsal-Free Continual Learning. 
+
+In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 11909–11919. Wah, C.; Branson, S.; Welinder, P.; Perona, P.; and Belongie, S. 2011. The Caltech-UCSD Birds-200-2011 Dataset. Cali-fornia Institute of Technology .Wang, L.; Xie, J.; Zhang, X.; Huang, M.; Su, H.; and Zhu, J. 2023a. Hierarchical Decomposition of Prompt-Based Con-tinual Learning: Rethinking Obscured Sub-optimality. In 
+
+Advances in Neural Information Processing Systems , vol-ume 36, 69054–69076. Wang, Z.; Liu, Y.; Ji, T.; Wang, X.; Wu, Y.; Jiang, C.; Chao, Y.; Han, Z.; Wang, L.; Shao, X.; and Zeng, W. 2023b. Rehearsal-free Continual Language Learning via Efficient Parameter Isolation. In Association for Computational Lin-guistics , 10933–10946. Wang, Z.; Zhang, Z.; Ebrahimi, S.; Sun, R.; Zhang, H.; Lee, C.-Y.; Ren, X.; Su, G.; Perot, V.; Dy, J. G.; and Pfis-ter, T. 2022a. DualPrompt: Complementary Prompting for Rehearsal-Free Continual Learning. European Conference on Computer Vision , 13686: 631–648. Wang, Z.; Zhang, Z.; Lee, C.-Y.; Zhang, H.; Sun, R.; Ren, X.; Su, G.; Perot, V.; Dy, J. G.; and Pfister, T. 2022b. Learning to Prompt for Continual Learning. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 139–149. Wu, Y.; Piao, H.; Huang, L.-K.; Wang, R.; Li, W.; Pfister, H.; Meng, D.; Ma, K.; and Wei, Y. 2025. SD-LoRA: Scal-able Decoupled Low-Rank Adaptation for Class Incremental Learning. In International Conference on Learning Repre-sentations , 1–17. Yang, B.; Lin, M.; Zhang, Y.; Liu, B.; Liang, X.; Ji, R.; and Ye, Q. 2023. Dynamic Support Network for Few-Shot Class Incremental Learning. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(3): 2945–2951. Yao, X.; Wang, Y.; Zhu, P.; Lin, W.; Li, J.; Li, W.; and Hu, Q. 2024. Socialized Learning: Making Each Other Better Through Multi-Agent Collaboration. In International Con-ference on Machine Learning , volume 235, 56927–56945. Yao, X.; Wang, Y.; Zhu, P.; Lin, W.; Zhao, R.; Guo, Z.; Li, W.; and Hu, Q. 2025. Socialized Coevolution: Advancing a Better World through Cross-Task Collaboration. In In-ternational Conference on Machine Learning , volume 267, 71780–71797. Zenke, F.; Poole, B.; and Ganguli, S. 2017. Continual Learn-ing Through Synaptic Intelligence. In International Confer-ence on Machine Learning , volume 70, 3987–3995. Zhang, J.; Liu, L.; Silvén, O.; Pietikäinen, M.; and Hu, D. 2025. Few-shot class-incremental learning for classification and object detection: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(4): 2924–2945. Zhang, J.; Xu, X.; Zhang, N.; Liu, R.; Hooi, B.; and Deng, S. 2024. Exploring Collaboration Mechanisms for LLM Agents: A Social Psychology View. In In Association for Computational Linguistics , 14544–14607. Zhou, D.-W.; Wang, Q.; Qi, Z.; Ye, H.-J.; chuan Zhan, D.; and Liu, Z. 2024. Class-Incremental Learning: A Survey. IEEE Transactions on Pattern Analysis and Machine Intelligence ,46(12): 9851–9873.

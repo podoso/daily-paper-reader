@@ -1,0 +1,874 @@
+Title: FTA-Mem: Fact-Time-Affect Anchored Memory for Low-Density Long-Term Dialogue
+
+URL Source: https://arxiv.org/pdf/2608.16303v1
+
+Published Time: Tue, 18 Aug 2026 01:49:36 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# FTA-Mem: Fact-Time-Affect Anchored Memory for Low-Density Long-Term Dialogue 
+
+## Chang Liu 1, Shuyi Zhang 1, Changsheng Ma 1, Yongfeng Tao 1, Minqiang Yang 1,Bin Hu 1,
+
+> 1
+
+School of Information Science and Engineering, Lanzhou University, 
+
+Abstract 
+
+Long-term emotional-support agents require memory mech-anisms for personalized understanding across sessions. How-ever, emotional-support dialogue is often low-density: turns are incomplete, evidence is scattered, and user states evolve over time. Existing memory methods usually rely on fixed units, such as turn-level notes or session summaries, which may lose details or introduce redundant noise. We propose FTA-Mem, a structured memory framework for low-density long-term dialogue. FTA-Mem uses Boundary-preserving 
+
+Window Segmentation ( BWS ) to form coherent situation fragments, and constructs Fact-Time-Affect Memory Units (FTA Units) that jointly encode factual content, temporal grounding, and affective context. Retrieved units are then synthesized into structured context for answer generation. Experiments on ES-MemEval and LoCoMo show that FTA-Mem improves overall long-term memory question answering across benchmarks with different information-density char-acteristics. On ES-MemEval, FTA-Mem achieves 0.3871 F1 and 0.6668 BERTScore. Further analysis shows that situation-level FTA construction better balances evidence preservation and construction cost than coarse session-level or overly fine-grained turn-pair construction, providing an effective granu-larity trade-off for long-term dialogue memory. 
+
+## Introduction 
+
+Large language models (LLMs) have shown substantial po-tential as conversational agents and are increasingly used in customer support, emotional support, and mental health ser-vices (Chen, Zeng et al. 2024; Zou et al. 2026b). Although these models can generate fluent and empathetic responses in short-term interactions, psychological and emotional support is inherently longitudinal (Schaie 1983). Reliable long-term support requires an agent to maintain personalized under-standing of users’ experiences, emotional trajectories, and prior support interactions across sessions. Building robust long-term memory systems has therefore become a central challenge for long-term conversational agents (Hatalis et al. 2023; Maharana et al. 2024; Wu and Shu 2026). However, long-term emotional-support dialogue poses a distinct memory challenge: it is often low-density. A single turn rarely contains a complete, self-contained fact; useful evidence may be sparse, indirect, temporally ambiguous, or distributed across multiple sessions (Chen et al. 2026). More-over, the meaning of an event often depends not only on what happened, but also on when the information remains valid and how the user appraises it. Therefore, simply retrieving more history or compressing longer contexts does not neces-sarily yield reliable memory. Many long-term memory systems for LLM agents follow a retrieval-augmented paradigm: past interactions are con-verted into retrievable memory units and later selected as context for generation. Some systems keep memory close to the original dialogue, retrieving raw passages or compact summaries and profiles (Zhong et al. 2024). Others intro-duce managed memory stores or agentic update mechanisms to support persistence and revision (Packer et al. 2024; Kang et al. 2025). More recent work further organizes memory with graph links or event segmentation, connecting related semantic units or merging adjacent turns into event memo-ries (Xu et al. 2026; Ke et al. 2025; Zou et al. 2026a). These designs improve storage, updating, or retrieval from different angles, but their effectiveness still depends on the quality and granularity of the underlying memory units. This raises two basic but underexplored questions: at what granularity should low-density long-term dialogue mem-ories be constructed, and what should count as a retriev-able memory unit? Coarse units such as session summaries are compact, but may omit QA-sensitive details such as tem-poral updates, unresolved plans, relationship changes, and affective cues. Fine-grained units such as turns or turn pairs preserve local evidence, but often split a coherent user event or state into redundant fragments. Recent event-segmentation and event-centric memory methods improve semantic in-tegrity by grouping adjacent turns into segments or using LLMs to extract coarse event graphs (Wu et al. 2025; Zou et al. 2026a; Hu et al. 2026b). However, low-density psy-chological dialogue requires organizing distributed factual, temporal, and affective cues within memory units, rather than only forming coarse event groups. To address this issue, we propose FTA-Mem, a struc-tured memory framework for low-density long-term dia-logue. FTA-Mem constructs situation-level Fact-Time-Affect Memory Units. FTA-Mem first preserves broader contextual continuity with Boundary-preserving Window Segmentation (BWS), and then decomposes each coherent fragment into compact memory units. It also maintains units around seg-arXiv:2608.16303v1 [cs.CL] 17 Aug 2026 ment boundaries by carrying unresolved units across frag-ments, fusing adjacent-fragment units before persistent ID assignment, and linking finalized units to related historical memories. Each unit jointly grounds factual evidence, tempo-ral validity, and affective interpretation. During answer gen-eration, retrieved FTA units are synthesized into structured context packets rather than passed as a flat list of retrieved passages. Our contributions are: 
+
+• We introduce FTA-Mem, a structured memory frame-work that represents low-density long-term dialogue with situation-level Fact-Time-Affect memory units. 
+
+• We design a boundary-preserving construction pipeline that preserves contextual continuity through unit carry-over, adjacent-fragment fusion, and temporal-link main-tenance. 
+
+• We evaluate FTA-Mem on ES-MemEval (Chen et al. 2026) and LoCoMo (Maharana et al. 2024), showing improved question-answering performance and a bet-ter granularity trade-off than session-level and turn-pair memory construction. 
+
+## Related Work 
+
+Psychological Counseling Agents 
+
+Early LLM-based counseling agents mainly focus on re-sponse generation in single-session or short-term interac-tions, such as CBT-LLM (Na 2024) for CBT-style counseling and HealMe (Xiao et al. 2024) for short multi-turn emotional support. These systems improve counseling responses but do not explicitly model long-term memory (Li et al. 2025; Wang et al. 2026). Recent work has begun to move toward multi-session psychological counseling. MusPsy (Wang et al. 2026) synthesizes multi-session counseling cases from user profiles and psychological scenarios. TheraMind (Hu et al. 2026a) and PsychAgent (Yang et al. 2026) further target con-tinuous counseling settings through strategy planning, client profiling, memory-augmented continuity, and skill evolution. These systems highlight the importance of long-term sup-port, but their memory components are typically organized around session summaries, client profiles, planning states, or therapeutic skills. In contrast, FTA-Mem focuses on the representation of retrievable memory units themselves, pre-serving factual evidence, temporal validity, and affective state in low-density emotional-support dialogue. 
+
+Long-Term Memory for LLM Agents 
+
+Retrieval-augmented generation (RAG) mitigates the context limitation of LLMs by retrieving external information (Fan et al. 2024; Arslan et al. 2024). Existing long-term memory systems for LLM agents mainly differ in how they define and maintain memory units. GraphRAG demonstrates the util-ity of graph-based organization for memory retrieval (Edge et al. 2025); MemoryBank stores dialogue history through summaries (Zhong et al. 2024); MemGPT and MemoryOS introduce hierarchical memory management (Packer et al. 2024; Kang et al. 2025); A-MEM builds agentic memory notes with links and updates (Xu et al. 2026); FraCom ex-tracts turn-derived semantic units and connects them with graph structures (Ke et al. 2025); ES-Mem segments adjacent turns into coherent event memories (Zou et al. 2026a); and CompassMem organizes dialogue into event-centric memory maps (Hu et al. 2026b). However, their underlying units are often still raw dialogue turns, summaries, or turn-derived se-mantic units. This leaves the granularity of retrievable mem-ory underexplored in low-density long-term dialogue. Coarse units, such as session summaries, are compact but may lose QA-sensitive details; fine-grained turn or turn-pair units pre-serve local evidence but may split coherent situations into redundant fragments. FTA-Mem therefore focuses on the re-trievable unit itself, constructing situation-level Fact-Time-Affect units that preserve factual evidence, temporal ground-ing, and affective state before retrieval, linking, and context synthesis. 
+
+## Methodology 
+
+Problem Definition 
+
+We consider a long-term dialogue case C consisting of mul-tiple sessions C = {S1, S 2, . . . , S N } , where each session is Si = {ui, 1, u i, 2, . . . , u i,T i }. Each turn ui,t contains the speaker role, timestamp, and utterance text. Given a user query q ∈ Q, the goal is to generate an answer a grounded in the case history. Directly conditioning on C is infeasible for long cases and unreliable for low-density dialogue, where useful evidence may be sparse, implicit, or distributed across sessions. FTA-Mem therefore introduces an external structured memory 
+
+M as an intermediate representation. At inference time, the query retrieves a subset of relevant memory units Msub ⊂
+
+M , and the answer is generated as: 
+
+a∗ = arg max  
+
+> a
+
+pθ (a | q, M sub ). (1) Thus, the central problem becomes how to construct mem-ory units that are compact enough for retrieval, yet expressive enough to preserve factual evidence, temporal validity, and affective context. The overall pipeline of FTA-Mem is illus-trated in Figure 1. 
+
+Boundary-preserving Window Segmentation 
+
+Low-density emotional-support dialogue often requires sur-rounding context to form a complete memory. A single turn may be incomplete, while an entire session may be too long and heterogeneous. We therefore introduce Boundary-preserving Window Segmentation (BWS), inspired by event segmentation theory (Zacks et al. 2007), to form co-herent situation fragments before memory construction. For each session Si, we first attach a numeric turn index to every turn. Given a window size W , BWS applies an LLM-based boundary detector gϕ to a consecutive window: 
+
+gϕ(Si[s : s + W − 1]) → { (bj , e j , r j )}Kj=1 , (2) where (bj , e j ) denotes a continuous turn span and rj denotes the boundary cue, such as a topic change or emotional shift. To avoid context truncation caused by window boundaries, BWS does not simply move forward by a fixed stride. After segmenting the current window, it repositions the next win-dow to the start of the last detected segment, i.e., s ← bK .I thought I was fine, but it came back again. 
+
+> 09:00:15
+> Mom asked if I had talked to Dad.
+> 09:00:27
+> Maybe after the
+> interview.
+> 09:01:02
+> …
+> Breathing helped a little.
+> 09:22:10
+> I still feel guilty
+> avoiding him.
+> 09:22:28
+> …
+> I may text Dad after
+> the interview.
+> 09:58:41
+
+u0 u1 … u20  
+
+> Window 1 [
+
+u0, u 20 ]
+
+> Segment 1
+
+[u 0, u a]
+
+> Segment 2
+
+[u a+1 , u b]
+
+> Segment 3
+
+[u b+1 , u 20 ]
+
+ub+1  ub+2  … ub+20  
+
+> Window 2 [
+
+ub+1 , u b+20 ]
+
+> Segment 3
+
+[u b+1 , u c]
+
+> Segment 4
+
+[u c+1 , u d]
+
+> Segment 5
+
+[u d+1 , u b+20 ] 
+
+> Final Window [um, u N]
+> Segment K-1
+
+[u m, u n]
+
+> Segment K
+
+[u n, u N]
+
+um um+1  … uN   
+
+> …
+> Fact: Mom …
+> Time: 09:00:27
+> Affect: Pressured
+> Span :[
+
+u2]    
+
+> Status : Complete
+> Unit 1 from Seg. 1
+> Fact: Dad …
+> Time: 09:01:02
+> Affect: Guilty …
+> Span :[
+
+u3]     
+
+> Status :Partial
+> Unit 2 from Seg. 2
+> Fact: F1,F2
+> Time: T1,T2
+> Affect: A1,A2
+> Span :[
+
+u3,u 5] 
+
+> Status : Complete
+> Unit 2 from Seg. 3
+
+…
+
+> ID : M k
+> Span :[
+
+ua]  
+
+> Unit K from Seg. M
+> ID :Null
+> Span :[
+
+ub] 
+
+> Unit L from Seg. M+1
+> ID : M k
+> Span :[
+
+ua,  ub]   
+
+> Unit K_L
+> Fact: FK,F L
+> Time: TK,T L
+> Affect: AK,A L
+> ID : M+1 L
+> Span :[
+
+ub]                   
+
+> Unit L
+> Fact: FL
+> Time: TL
+> Affect: AL
+> Fact: FK
+> Time: TK
+> Affect: AK
+> Fact: FL
+> Time: TL
+> Affect: AL
+> Merge Assign ID
+> Unit A Unit B
+> Unit C Unit D
+> support
+> conflict
+> update
+> Fact: FQ
+> Time: TQAffect: AQ
+> Query Anchors
+> Unit C Unit D
+> Unit B
+> Unit B Unit C Unit D
+> Structured Context
+
+Grounded 
+
+Answer 
+
+> Top-K Units
+> Neighbor Expansion
+> Dedup and Order
+> Packet
+
+1. Dialogue Turns  2. BWS (W=20) 
+
+u0
+
+u1
+
+u2
+
+u20 
+
+3. Unit Construction & Link  4. Retrieval & Answer 
+
+u21 
+
+uN 
+
+> FTA Unit Construction Adjacent Segment Fusion
+
+Turn  Final Segment Temp Segment 
+
+Temp Unit  Final Unit 
+
+> Independent Segment Link
+
+Figure 1: Overview of FTA-Mem. BWS segments dialogue turns into boundary-preserving fragments, which are converted into Fact-Time-Affect units. Partial units can be carried forward, adjacent units can be fused before ID assignment, and finalized units are linked, retrieved, deduplicated, and organized into structured context for grounded answer generation. BWS finalizes completed segments before the last detected segment, keeps the last segment provisional for the next win-dow, and enforces a minimum forward step when the detector returns a single full-window segment. If the current window reaches the end of the session, BWS finalizes the detected segments and terminates. This allows boundary-uncertain content near the window tail to be reprocessed with follow-ing context. The output of BWS is a sequence of contiguous fragments 
+
+Fi = {fi, 1, f i, 2, . . . , f i,L i } for each session Si. Each frag-ment is then used as the evidence span for constructing one or more memory units. 
+
+Memory Unit Construction 
+
+FTA-Mem is inspired by Tulving’s distinction between episodic and semantic memory (Tulving et al. 1972). At the episodic level, it constructs evidence-grounded Fact-Time-Affect units from dialogue fragments; at the longitudinal level, it can maintain semantic user memory and support-experience memory for consistency. 
+
+Fact-Time-Affect Memory Unit FTA-Mem represents long-term dialogue at the situation level. A situation may correspond to a user event, an evolving state, or a support interaction. Following situation models (Zwaan and Rad-vansky 1998), a useful memory unit should preserve what happened, when it is valid, and how it is affectively situated. The basic memory node is a Fact-Time-Affect Memory Unit , denoted as m = ⟨xF , x T , x A, e, o ⟩. Here, xF is the fact anchor, xT is the time anchor, xA is the affect anchor, 
+
+e is the evidence pointer, and o is the unit-construction sta-tus. The fact anchor stores the factual claim, situation type, participants, and summary; the time anchor stores dialogue time, event time, temporal orientation, and situation comple-tion status; and the affect anchor stores broader subjective context, including emotion, intention, and relation cues. Given a situation fragment fi,j and unresolved units Ii,j ,an LLM-based extractor constructs candidate FTA units: 
+
+{mki,j }Ki,j 
+
+k=1 = Ext θ (fi,j , I i,j ). (3) The unit-construction status o indicates whether the mem-ory unit is complete, partial, pending, or unknown. To re-duce segmentation-induced incompleteness, unresolved par-tial units are carried to the next fragment: 
+
+Ii,j +1 = {m ∈ M≤i,j | o(m) = partial }. (4) Finalized units are assigned persistent memory IDs and in-serted into the memory store, while unresolved partial units remain construction context rather than independently re-trievable memories. 
+
+Unit Consolidation and Temporal-Link Maintenance 
+
+FTA-Mem uses a two-level maintenance mechanism to re-duce segmentation-induced redundancy while preserving longitudinal consistency. The first level locally consolidates partial units across adjacent fragments, and the second level maintains temporal links among distributed memories. After the extractor produces candidate units for fragment 
+
+fi,j , FTA-Mem first checks whether each candidate should be fused with an unresolved unit carried from adjacent frag-ments. This step targets cases where a situation near a frag-ment boundary is partially extracted in one fragment and completed in the next. If a new candidate ˜m is compatible with a previous unresolved unit mp ∈ Ii,j and can complete or refine it, FTA-Mem performs local fusion: 
+
+mp ← Fuse( mp, ˜m). (5) The fusion combines their factual anchors, temporal anchors, affective context, and evidence pointers. The new candidate is not assigned an independent memory ID. If no local fusion is triggered, the candidate is finalized, assigned a persistent memory ID, and inserted into the memory store. FTA-Mem then links each newly stored unit to related his-torical units. Candidate neighbors are retrieved from the ex-isting memory store by embedding similarity, and a relation classifier labels each pair as same-situation, update, con-tradiction, follow-up, support, or unknown. Non-unknown relations are added to the memory graph: 
+
+Er ← E r ∪ { (m, m ′, r )}. (6) The graph supports bidirectional access during retrieval, while each relation label preserves its direction from the new unit to the historical unit. These links update relation labels, temporal validity, lifecycle status, and reverse point-ers for later neighbor expansion. In this way, FTA-Mem can track whether a prior situation has been completed, revised, contradicted, or supported over time. 
+
+Longitudinal Memory Maintenance In addition to episodic FTA units, FTA-Mem maintains auxiliary longi-tudinal memory after each session, including user seman-tic memory U and support-experience memory H. Given episodic units Mi from session Si, the memories are up-dated as: Ui = Update U (Ui−1, Mi),
+
+Hi = Update H (Hi−1, Msup i ). (7) They provide auxiliary context, while episodic FTA units remain the primary evidence source. 
+
+Retrieval and Context Synthesis 
+
+At inference time, FTA-Mem retrieves relevant FTA units and synthesizes them into a structured memory packet for answer generation. 
+
+Query Rewriting and Unit Retrieval Given an input query q, FTA-Mem rewrites it into an evidence-oriented re-trieval query q′. The rewrite preserves explicit entities, tem-poral expressions, relations, and task intent, so that the query better matches the structured memory store rather than broad semantic summaries. Each memory unit m is represented by a structured re-trieval text ρ(m), constructed from its factual anchor, tem-poral anchor, affective anchor, and evidence metadata. FTA-Mem scores each unit as: 
+
+R(q′, m ) = λs emb (q′, ρ (m)) + (1 − λ)c(q′, m ), (8) where semb is embedding similarity, c(q′, m ) is a structured cue score over time, situation type, participants, and affective context, and λ balances semantic similarity and structured cue matching. The primary episodic evidence set is selected by thresh-olded top-K retrieval: 
+
+Msub = TopK K {m ∈ M | R(q′, m ) ≥ τ }. (9) Here, K controls the retrieval budget and τ filters weakly related memories.                 
+
+> Metric ES-MemEval LoCoMo
+> Turn length 18.56 22.69
+> Factual anchors / turn 0.80 1.11
+> Entity anchors / turn 0.52 1.24
+> Temporal anchors / turn 0.11 0.22
+> Support-process anchors / turn 0.91 0.50 Implicitness (1–3) 1.91 1.58 Low-info turns 7.22% 5.58%
+
+Table 1: Turn-level information-density statistics of ES-MemEval and LoCoMo. Values are averaged over turns. 
+
+Linked Neighbor Expansion and Source Grounding 
+
+The initially retrieved units may have later updates, contra-dictions, or follow-up evidence. FTA-Mem therefore expands a small number of linked neighbors: 
+
+Lsub = Expand( Msub , Er , B ), (10) where B limits neighbors per retrieved unit. The retrieved units and neighbors are deduplicated by persistent mem-ory ID and ordered chronologically before context synthesis. These neighbors provide relation-aware support, while Msub 
+
+remains the primary evidence set. Each retrieved unit keeps an evidence pointer e(m) to its original dialogue span. During context synthesis, FTA-Mem preserves these source pointers together with the unit content, so that the answer model can ground its response in the orig-inal conversation rather than only in abstracted memory text. In addition, FTA-Mem retrieves relevant user semantic mem-ory Usub and support-experience memory Hsub , and groups them as auxiliary longitudinal memory Asub = Usub ∪Hsub .
+
+Structured Context Synthesis FTA-Mem synthesizes the retrieved information into a structured memory packet: 
+
+Pq = Syn( Msub , L sub , A sub ). (11) The packet separates primary FTA units, linked neigh-bor units, source dialogue spans, and auxiliary longitudinal memory. This structured format prevents the answer model from treating all retrieved content as a flat passage list. The final answer is generated as: 
+
+a∗ = arg max  
+
+> a
+
+pθ (a | q, P q ). (12) During generation, Msub is treated as primary evidence, Lsub 
+
+as relation-aware supporting context, and Asub as auxiliary context. 
+
+## Experiments 
+
+Experimental Settings 
+
+Datasets. We evaluate FTA-Mem on two long-term dia-logue memory benchmarks. ES-MemEval focuses on long-term emotional-support interactions and contains 18 user cases with 1,427 questions. LoCoMo is a general long con-versational memory benchmark with 10 conversation sam-ples and 1,986 questions, covering single-hop, multi-hop, temporal, and open-domain reasoning. Backbone Method F1 Score (%) ↑ BERTScore (%) ↑ Judge ↑ Avg.R ↓                                                                                                                               
+
+> IE TR CD Abs UM All IE TR CD Abs UM All Qwen3-8B MemoryBank 23.13 29.76 25.65 33.29 24.55 27.08 53.50 64.45 59.95 49.37 65.31 58.66 1.036 4.3 MemGPT 44.15 32.77 25.14 29.54 25.64 31.69 65.56 65.28 58.01 49.26 65.93 61.19 1.107 2.8 MemoryOS 21.41 25.79 22.35 59.96 22.29 29.70 52.35 60.83 56.73 67.48 63.87 60.09 0.917 4.9 A-Mem 27.96 31.66 26.60 39.52 25.22 29.97 56.18 65.22 60.12 53.46 65.55 60.23 1.090 3.0 CompassMem 22.06 28.85 22.06 56.52 24.32 30.20 54.09 62.35 55.69 66.98 64.70 60.67 1.024 4.4 FTA-Mem 44.46 33.42 34.38 56.55 26.35 38.71 67.80 64.40 65.62 70.26 65.54 66.68 1.119 1.5
+> Qwen3-14B MemoryBank 24.78 30.77 25.61 36.76 26.66 28.72 54.28 64.43 59.44 42.82 66.44 57.78 1.097 3.2 MemGPT 38.07 33.96 21.85 40.47 27.24 32.33 61.40 66.34 54.43 44.81 66.84 59.21 1.088 2.4
+> MemoryOS 21.51 28.46 21.91 30.83 24.91 25.40 51.53 62.07 55.78 41.39 65.14 55.48 0.952 4.4 A-Mem 30.30 34.58 30.73 11.23 28.34 27.32 56.67 66.46 63.07 34.24 67.31 58.00 1.114 2.5 CompassMem 22.40 29.20 22.40 58.00 24.60 30.60 54.30 62.80 56.00 68.00 65.10 61.00 1.032 4.2 FTA-Mem 37.31 29.99 31.11 72.80 24.87 38.52 61.79 60.61 62.62 81.75 63.07 65.64 1.121 2.4
+> GPT-4o-mini MemoryBank 25.85 32.35 25.01 57.16 26.62 32.88 54.70 65.07 58.23 68.83 66.43 62.52 1.112 2.8 MemGPT 29.63 34.99 30.21 45.46 27.60 33.26 55.94 66.77 62.82 59.84 66.38 62.34 1.080 2.4 MemoryOS 24.80 28.10 20.90 65.00 24.70 32.06 54.70 62.60 55.94 68.10 65.45 61.26 1.020 4.4 A-Mem 26.33 30.77 22.09 66.95 26.40 33.86 54.86 63.15 53.93 76.36 64.82 62.40 1.099 3.1 CompassMem 24.60 30.40 23.20 62.50 25.10 31.80 55.00 63.60 57.00 72.00 65.20 62.00 1.054 4.0 FTA-Mem 40.93 29.50 31.25 68.01 25.68 38.53 65.22 61.83 62.80 78.08 64.04 66.19 1.122 2.3
+
+Table 2: Performance on ES-MemEval. Avg.R is computed over the twelve automatic metrics, i.e., F1 and BERTScore on IE/TR/CD/Abs/UM/All; Judge is not included in Avg.R. Best results are in bold, and second-best results are underlined. To characterize their difference, we conduct a turn-level information-density analysis in Table 1. Specifically, we use GPT-5.5 to annotate each dialogue turn with our den-sity prompt, counting factual, entity, temporal, and support-process anchors, rating implicitness on a 1–3 scale, and assigning a binary low-information label. We then report dataset-level averages. LoCoMo contains more explicit fac-tual, entity, temporal, and total anchors per turn, indicating denser retrievable evidence. In contrast, ES-MemEval con-tains more support-process signals and higher implicitness, suggesting that its useful evidence is more often embedded in supportive interactions and depends more on dialogue context. 
+
+Metrics. For ES-MemEval, we report F1 and BERTScore over five capabilities (Zhang et al. 2020): information extrac-tion (IE), temporal reasoning (TR), conflict detection (CD), abstention (Abs), and user modeling (UM). We also report an average LLM-as-a-judge score on a 0–2 scale, where GPT-5.5 is used as the judge model. For LoCoMo, we report F1 and BLEU-1 for Single Hop, Multi Hop, Temporal, and Open Domain questions. We additionally report average rank to summarize robustness across question types. 
+
+Baselines. We compare FTA-Mem with representative long-term memory systems for LLM agents. MemoryBank stores dialogue history through summaries and user-related memories. MemGPT, implemented with Letta, represents an external-memory agent baseline with archival memory retrieval. MemoryOS maintains hierarchical memory states for long-term personalization. A-Mem is an agentic mem-ory baseline with memory construction, linking, and update. CompassMem constructs event-centric memory graphs and hierarchical topic structures. We also include question-only, fact-only, and component-ablated variants in the ablation studies. 
+
+Implementation Details. FTA-Mem uses FTA units with 
+
+W = 20 for BWS. Retrieval uses all-MiniLM-L6-v2 em-beddings with a threshold of τ = 0 .35 (Wang et al. 2020), and we set λ = 0 .8 in Eq. (8). The retrieval budget is K = 10 
+
+on ES-MemEval and K = 25 on LoCoMo. Query rewriting is enabled, and one linked neighbor is added per retrieved unit. Qwen models are served with vLLM on two NVIDIA A800 GPUs (Yang et al. 2025; Kwon et al. 2023); GPT-4o-mini and GPT-5.5 judge evaluation use the API. All answer generation uses temperature 0. 
+
+Main Results 
+
+Overall Performance Table 2 reports the results on ES-MemEval. FTA-Mem achieves the strongest average perfor-mance across backbone settings. With Qwen3-8B, it obtains 38.71 F1, 66.68 BERTScore, and the best average rank; with GPT-4o-mini, it also achieves the best overall F1 and BERTScore. The gains are most visible in information ex-traction and conflict detection, indicating that FTA units bet-ter preserve answerable evidence together with temporal and affective context. Existing memory baselines show less stable behavior across capabilities. MemoryOS and CompassMem perform strongly on abstention-related cases, while MemGPT and A-Mem are competitive on some individual categories. How-ever, they do not consistently perform well across IE, tempo-ral reasoning, conflict detection, and user modeling. This suggests that low-density emotional-support memory re-quires more than generic summaries, profiles, event local-ization, or external-memory retrieval; the retrievable unit Backbone Method Single Hop Multi Hop Temporal Open Domain Average ↑                                                                                                                                                                                                     
+
+> F1 ↑BLEU-1 ↑F1 ↑BLEU-1 ↑F1 ↑BLEU-1 ↑F1 ↑BLEU-1 ↑F1 BLEU-1 Qwen3-8B MemoryBank 14.32 16.07 28.30 23.78 22.25 18.69 15.32 12.33 20.05 17.72 MemGPT 21.66 22.43 19.14 15.28 3.71 2.81 11.86 9.28 14.09 12.45 MemoryOS 18.65 22.67 26.07 22.31 3.62 2.52 14.21 11.44 15.64 14.74 A-Mem 23.92 22.69 29.42 24.85 26.81 21.85 15.68 11.90 23.96 20.32 CompassMem 31.73 29.12 42.05 35.86 34.18 28.06 18.64 14.67 31.65 26.93 FTA-Mem 31.16 26.62 41.84 35.75 35.93 29.90 20.86 16.62 32.45 27.22
+> Qwen3-14B MemoryBank 11.96 12.65 25.37 21.03 20.06 16.06 12.17 9.41 17.39 14.79 MemGPT 21.35 17.42 22.32 18.64 6.34 5.42 11.52 8.64 15.38 12.53 MemoryOS 17.58 20.34 26.34 22.13 5.11 3.40 13.07 10.51 15.53 14.09 A-Mem 23.68 22.88 28.31 24.03 21.06 16.30 16.16 12.62 22.30 18.96 CompassMem 28.40 27.50 39.50 33.60 23.40 18.40 12.40 8.70 25.93 22.05 FTA-Mem 27.84 26.22 39.32 33.52 25.19 20.23 14.58 10.66 26.73 22.66
+> GPT-4o-mini MemoryBank 10.81 9.29 22.35 17.66 19.64 14.39 11.87 9.16 16.17 12.62 MemGPT 22.65 18.72 24.45 19.44 9.15 7.44 11.04 8.34 16.82 13.48 MemoryOS 14.61 16.06 24.95 20.69 4.44 3.36 12.37 9.93 14.09 12.51 A-Mem 17.95 14.50 24.98 20.15 21.98 16.69 14.56 11.42 19.87 15.69 CompassMem 23.60 23.70 37.00 30.50 29.20 23.70 9.20 6.80 24.75 21.18 FTA-Mem 23.01 21.16 36.74 30.38 30.95 25.52 11.41 8.75 25.53 21.45
+
+Table 3: Results on LoCoMo category-level long-term memory question answering. Best results are in bold, and second-best results are underlined.                             
+
+> Gain Fact Ent. Time Impl.
+> ES-MemEval
+> FTA −CompassMem -0.39 -0.12 -0.14 0.41 FTA −Avg. -0.32 -0.07 -0.08 0.44
+> LoCoMo
+> FTA −CompassMem 0.00 0.47 -0.44 0.21 FTA −Avg. 0.26 0.40 -0.12 -0.10
+
+Table 4: Diagnostic Pearson correlations between dialogue-level density fields and FTA-Mem’s relative F1 gain. Fact, entity, and time densities are mean annotated anchors per turn. Avg. denotes the mean over MemoryBank, MemGPT, MemoryOS, A-Mem, and CompassMem. itself should encode factual evidence, temporal validity, and affective context. Table 3 shows results on LoCoMo. FTA-Mem achieves the best average F1 and BLEU-1 across all backbone settings, suggesting that situation-level FTA units remain competitive and effective in denser long-term dialogue. On Qwen3-8B, CompassMem is slightly stronger on single-hop and multi-hop questions, while FTA-Mem performs best on temporal and open-domain questions and obtains the best overall av-erage. This pattern is consistent with Table 1: LoCoMo con-tains denser factual and entity anchors, so event-centric or conventional retrieval remains competitive, while FTA-Mem brings clearer gains when temporal state and distributed ev-idence matter. 
+
+Granularity Analysis Table 6 compares construction granularities. On ES-MemEval, session-level construction                                        
+
+> Method Retrieval Unit Units Token/Q
+> ES-MemEval
+> MemoryBank Summary/profile 838 982 MemGPT Archival passage 401 3,003 MemoryOS Turn-level state 4,321 3,658 A-Mem Agentic note 401 3,103 CompassMem Event graph node 2,642 1,268 FTA-Mem Situation-level FTA 6,564 2,084
+> LoCoMo
+> MemoryBank Summary/profile 564 615 MemGPT Archival passage 272 4,915 MemoryOS Turn-level state 2,807 534 A-Mem Agentic note 272 2,978 CompassMem Event graph node 2,190 1,467 FTA-Mem Situation-level FTA 4,299 1,713
+
+Table 5: Answer-stage cost comparison. Token/Q denotes response-generation tokens per question. (W = Session) is too coarse and loses useful evidence, while turn-pair construction ( W = 2 ) creates more units and calls but still underperforms situation-level FTA construc-tion. On LoCoMo, turn-pair construction is slightly stronger, but requires substantially higher construction cost. These re-sults indicate that very fine-grained construction can help in denser factual settings, but it is less efficient and more redun-dant. Situation-level construction provides a better overall trade-off. A controlled comparison with fixed-window seg-mentation is provided in the supplementary material. Unit F1 ↑ B/B1 ↑ Units Calls Tokens 
+
+ES-MemEval 
+
+Session-level 31.76 61.78 1,692 401 1.58M Turn-pair 37.06 65.43 8,556 4,883 6.40M FTA-Mem 38.71 66.68 6,564 3,245 4.99M 
+
+LoCoMo 
+
+Session-level 29.34 25.13 1,008 272 1.09M Turn-pair 38.28 32.51 6,071 5,882 7.04M FTA-Mem 37.35 31.67 4,299 2,061 3.39M 
+
+Table 6: Granularity and memory-unit construction cost. Units is the total number of constructed memory units. Calls and Tokens count only LLM calls and tokens used for memory-unit construction. 3 5 7 10 15                    
+
+> Retrieved memories (K)
+> 35 40 45 50 55 60 65 70
+> Score (%)
+> 35.8 37.0 38.0 38.7 38.6 64.8 65.5 66.3 66.7 66.7
+> ES-MemEval
+> 35710 15 20 25 30
+> Retrieved memories (K)
+> 25.0 27.5 30.0 32.5 35.0 37.5 40.0 42.5
+> 29.3 32.9 34.4 35.2 36.3 37.1 37.4 37.3 25.7 28.6 29.9 30.1 31.2 31.6 31.7 31.2
+> LoCoMo
+> F1 Score BERTScore / BLEU-1
+
+Figure 2: Effect of retrieval budget K on ES-MemEval and LoCoMo. 
+
+Answer-Stage Cost Table 5 reports answer-stage cost. FTA-Mem constructs fewer units than turn-level or turn-pair memory construction, but more units than summary-based or coarse event-localization methods. This reflects its situation-level design: it preserves sparse evidence at a finer granularity than summaries, while avoiding the redundancy of indexing every turn. Despite using richer memory units, FTA-Mem keeps Token/Q within a competitive range despite using richer structured units. 
+
+Density-Gain Correlation Table 4 analyzes when FTA-Mem obtains larger relative gains. On ES-MemEval, the gain over CompassMem is higher when factual density is lower (r = −0.39 ) and implicitness is higher ( r = 0 .41 ); the average-baseline comparison shows the same trend. Entity and time densities are less correlated with the gain. This pattern is not consistent on LoCoMo, suggesting that the density-related advantage is more specific to ES-MemEval. Overall, the results provide diagnostic evidence that FTA-Mem is especially useful when explicit factual evidence is sparse and user meaning is implicit. 
+
+Hyperparameter Analysis 
+
+Figure 2 analyzes the effect of the retrieval budget K. On ES-MemEval, performance increases from K = 3 to K = 10 ,reaching 38.71 F1 and 66.68 BERTScore, and then saturates. This suggests that ES-MemEval needs enough structured evidence, but overly large retrieval sets bring limited benefit. On LoCoMo, pooled over Cat1–Cat4, performance im-Main w/o Link w/o Aff. w/o Time Fact Q-only                     
+
+> 010 20 30 40 50 60 70
+> Score (%)
+> 38.7 38.1 37.8 37.1 36.4 18.5 66.7 66.2 66.0 65.7 65.5 44.6
+> ES-MemEval
+> Main w/o Link w/o Aff. w/o Time Fact Q-only
+> 010 20 30 40 37.4 36.2 35.2 31.4 31.1 12.4 31.7 30.5 29.5 26.2 25.9 9.9
+> LoCoMo
+> F1 BERTScore / BLEU-1
+
+Figure 3: Ablation results on ES-MemEval and LoCoMo. proves more gradually and peaks around K = 25 . Since LoCoMo contains denser entity and factual cues, a larger retrieval budget can provide useful additional evidence. This contrast supports our density analysis: low-density emotional-support dialogue benefits more from selective re-trieval and structured context synthesis, while denser factual dialogue can tolerate larger retrieval sets. 
+
+Ablation Study 
+
+Figure 3 presents the ablation results. Removing temporal information causes the largest degradation, especially on Lo-CoMo, showing the importance of temporal grounding for evolving situations. Removing links causes a smaller drop, suggesting that relation maintenance provides auxiliary lon-gitudinal cues. Removing affect information also degrades performance. Since the affect anchor includes emotion, in-tention, and relation cues, this effect can extend beyond emotional-support questions to person-relation and plan-related reasoning. Fact-Only memory also underperforms the full FTA unit on both benchmarks, indicating that factual content alone is insufficient for long-term dialogue memory. The Question-only baseline performs much worse, confirming that the gains come from retrieved memory rather than backbone knowledge alone. Overall, FTA-Mem benefits from combin-ing factual evidence, temporal grounding, affective context, and lightweight links. Further analyses are provided in the supplementary material. 
+
+## Conclusion 
+
+We propose FTA-Mem, a structured memory framework for low-density long-term dialogue. FTA-Mem constructs situation-level Fact-Time-Affect units through boundary-preserving segmentation, preserving factual evidence to-gether with temporal and affective context. It further orga-nizes these units with temporal links and structured context synthesis to support grounded and personalized answer gen-eration. Experiments on ES-MemEval and LoCoMo show that FTA-Mem improves long-term memory question an-swering across different dialogue settings and provides a favorable trade-off among evidence preservation, temporal consistency, and construction efficiency. 
+
+## References 
+
+Arslan, M.; Ghanem, H.; Munawar, S.; and Cruz, C. 2024. A Survey on RAG with LLMs. Procedia computer science ,246: 3781–3790. Chen, T.; Lu, J.; Shen, Y.; and Zhang, L. 2026. Es-memeval: Benchmarking conversational agents on personalized long-term emotional support. In Proceedings of the ACM Web Conference 2026 , 5810–5821. Chen, X.; Zeng, A.; et al. 2024. A survey on large language model based autonomous agents. In CCL 2024–23rd Chinese natl conf comput linguist , volume 2, 141–150. Edge, D.; Trinh, H.; Cheng, N.; Bradley, J.; Chao, A.; Mody, A.; Truitt, S.; Metropolitansky, D.; Ness, R. O.; and Larson, J. 2025. From Local to Global: A Graph RAG Approach to Query-Focused Summarization. arXiv:2404.16130. Fan, W.; Ding, Y.; Ning, L.; Wang, S.; Li, H.; Yin, D.; Chua, T.-S.; and Li, Q. 2024. A survey on rag meeting llms: Towards retrieval-augmented large language models. In Proceedings of the 30th ACM SIGKDD conference on knowledge discov-ery and data mining , 6491–6501. Hatalis, K.; Christou, D.; Myers, J.; Jones, S.; Lambert, K.; Amos-Binks, A.; Dannenhauer, Z.; and Dannenhauer, D. 2023. Memory matters: The need to improve long-term memory in llm-agents. In Proceedings of the AAAI Sympo-sium Series , volume 2, 277–280. Hu, H.; Ma, C.; Wang, Q.; Lin, L.; Zhou, Y.; Cui, L.; Ma, F.; and Tian, Q. 2026a. Theramind: A strategic and adaptive agent for longitudinal psychological counseling. In Proceed-ings of the ACM Web Conference 2026 , 9136–9147. Hu, Y.; Liu, J.; Tan, J.; Zhu, Y.; and Dou, Z. 2026b. Memory Matters More: Event-Centric Memory as a Logic Map for Agent Searching and Reasoning. In Liakata, M.; Moreira, V. P.; Zhang, J.; and Jurgens, D., eds., Findings of the As-sociation for Computational Linguistics: ACL 2026 , 22389– 22407. San Diego, California, United States: Association for Computational Linguistics. ISBN 979-8-89176-395-1. Kang, J.; Ji, M.; Zhao, Z.; and Bai, T. 2025. Memory os of ai agent. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 25972–25981. Ke, C.; Du, Y.; Liang, B.; Xiang, Y.; Gui, L.; Li, Z.; Wang, B.; Yu, Y.; Wang, H.; Wong, K.-F.; et al. 2025. Flexibly Utilize Memory for Long-Term Conversation via a Fragment-then-Compose Framework. In Proceedings of the 2025 Confer-ence on Empirical Methods in Natural Language Processing ,21130–21147. Kwon, W.; Li, Z.; Zhuang, S.; Sheng, Y.; Zheng, L.; Yu, C. H.; Gonzalez, J.; Zhang, H.; and Stoica, I. 2023. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th symposium on operating systems principles , 611–626. Li, H.; Yang, C.; Zhang, A.; Deng, Y.; Wang, X.; and Chua, T.-S. 2025. Hello again! llm-powered personalized agent for long-term dialogue. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , 5259–5276. Maharana, A.; Lee, D.-H.; Tulyakov, S.; Bansal, M.; Bar-bieri, F.; and Fang, Y. 2024. Evaluating very long-term conversational memory of llm agents. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 13851–13870. Na, H. 2024. CBT-LLM: A Chinese large language model for cognitive behavioral therapy-based mental health ques-tion answering. In Proceedings of the 2024 Joint Interna-tional Conference on Computational Linguistics, Language Resources and Evaluation (LREC-COLING 2024) , 2930– 2940. Packer, C.; Wooders, S.; Lin, K.; Fang, V.; Patil, S. G.; Stoica, I.; and Gonzalez, J. E. 2024. MemGPT: Towards LLMs as Operating Systems. arXiv:2310.08560. Schaie, K. W. 1983. Longitudinal studies of adult psycho-logical development . Guilford press New York. Tulving, E.; et al. 1972. Episodic and semantic memory. 
+
+Organization of memory , 1(381-403): 1. Wang, B.; Wang, J.; Sun, Y.; Fu, X.; Zhao, Y.; and Qin, B. 2026. Psychological counseling cannot be achieved overnight: Automated psychological counseling through multi-session conversations. In Findings of the Association for Computational Linguistics: ACL 2026 , 16593–16609. Wang, W.; Wei, F.; Dong, L.; Bao, H.; Yang, N.; and Zhou, M. 2020. Minilm: Deep self-attention distillation for task-agnostic compression of pre-trained transformers. Advances in neural information processing systems , 33: 5776–5788. Wu, S.; and Shu, K. 2026. Memory in llm-based multi-agent systems: Mechanisms, challenges, and collective intel-ligence. In Pacific-Asia Conference on Knowledge Discovery and Data Mining , 167–184. Springer. Wu, Y.; Zhang, Y.; Liang, S.; and Liu, Y. 2025. SGMem: Sen-tence Graph Memory for Long-Term Conversational Agents. arXiv:2509.21212. Xiao, M.; Xie, Q.; Kuang, Z.; Liu, Z.; Yang, K.; Peng, M.; Han, W.; and Huang, J. 2024. HealMe: Harnessing cogni-tive reframing in large language models for psychotherapy. In Proceedings of the 62nd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 1: Long Papers) ,1707–1725. Xu, W.; Liang, Z.; Mei, K.; Gao, H.; Tan, J.; and Zhang, Y. 2026. A-mem: Agentic memory for llm agents. Advances in Neural Information Processing Systems , 38: 17577–17604. Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 Technical Report. arXiv:2505.09388. Yang, Y.; Li, J.; Pan, Q.; Zhou, J.; Chen, K.; Chen, Q.; Zhao, J.; Zhou, N.; Li, X.; and He, L. 2026. PsychAgent: An Experience-Driven Lifelong Learning Agent for Self-Evolving Psychological Counselor. arXiv:2604.00931. Zacks, J. M.; Speer, N. K.; Swallow, K. M.; Braver, T. S.; and Reynolds, J. R. 2007. Event perception: a mind-brain perspective. Psychological bulletin , 133(2): 273. Zhang, T.; Kishore, V.; Wu, F.; Weinberger, K. Q.; and Artzi, Y. 2020. BERTScore: Evaluating Text Generation with BERT. arXiv:1904.09675. Zhong, W.; Guo, L.; Gao, Q.; Ye, H.; and Wang, Y. 2024. Memorybank: Enhancing large language models with long-term memory. In Proceedings of the AAAI conference on artificial intelligence , volume 38, 19724–19731. Zou, H.; Sun, T.; He, C.; Tian, Y.; Li, Z.; Jin, L.; Liu, N.; Zhong, J.; and Wei, K. 2026a. ES-Mem: Event Segmentation-Based Memory for Long-Term Dia-logue Agents. arXiv:2601.07582. Zou, H. P.; Huang, W.-C.; Wu, Y.; Guo, J.; Chen, Y.; Miao, C.; Nguyen, H. H.; Zhou, Y.; Zhang, W.; Fang, L.; et al. 2026b. Llm-based human-agent collaboration and interac-tion systems: A survey. In Findings of the Association for Computational Linguistics: ACL 2026 , 36335–36364. Zwaan, R. A.; and Radvansky, G. A. 1998. Situation mod-els in language comprehension and memory. Psychological bulletin , 123(2): 162. 
+
+## Supplementary Material 
+
+Reproducibility Details 
+
+Answer generation uses temperature 0, while memory con-struction uses temperature 0.7. In FTA-Mem, BWS, FTA-unit extraction, relation classification, query rewriting, and answer generation are implemented as separate LLM calls with fixed prompts. Local Qwen backbones are served with vLLM on two NVIDIA A800 GPUs; GPT-4o-mini inference and GPT-5.5-based judge evaluation are conducted through APIs. Retrieval uses all-MiniLM-L6-v2 embeddings with cosine similarity. For all compared methods, we use the same answer backbone and generation settings while pre-serving each baseline’s native memory format and context construction procedure. Unless otherwise specified, all addi-tional analyses and ablation experiments use Qwen3-8B as the backbone. For retrieval, we use the same top-K protocol across meth-ods when applicable. Guided by the default retrieval settings reported in the original benchmark studies, the main compar-ative experiments (Tables 2–3) use K = 7 for ES-MemEval and K = 10 for LoCoMo. Following the top-K sensitivity analysis, we use K = 10 for ES-MemEval and K = 25 for LoCoMo in the subsequent ablation, granularity, and diag-nostic experiments (Tables 4–6). Token/Q denotes the result-ing answer-stage tokens per question under each method’s native memory representation and context-construction pro-cedure, rather than a manually matched token budget. 
+
+Baseline Selection 
+
+ES-Mem is not included as a baseline because it had not been formally accepted and no official implementation was publicly available at the time of submission. SGMem is like-wise excluded because no official implementation was pub-licly available. Moreover, both methods are closely related to fine-grained turn- or sentence-level memory construction, which is already examined in our granularity comparison. 
+
+Boundary-preserving Window Segmentation 
+
+Algorithm 1 gives the BWS procedure. The detector returns segment boundaries using the global numeric turn indices in the session. For each window, BWS finalizes completed segments before the last detected segment and keeps the last segment provisional. The next window starts from the                       
+
+> Dataset Setting F1 ↑B/B1 ↑Units
+> ES-MemEval BWS 38.71 66.68 6,564
+> ES-MemEval Fixed Window 37.94 65.34 6,678 LoCoMo BWS 37.35 31.67 4,299
+> LoCoMo Fixed Window 37.04 30.84 4,332
+
+Table 7: Comparison between boundary-preserving window segmentation and fixed-window segmentation. B/B1 denotes BERTScore on ES-MemEval and BLEU-1 on LoCoMo. Scores are reported in percentages. beginning of this provisional segment, allowing boundary-tail content to be reprocessed with following context. If the detector returns a single full-window segment, BWS enforces a minimum forward step to avoid non-termination. When the window reaches the end of the session, all remaining segments are finalized. Algorithm 1: Boundary-preserving Window Segmentation 
+
+Require: Session S, window size W 
+
+> 1:
+
+s ← 0 
+
+> 2:
+
+F ← ∅  
+
+> 3:
+
+while s < |S| do  
+
+> 4:
+
+E ← min( s + W − 1, |S| − 1)  
+
+> 5:
+
+{(bj , e j , r j )}Kj=1 ← gϕ(S[s : E])  
+
+> 6:
+
+if E = |S| − 1 then  
+
+> 7:
+
+add all detected segments to F 
+
+> 8:
+
+break  
+
+> 9:
+
+else  
+
+> 10:
+
+add segments 0, . . . , K − 2 to F if K > 1 
+
+> 11:
+
+retain the last segment as provisional  
+
+> 12:
+
+s ← max( bK−1, s + 1)  
+
+> 13:
+
+end if  
+
+> 14:
+
+end while  
+
+> 15:
+
+return F
+
+Additional Comparative Experiments 
+
+To directly examine the effect of boundary-preserving seg-mentation, we compare BWS with a fixed-window variant on ES-MemEval and LoCoMo. The fixed-window setting uses the same window size, memory-unit schema, retriever, and answer-generation pipeline, but advances windows with a fixed stride and does not carry the last boundary-uncertain segment into the next window. Therefore, the comparison isolates the effect of preserving segment boundaries during memory construction. The fixed-window variant constructs slightly more mem-ory units but obtains lower F1 and B/B1 on both benchmarks. This suggests that simply increasing the number of segments is not sufficient; preserving uncertain boundary-tail content helps avoid incomplete memory units and improves down-stream question answering. Setting F1 ↑ BERTScore ↑
+
+FTA-Mem 38.71 66.68 
+
+w/o Query Rewrite 37.44 65.90 Plain Embedding 35.99 64.88 Flat Context 37.86 65.24 w/o Auxiliary Memory 38.65 66.73 
+
+Table 8: Additional ablation results on ES-MemEval. Scores are reported in percentages. 
+
+Additional Ablation Studies 
+
+Table 8 reports additional ablations on ES-MemEval. Re-moving query rewriting leads to a moderate drop, suggesting that evidence-oriented reformulation helps align user ques-tions with structured FTA units. Plain embedding retrieval further reduces performance, showing that structured cue matching over time, situation type, participants, and affec-tive context contributes beyond semantic similarity alone. Replacing the structured memory packet with flat con-text also degrades performance. This indicates that FTA-Mem benefits not only from retrieving relevant units, but also from organizing them into primary evidence, linked neighbors, source spans, and auxiliary context. In contrast, removing auxiliary memory causes little change, suggesting that episodic FTA units remain the primary evidence source, while user semantic memory and support-experience mem-ory mainly provide background personalization. 
+
+Density Annotation and Statistical Analysis 
+
+Each dialogue turn is annotated with factual, entity, temporal, and support-process anchor counts. Anchor fields are non-negative integer counts; implicitness is rated on a 1–3 scale, and low-information status is binary. We aggregate turn-level annotations into dialogue-level statistics by averaging over turns. We further report the same density-gain correlation set-ting used in the main paper. For each ES-MemEval case or LoCoMo conversation, we compute the relative F1 gain of FTA-Mem and correlate it with dialogue-level density fields. Table 9 reports Pearson r for the two main diagnostic fields, together with auxiliary robustness statistics. On ES-MemEval, the diagnostic trend suggests that FTA-Mem gains more when factual density is lower and implic-itness is higher. The result is best viewed as diagnostic ev-idence rather than a causal claim. The pattern is weaker on LoCoMo, suggesting that the density-related advantage is more evident in the low-density emotional-support bench-mark. 
+
+Paired Bootstrap Uncertainty Check 
+
+We estimate the uncertainty of the main FTA-Mem– CompassMem comparison with paired cluster bootstrap. ES-MemEval cases and LoCoMo conversations are resampled with replacement, and the F1 difference is averaged over the sampled clusters. This setting reflects the multi-question structure of each dialogue case while keeping the constructed memories fixed. 0.7 0.8 0.9 Factual-anchor density 0510 15 20 F1 gain over CompassMem  ES-MemEval (Fact, r=-0.39) 1.88 1.90 1.92 1.94 Implicitness 0510 15 20 F1 gain over CompassMem  ES-MemEval (Implicit, r=+0.43) 
+
+Figure 4: Dialogue-level density-gain trends on ES-MemEval. As shown in Table 10, the ES-MemEval gain remains clearly positive, while the LoCoMo interval is much closer to zero. This suggests that the advantage over CompassMem is more stable on ES-MemEval, whereas the LoCoMo dif-ference should be interpreted cautiously. 
+
+Memory Quality Audit 
+
+To examine whether the intermediate memory representa-tion is grounded before retrieval and answer generation, we conduct a small-scale manual audit of FTA-Mem out-puts. We randomly sample 100 generated FTA units from the Qwen3-8B runs, balanced across ES-MemEval and Lo-CoMo. For each unit, two annotators independently evaluate factual grounding, temporal accuracy, and affect/context ac-curacy by comparing the memory fields with the cited ev-idence span, and we report the mean of their scores. We additionally sample 50 linked pairs, balanced across the two benchmarks, and evaluate whether the linked units are mean-ingfully related for memory maintenance and retrieval. Each criterion is scored on a 0–2 scale: 2 denotes fully correct and grounded, 1 denotes partially correct but usable, and 0 denotes incorrect or unsupported. Table 11 reports the average score for each criterion. The audit suggests that FTA units are strongly grounded in factual and temporal evidence on both benchmarks. Af-fect/context information is usually usable but less often fully explicit, reflecting that emotional state and intentions are sometimes inferred from local context. Relation relatedness is also useful but noisier than the unit-level anchors, which supports our treatment of links as lightweight maintenance cues rather than a fully precise symbolic graph. 
+
+Case Study 
+
+Unit Case Figure 5 shows a representative FTA unit. The example illustrates how a situation-level unit stores factual, temporal, affective, evidence, and link-maintenance fields. 
+
+Result Case Table 12 shows three difficult ES-MemEval cases: temporal reasoning, conflict detection, and user mod-eling. In Q1, A-Mem retrieves a plausible but wrong work-related event, while FTA-Mem locates the time-specific ar-gument with Jack. In Q2, A-Mem misses the contradiction between painting as a helpful coping strategy and Sarah’s lack of consistent time for it. In Q3, A-Mem identifies the wrong person, whereas FTA-Mem preserves the participant relation between Jimmy and George. These examples show Dataset Gain Field Pearson r Spearman ρ 95% CI Perm. p LOO Range                                                         
+
+> ES-MemEval FTA–CompassMem Fact -0.39 -0.48 [-0.70, -0.04] 0.110 [-0.49, -0.32] ES-MemEval FTA–CompassMem Implicit. 0.43 0.41 [0.00, 0.73] 0.077 [0.31, 0.53] ES-MemEval FTA–Avg. Baseline Fact -0.32 -0.36 [-0.74, 0.13] 0.154 [-0.54, -0.20] ES-MemEval FTA–Avg. Baseline Implicit. 0.44 0.34 [-0.15, 0.78] 0.081 [0.23, 0.55] LoCoMo FTA–CompassMem Fact 0.00 -0.20 [-0.77, 0.60] 0.481 [-0.53, 0.07] LoCoMo FTA–CompassMem Implicit. 0.21 0.31 [-0.16, 0.96] 0.306 [0.26, 0.63] LoCoMo FTA–Avg. Baseline Fact 0.26 0.21 [-0.66, 0.74] 0.694 [-0.08, 0.34] LoCoMo FTA–Avg. Baseline Implicit. -0.10 -0.16 [-0.64, 0.72] 0.998 [-0.13, 0.21]
+
+Table 9: Additional density-gain correlations under the same setting as the main-paper diagnostic table. Pearson r follows the main-paper aggregation. CI denotes case-level bootstrap 95% confidence interval; Perm. p is computed by permutation testing; and LOO Range reports leave-one-case-out Pearson ranges.          
+
+> Dataset Clusters Mean Diff. 95% CI
+> ES-MemEval 18 8.43 [5.81, 11.04] LoCoMo 10 0.55 [-0.01, 3.18]
+
+Table 10: Paired cluster bootstrap uncertainty check for FTA-Mem minus CompassMem. Values are token-level F1 dif-ferences in percentage points. Clusters correspond to ES-MemEval cases or LoCoMo conversations. LoCoMo ex-cludes Cat5 no-information questions.             
+
+> Benchmark Fact Time Affect/Ctx. Rel.
+> ES-MemEval 2.00 2.00 1.48 1.36 LoCoMo 2.00 2.00 1.38 1.25
+
+Table 11: Manual audit of intermediate FTA memory quality. Scores are reported on a 0–2 scale. Rel. denotes relation relatedness for linked memory pairs. that FTA units help the answer model use not only relevant content, but also temporal validity, status cues, and affective context. 
+
+Ethical Statement 
+
+Our experiments use existing public benchmarks and do not collect new data from real users or access private conver-sations. We follow the data-use conditions of the original benchmarks. FTA-Mem is designed to improve evidence grounding and continuity in long-term dialogue memory rather than to provide clinical diagnosis or treatment. Long-term memory may nevertheless introduce risks be-yond those of stateless dialogue systems. Incorrect, outdated, or over-interpreted memories may persist across sessions and influence later responses. This is particularly important for affective information, since inferred emotional states, inten-tions, and interpersonal relations may be ambiguous or sen-sitive. Persistent memory may also increase privacy risks if source dialogue spans or inferred user attributes are retained or exposed inappropriately. In real emotional-support applications, users should be clearly informed when long-term memory is enabled and      
+
+> Fact-Time-Affect Memory Unit memory_id : emem_000021
+> summary : Seeker mentions having friends but feels they are too busy to talk to.
+> time_orientation : present
+> content_type : current_state
+> event_time : unknown
+> content.text : Seeker has a few friends they think they can talk to about their feelings, but they feel the friends are too busy with work.
+> content.participants : user
+> content.emotion_or_state : feeling unable to reach out
+> content.intention_or_plan : unknown
+> evidence.session : esc150
+> evidence.turn_span : [5, 5]
+> evidence.dialogue_time : 2024-07-25
+> status : complete
+> completeness : complete
+> L_links : [ { target : emem_000019; relation : supports; con-fidence : high }, { target : emem_000007; relation : supports;
+> confidence : medium } ]
+> R_links : [emem_000035]
+
+Figure 5: Example of a generated Fact-Time-Affect memory unit with temporal links. should have meaningful control over consent, inspection, correction, deletion, and data-retention settings. Deployment would additionally require access control, secure storage, data minimization, and safeguards for handling uncertain or conflicting memories. We therefore view FTA-Mem as a re-search framework for evaluating long-term dialogue memory rather than a standalone clinical or counseling system. 
+
+Prompt Templates 
+
+We provide the core prompt templates used in FTA-Mem memory construction. Specifically, we include the boundary-preserving window segmentation prompt, the Fact-Time-Affect memory-unit extraction prompt, and the temporal-link maintenance prompt. These prompts correspond to the three main construction steps: forming coherent situation frag-ments, converting fragments into structured FTA units, and maintaining relations among finalized memory units. The Query Gold Answer A-Mem Ours Q1: As of October 12, 2025 , what event made Sarah feel unsettled? ( Tem-poral Reasoning )An argument with Jack about 
+
+future plans .Sarah felt unsettled due to her 
+
+boss’s unexpected resignation 
+
+and concerns about leadership changes. Sarah felt unsettled after an ar-gument with Jack about their 
+
+future plans .
+
+Q2: Has Sarah found time for paint-ing consistently as a coping strategy? (Conflict Detection )
+
+No , she has found it hard to find time for painting due to work and personal issues .
+
+Yes , Sarah has been painting consistently as a coping strategy. Sarah finds painting calming, but struggles to find time due to work and personal issues .
+
+Q3: What future plan indicates Jimmy’s willingness to reconnect with past relationships ? ( User Mod-eling )He is considering reaching out to George for an honest conver-sation. Jimmy’s willingness to recon-nect is indicated by his desire to meet with Jennifer .Jimmy plans to reach out to George for an honest conver-sation. 
+
+Table 12: Case study on ES-MemEval. A-Mem often retrieves related but noisy memories, while FTA-Mem better identifies the target situation, temporal state, and participant relation. full prompt files and runnable configurations are included in the supplementary code. We also include the turn-level den-sity annotation prompt used for the diagnostic information-density analysis. Boundary-preserving Window Segmentation Prompt 
+
+1 system: 
+
+2 You are responsible for dividing the raw dialogue of one complete session into continuous small segments suitable for memory construction. 
+
+3 Do not extract memory, do not answer questions. Return JSON only. 
+
+45 user: 
+
+6 Current raw session dialogue turns. Each turn includes system-generated numeric turn_index, optional original turn_id, role, timestamp, and text: 
+
+7 {session_dialogue} 
+
+89 Segmentation triggers include: 
+
+10 - topic_change: topic changes. 
+
+11 - goal_change: dialogue goal changes. 
+
+12 - emotion_shift: emotion or state changes noticeably. 
+
+13 - new_time_reference: a new time reference appears. 
+
+14 - new_person_or_relationship: a new person or relationship appears. 
+
+15 - problem_to_support_transition: the dialogue moves from problem description to support/advice. 
+
+16 - support_strategy_transition: support strategy changes. 
+
+17 - homework_or_plan_creation: homework, plan, commitment, or follow-up item appears. 
+
+18 - correction_or_contradiction: correction, denial, or contradiction appears. 
+
+19 - risk_signal: a risk signal appears. 
+
+20 - session_start: session starts. 
+
+21 - unknown: unclear boundary. 
+
+22 23 Requirements: 
+
+24 1. Each segment must be a continuous turn range. 
+
+25 2. Each segment should center on one memorable subtask, not one broad topic. 
+
+26 3. If one broad topic contains multiple independently memorable units, split them into separate segments. 
+
+27 4. Do not make a single empathy statement, confirmation, thanks, closing, or generic encouragement its own segment; merge it into the adjacent related segment. 
+
+28 5. Do not skip turns and do not overlap turns. 
+
+29 6. turn_span must use the numeric turn_index values shown in the current session; do not use the original turn_id. 
+
+30 31 Return JSON. Do not add any other top-level keys: 
+
+32 {
+
+33 "segments": [
+
+34 {
+
+35 "turn_span": [0, 2], 
+
+36 "boundary_trigger": "session_start | topic_change | goal_change |emotion_shift | new_time_reference | new_person_or_relationship |problem_to_support_transition | support_strategy_transition |homework_or_plan_creation | correction_or_contradiction | risk_signal | unknown" 
+
+37 }
+
+38 ]
+
+39 }
+
+Figure 6: Boundary-preserving window segmentation prompt. Fact-Time-Affect Unit Extraction Prompt 
+
+1 system: 
+
+2 You are the memory unit construction module for a long-term psychological support agent. 
+
+3 You must output strict JSON. Use "unknown" for missing information. Do not make unsupported inferences. 
+
+45 user: 
+
+6 Current raw dialogue turns for this segment. Each turn includes system-generated numeric turn_index, optional original turn_id, role, timestamp, and text. 
+
+7 segment_dialogue:{segment_dialogue} 
+
+8 Incomplete events left by the previous segment. If empty, there is no event that needs priority completion. 
+
+9 incomplete_memory:{incomplete_memory} 
+
+10 Follow these steps: 
+
+11 1. First decide whether the current segment can complete any event in incomplete_memory. If not, create new memories. 
+
+12 2. Construct minimal memory_units. One coherent event, state, plan, or support interaction should correspond to one unit. 
+
+13 3. Do not create low-value memory units for greetings, confirmations, thanks, short acknowledgements, closings, or generic assistant filler. 
+
+14 4. time_orientation must be one of past, present, future, mixed, unknown. 
+
+15 5. content_type must be exactly one of event, current_state, relationship_event, belief_candidate, homework_or_plan, support_interaction, risk_signal, general_fact. 
+
+16 6. status is the event state: complete if sufficiently stated, partial if meaningful but underspecified, pending for unfinished future plan/homework/follow-up, unknown if unclear. 
+
+17 7. evidence_turn_span use numeric turn_index values and is the continuous evidence range supporting this memory unit, not just the single trigger sentence. 
+
+18 8. For question-answer facts, conflicts, durations, names, yes/no facts, and relationship details, evidence_turn_span must cover the complete question-answer exchange and key follow-up turns inside the current segment. 
+
+19 9. content.text is the factual anchor of the memory unit. Write it as the shortest evidence-grounded factual statement that can answer future questions, close to the original wording when possible. 
+
+20 10. content.text must preserve QA-sensitive facts when present: names, dates, durations, quantities, negations, yes/no facts, relationship roles, causal links , commitments, plans, and explicit uncertainty. Do not replace these facts with broad psychological interpretations. 
+
+21 11. Use summary for a compact abstraction of the unit; do not rely on summary to carry exact facts that should be in content.text. 
+
+22 12. Each memory unit may output only the fields listed in the schema. 
+
+23 24 Return only the following JSON object. Do not add any other top-level keys or fields :
+
+25 {
+
+26 "memory_units": [
+
+27 {
+
+28 "summary": "...", 
+
+29 "time_orientation": "past | present | future | mixed | unknown", 
+
+30 "content_type": "event | current_state | relationship_event | belief_candidate | homework_or_plan | support_interaction | risk_signal | general_fact", 
+
+31 "event_time": "unknown", 
+
+32 "content": {
+
+33 "text": "short evidence-grounded factual statement with exact entities, values, negations, or plans when present", 
+
+34 "participants": "user | assistant | user,assistant", 
+
+35 "emotion_or_state": "unknown", 
+
+36 "intention_or_plan": "unknown" 
+
+37 }, 
+
+38 "evidence_turn_span": [0, 3], 
+
+39 "status": "complete | partial | pending | unknown" 
+
+40 }
+
+41 ]
+
+42 }
+
+Figure 7: Fact-Time-Affect memory-unit extraction prompt. Temporal Link Maintenance Prompt 
+
+1 system: 
+
+2 You maintain relations among episodic memory units. 
+
+3 The input contains only one newly generated memory unit and candidate neighbor memory units retrieved by similarity. 
+
+4 Only judge relations and provide update suggestions for each candidate neighbor memory unit’s completeness, lifecycle.status, and link relation. 
+
+5 Return JSON only. 
+
+67 user: 
+
+8 Newly generated memory unit: 
+
+9 {new_memory_unit} 
+
+10 11 Candidate neighbor memory units: 
+
+12 {candidate_neighbor_memory_units} 
+
+13 14 Judge the relation between the new memory and each candidate neighbor: 
+
+15 - same_episode_as: they describe the same event, state, or plan. 
+
+16 - updates: the new memory adds details, progress, or completion information to an old memory. 
+
+17 - contradicts: the new memory clearly conflicts with an old memory. 
+
+18 - followup_of: the new memory is a follow-up action, result, or continuation of an old memory. 
+
+19 - supports: the new memory provides supporting evidence or reinforces an old memory. 
+
+20 - unknown: they are similar, but the specific relation cannot be confirmed. 
+
+21 22 lifecycle.status must be one of: 
+
+23 pending, completed, contradicted, archived, unknown. 
+
+24 25 completeness must be one of: 
+
+26 complete, partial, unknown. 
+
+27 28 Return one update per related candidate neighbor. Do not output updated_at; the system will set it from the new memory’s event_time. 
+
+29 Return JSON. Do not add any other top-level keys. 
+
+30 {
+
+31 "memory_updates": [
+
+32 {
+
+33 "memory_id": "candidate neighbor id", 
+
+34 "completeness": "complete | partial | unknown", 
+
+35 "lifecycle_status": "pending | completed | contradicted | archived | unknown", 
+
+36 "relation": "same_episode_as | updates | contradicts | followup_of | supports | unknown", 
+
+37 "relation_confidence": "low | medium | high | unknown" 
+
+38 }
+
+39 ]
+
+40 }
+
+Figure 8: Temporal-link maintenance prompt. Turn-level Density Annotation Prompt 
+
+1 system: 
+
+2 You are a careful annotation model. Output only valid JSON. 
+
+34 user: 
+
+5 Annotate the information density of one dialogue turn for long-term memory construction. 
+
+6 Use only the current turn, speaker role, and session time. Do not infer unsupported facts. 
+
+78 Definitions: 
+
+9 - factual_anchors: count distinct concrete facts, events, preferences, plans, states, or relationships explicitly expressed in this turn. 
+
+10 - entity_anchors: count distinct named people, places, organizations, roles, groups, or specific objects mentioned in this turn. 
+
+11 - temporal_anchors: count distinct temporal cues, including dates, durations, order words, past/present/future references, deadlines, or update timing. 
+
+12 - support_process_anchors: count distinct support-process cues, such as advice, coping actions, help-seeking, reflection, validation, planning, or response to support. 
+
+13 - implicitness: 1 explicit/self-contained; 2 partially context-dependent; 3 highly indirect or dependent on prior/following context. 
+
+14 - low_information: 1 if the turn is mostly social filler, vague acknowledgement, or too short to form a memory; otherwise 0. 
+
+15 16 Counting rules: 
+
+17 - Anchor fields are non-negative integer counts, not 0-5 rating scores. 
+
+18 - Do not cap anchor counts. If a turn contains many anchors, count all distinct anchors. 
+
+19 - Count only anchors grounded in this turn text; do not add information from outside the turn. 
+
+20 - A short turn may still contain anchors if it names a person, time, emotion, plan, or concrete fact. 
+
+21 22 Return only a JSON object with these keys: 
+
+23 factual_anchors, entity_anchors, temporal_anchors, support_process_anchors, implicitness , low_information. 
+
+24 Use non-negative integers for anchor counts, 1-3 for implicitness, and 0/1 for low_information. 
+
+25 26 Example output: 
+
+27 {"factual_anchors":1,"entity_anchors":1,"temporal_anchors":0,"support_process_anchors ":0,"implicitness":1,"low_information":0} 
+
+28 29 Session time: {session_time} 
+
+30 Speaker: {speaker} 
+
+31 Turn text: {turn_text} 
+
+Figure 9: Turn-level density annotation prompt.
