@@ -1,0 +1,343 @@
+Title: Catastrophic Learning: A New Attack Vector on Continual Learning Networks
+
+URL Source: https://arxiv.org/pdf/2608.18976v1
+
+Published Time: Thu, 20 Aug 2026 00:58:48 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Catastrophic Learning: A New Attack Vector on Continual Learning Networks 
+
+Benedikt Kluss 
+
+Chair for System Security University of Bonn 
+
+Bonn, Germany kluss@cs.uni-bonn.de 
+
+Niklas Bunzel 
+
+Fraunhofer SIT / TU Darmstadt 
+
+Darmstadt, Germany bunzel@sit.fraunhofer.de 
+
+Abstract —Continual Learning (CL) enables deep learning models to iteratively learn from a stream of data without forgetting prior knowledge. Existing adversarial research on CL primarily aims to re-enable catastrophic forgetting, thus attacking stability and reducing availability. In this work, we identify a novel security flaw: data manipulated by an attacker can reduce the learnability of the current or of upcoming iterations. We term such manipulations learning blockers , as they specifically attack the plasticity of CL algorithms. Learning blockers are particularly harmful because they are difficult to detect during training and evaluation of the current iteration, since they can target iterations whose data the model has not yet encountered. When learning blockers additionally induce catastrophic forgetting, the resulting overall degradation is what we call catastrophic learning . We formalize this scenario, define an associated threat model, and propose six attack strategies: Label-Exchange, Tensor-Exchange, Attraction-Coincident, Attraction-Preceding, Repulsion-Coincident, and Repulsion-Preceding. The Attraction variants minimize the loss between the poisoned and the victim iteration label, pulling their representations together in feature space; the Repulsion variants maximize this loss, pushing them apart so the stability mechanism resists the required parameter shift. In the Coincident variants, the poisoned and the victim iteration coincide, using a clean reference iteration only as a label source; in the Preceding variants, the poisoned iteration precedes the victim, leaving it clean but not learnable due to distorted representations learned beforehand. We evaluate the attacks on MNIST and Split-CIFAR10 against three CL strategies—DER, ER-ACE, and iCaRL—across more than 4,480 simulations. Our results demonstrate a strong vulnerability of CL algorithms: an adversary can selectively impede plasticity to hinder the acquisition of new knowledge, while simultaneously promoting the loss of previously learned information, thereby inducing a catastrophic learning scenario. 
+
+Index Terms —continual learning, catastrophic learning, learn-ing blockers, catastrophic forgetting, data poisoning, adversarial attacks 
+
+I. I NTRODUCTION 
+
+In classical computer science, developers implement models to describe complex structures of the real world. With the rise of artificial intelligence, more and more of the world’s complexity can be reproduced using data that goes far beyond the boundaries of classical deterministic algorithms. Thanks to machine learning, and especially deep learning, many re-search problems such as speech recognition, natural language processing, or computer vision can be solved [1]. The acquisition of data is a crucial step in building a deep learning model with high accuracy. This is particularly true in critical sectors such as healthcare, autonomous driving, and cybersecurity, where the quality of data is essential to avoid in-correct decisions. Furthermore, data distributions are dynamic, as evidenced by the constant discovery of new research results. Consequently, a continual learning strategy is required in the field of deep learning. The concept of Continual Learning (CL), also referred to as incremental learning and lifelong learning [2], aims to address this challenge by enabling deep learning models to learn iteratively from a stream of data without forgetting prior knowledge. The objective is to facili-tate seamless adaptation to novel scenarios without requiring extensive resources, such as memory or computing power, for comprehensive retraining. However, training a model on new data can lead to a phenomenon known as catastrophic forgetting [3], which causes misclassifications of previously acquired knowledge. Several strategies have been developed to mitigate this problem by preserving prior knowledge through the maintenance of model stability , while simultaneously al-lowing the model to adapt to new information. This adaptation to new data is termed plasticity in the scientific literature [4]. In order to obtain new data, two factors must be considered: the quality of the data and the methodology used to collect it. Because data classification is time-consuming and labor-intensive, existing data sources from various internet reposi-tories are commonly used. This is the case, for instance, with current large language models such as ChatGPT [5]. The cred-ibility of these data sources is questionable, and the presence of untrustworthy data introduces the risk of adversarial attacks yielding poisoned data. In the context of CL, the adversarial attacks investigated in the current literature all aim to promote catastrophic forgetting [6]–[9], i.e., they attack the stability 
+
+of the algorithms. Complementary test-time evasion attacks against CL models have also been reported [10], whereas we consider causative poisoning attacks that target future iterations. 
+
+A. Motivation 
+
+The non-stationary data distribution of CL offers an attack surface for malicious input data at every learning iteration. The concept of catastrophic forgetting considers a malicious arXiv:2608.18976v1 [cs.CR] 19 Aug 2026 iteration to compromise the accuracy of previous iterations. However, models are designed with a particular domain pur-pose in mind, so data from subsequent iterations might already be known or collected but not yet incorporated into the training process. Consequently, an attacker aware of upcoming iterations is able to attack not only the stability, but also the 
+
+plasticity of learning new data. To the best of our knowledge, research on attacks aiming at the plasticity of CL algorithms has not been conducted to date. This research gap needs to be investigated in order to make continual learning robust against adversarial attacks, thus ensuring the safe application of CL algorithms in critical sectors. Because these attacks are designed to hinder the learning of new knowledge, we refer to them as learning blockers . The combination of learning blockers with the well-known phenomenon of catastrophic forgetting gives rise to a 
+
+catastrophic learning scenario. As an illustrative example, consider a continual learning cancer detection system that must learn to identify new types of cancer as they are discovered in research. Retraining a voluminous model would prove less efficient in terms of cost and resources than training an existing model with an additional, comparatively smaller batch of new cancer data. However, using a continual learning network introduces a novel vulnerability in the form of learning blockers: the detection of novel cancers can be hindered by manipulating the data of a single iteration. If these learning blockers also result in catastrophic forgetting, the system suffers a signifi-cant deterioration in cancer detection—a catastrophic learning scenario—potentially resulting in life-threatening misclassifi-cations within the healthcare sector. 
+
+B. Contribution 
+
+This paper makes the following contributions:  
+
+> •
+
+We introduce the novel attack scenario of catastrophic learning , which extends the well-known catastrophic for-getting problem by learning blockers that attack upcom-ing iterations.  
+
+> •
+
+We define a threat model tailored to continual learning, comprising the attacker’s notation, goal, knowledge, and capabilities.  
+
+> •
+
+We formulate six attacks that build learning blockers to induce catastrophic learning: two data-flipping attacks and four gradient-based attacks.  
+
+> •
+
+We provide a detailed evaluation of these six attacks over 4,480 simulations on MNIST and Split-CIFAR10 against three CL algorithms. In particular, we answer the following research questions: 1) Can an adversary, by manipulating the training data of a given iteration in CL algorithms, effectively degrade the model’s accuracy for that iteration or subsequent iterations? 2) Does an attack targeting the plasticity mechanism of a CL algorithm promote catastrophic forgetting? II. B ACKGROUND OF CONTINUAL LEARNING 
+
+A. Fundamentals and the Stability-Plasticity Dilemma 
+
+A deep learning algorithm approximates a target function 
+
+f ∗ that maps an input x to an output y via a parameterized classifier y = f ∗(x) ≈ f (x; θ), where the parameter vector (weights) θ is learned. Successive applications of parameter-ized layers, interleaved with non-linear activation functions, build the network, and the length of this chain gives rise to the term deep learning [11]. Continual Learning aims to enable neural networks to approximate f ∗ by learning from a sequence of datasets 
+
+D1, D 2, . . . , D T . The primary objective is to prevent catas-trophic forgetting, which occurs when the gradient updates for a new task t point in a direction antagonistic to the gradients of previous tasks. This creates the stability-plasticity dilemma :too much stability prevents the model from learning new information (loss of plasticity), while too much plasticity leads to the erasure of old knowledge (loss of stability) [12]. Three major categories of strategies mitigate catastrophic forgetting: (1) Regularization-based strategies restrict the shift of the model’s parameters in each learned iteration; (2) Replay-based strategies import data of old iterations to hinder param-eter drift, where the replayed data may be original, synthe-sized, or generated by another model; (3) Architecture-based 
+
+strategies use task-specific parameters instead of shared ones. Replay-based strategies are the most common approach [13]– [15]. 
+
+B. Continual Learning Scenarios 
+
+We focus on Class-Incremental Learning (CIL), in which the model learns new classes over time and must discriminate between all seen classes during testing without the aid of task labels. Other scenarios such as Instance-Incremental, Domain-Incremental, Task-Incremental, and Online Continual Learning are discussed in the literature [16] but are out of scope for this work. 
+
+C. Evaluated CL Algorithms 
+
+We evaluate our attacks against three representative and widely used strategies:  
+
+> •
+
+iCaRL [13]: Uses a nearest-mean-of-exemplars classi-fier and maintains a fixed-size buffer of representative images selected via herding. Catastrophic forgetting is mitigated by computing exemplars from the current data and combining them with stored exemplars, along with a distillation loss.  
+
+> •
+
+DER [14]: Employs a dynamically expandable represen-tation in which a new feature extractor is concatenated to a super-feature extractor in each iteration. Previous extractors are frozen to preserve stability, while the new extractor provides plasticity.  
+
+> •
+
+ER-ACE [15]: Builds on Experience Replay and applies an asymmetric cross-entropy loss that separates the loss functions on the buffered data and the newly arrived experience, reducing the bias toward the most recent task. Fig. 1: Exemplary representation of the catastrophic learning scenario. The attacker manipulates iteration t to disrupt the upcoming victim iteration t+1 (plasticity) and may also induce forgetting of iteration t − 1 (stability). III. T HREAT MODEL AND CATASTROPHIC LEARNING 
+
+A. Definition of Catastrophic Learning 
+
+We call our attack scenario catastrophic learning , building on the well-known catastrophic forgetting dilemma. Building 
+
+learning blockers , we are able to create a catastrophic learning scenario for new input. We define catastrophic learning as an attack that achieves a lower training and evaluation accuracy for an attacked victim iteration. In terms of CL, this attack reduces either the plasticity or the stability tremendously, so that the rate of learned data decreases. Catastrophic forgetting is a concept that focuses on prior iterations, whereas a learning blocker is an attack concept that focuses on compromising the current or an upcoming iteration. A learning blocker manipulates the data of one iteration in order to perturb the generalization of a CL model about itself or an upcoming iteration. To attack an upcoming iteration, we consider two iterations: the poisoned iteration , from which an attack is launched, and the victim iteration , which is corrupted. As shown in Figure 1, the attacker manipulates iteration t (poisoned iteration) to disrupt iteration t + 1 (victim iteration) so that it can no longer be properly learned by the continual learning model. The construction of learning blockers is bidirectional: on the one hand, the attacker focuses on upcoming iterations, compromising the plasticity of learning new data; on the other hand, the attacker can also modify the input data to induce catastrophic forgetting of past iterations. 
+
+B. Notation 
+
+Based on the machine learning threat model of Demontis et al. [17], we formulate an extended threat model for CL. A central ingredient of that model—the transferability of ad-versarial perturbations across models—has since been studied and quantified for a range of architectures and domains [18]– [20], supporting the assumption that poisoned samples crafted on one model can remain effective on another. In a training phase (1), the training data is provided to the algorithm with its correct label; in a test phase (2), unseen data is given to the algorithm and its prediction is validated. CL algorithms additionally balance between plasticity (a) and stability (b). The attacker is described by her objectives (i), her knowledge of the system and its underlying algorithms (ii), and her power to manipulate the input data (iii). Data manipulation is further subdivided into having full control over the dataset (k) or only being able to manipulate some data points (l). 
+
+C. Attacker’s Goal 
+
+Adversaries have strong incentives to manipulate CL al-gorithms, especially when they are deployed in critical en-vironments. Whereas the literature typically describes an ad-versary’s goal as the loss of prior knowledge [9], we extend the adversary’s goal to consider not only past but also future 
+
+iterations as vulnerable. New tasks are then learned with re-duced accuracy, resulting in an unusable and unreliable model. This causes a denial-of-service condition, i.e., an availability 
+
+violation of the classification system [21]. 
+
+D. Attacker’s Knowledge 
+
+We assume that the attacker knows that the model is in a continual learning scenario. Crucial to the execution of a catastrophic learning attack is the knowledge of at least one iteration of data that is learned and at least one label of another iteration. The four PGD-based attacks additionally require the model and the CL strategy itself; however, the adversary may approximate the model using the extraction technique [22], thus moving from a black-box to a white-box scenario. Such black-box transfer is particularly relevant in practice, as transferred black-box attacks have been shown to carry non-trivial risk even when the surrogate and target models differ substantially [18], [19]. 
+
+E. Attacker’s Capability 
+
+To reduce the algorithm’s learning capabilities, the attacker can modify training and test data. She is called causative if she can influence the training dataset and thus the training process, and exploratory if she can manipulate only the test data [17]. Following Biggio et al. [23], we extend the attacker capabilities: an attacker may be a malicious employee or may have gained access to the database server, giving her up to full access to the training data. Furthermore, if training is outsourced to a malicious third party, access to the model is possible without needing model extraction. If the attacker knows the purpose of the model, she can also provide manip-ulated information for future training—for example, adversar-ial patches applicable in real-world scenarios [24]–[27] may disrupt autonomous driving systems that employ continual learning, and their effect can be amplified by environmental influences on object detection [28]. IV. L EARNING BLOCKERS : A TTACK STRATEGIES 
+
+We propose six attacks that build learning blockers for CL. Due to the balance between stability and plasticity, CL offers a new range of attack vectors beyond the often-studied catastrophic forgetting dilemma. The attacks aim to investigate this balance by injecting poisoned data in one iteration to TABLE I: Overview of the proposed attacks.                      
+
+> Attack Disruption Goal Concept Taxonomy Label-Exchange Stability/Plasticity Flipping Black-Box, Poisoning Full-Tensor-Exchange Stability/Plasticity Flipping Black-Box, Poisoning Attraction-Coincident Stability PGD White-Box, Poisoning Attraction-Preceding Stability PGD White-Box, Poisoning Repulsion-Coincident Plasticity PGD White-Box, Poisoning Repulsion-Preceding Plasticity PGD White-Box, Poisoning
+
+Fig. 2: Exemplary MNIST data: a “2” labeled as “9” in the Label-Exchange attack. decrease the accuracy and thus increase the loss of itself or a following iteration. Table I summarizes the attacks. 
+
+A. Label-Exchange Attack 
+
+The label-exchange attack is similar to the label-flipping attack, but applied in the context of CL to cause learning blockades. The labels of an iteration controlled by the attacker (poisoned iteration t) are replaced by the label of another iteration (victim iteration t + α). Hence, both iterations share the same label but contain different input data, forcing the network to learn the same label with different inputs from different iterations. Figure 2 visualizes this for the MNIST dataset: a written “2” is assigned the label “9”. Because data are learned in ascending order in our test cases, the manipulated data is learned before the actual victim data with the same label. Formally, in the context of task-incremental learning each iteration t usually holds one specific label. The label-exchange attack breaks this assumption to attack plasticity: 
+
+f (xit) = yt+α = f (xjt+α) (1) where xit̸ = xjt+α and, in a non-attacked scenario, f (xit) = 
+
+yt̸ = yt+α = f (xjt+α). Due to conflicting data but coherent labels, both plasticity and stability are attacked. The underly-ing system and algorithm need not be known beyond the fact that we are in a CL environment. 
+
+B. Full-Tensor-Exchange Attack 
+
+In the full-tensor-exchange attack, the labels of the poisoned iteration remain unmodified, but the input image of the poi-soned iteration is substituted by the input image of the victim iteration. The algorithm is thus forced to learn the same input with different labels in two different iterations. Depending on the stability-plasticity dilemma, the algorithm must balance 
+
+Fig. 3: Exemplary MNIST data: originally a “2”, fully ex-changed by the tensor of a “9” in the Full-Tensor-Exchange attack. 
+
+Fig. 4: Coincident scenario: the surrogate is trained on only the victim iteration. between both iterations, which results in an unpredictable classification. Figure 3 illustrates the manipulation on MNIST, where a written “2” is fully replaced by the tensor of a written “9”. Formally, without an attack, xit̸ = xjt+α and f (xit)̸ =
+
+f (xjt+α). The attacker manipulates the data of iteration t such that 
+
+f (xit) = f (xjt+α). (2) Both stability and plasticity are compromised, and the attacker aims to lower the accuracy for both previous and upcoming iterations without needing to know which CL algorithm is used. 
+
+C. Attraction-Coincident Attack 
+
+The Attraction-Coincident attack brings the data of one iteration close to the label of another iteration using targeted PGD. As shown in Figure 4, the attacker chooses iteration t,which is learned unaltered by the CL model. She then copies the model and trains the copy on the victim iteration t + 1 .The attacker computes the loss between the victim iteration data and the poisoned iteration’s label and perturbs the victim iteration data batch using PGD so that the data batches are brought close together, choosing the perturbation with the smallest loss to the poisoned iteration’s label. The original model is then trained with the adversarially manipulated data. Bringing data batches close to the decision boundary leads to an unpredictable classification; it depends on the CL strategy whether the old or the currently learned iteration Fig. 5: Preceding scenario: the surrogate is trained on both the poisoned and the victim iteration. is preferred. This attacks both plasticity and stability. The adversary’s input ˜xit+1 is computed on the target yt via 
+
+˜xit+1 ,n +1 = Proj xt+1 +s
+
+
+
+˜xit+1 ,n − ϵ ∇Jθ (xit+1 , y t)
+
+∥∇ Jθ (xit+1 , y t)∥2
+
+
+
+(3) 
+
+˜xit+1 = arg min 
+
+> ˜xit+1 ,n
+
+ L(˜ xit+1 ,n , y t) (4) where Proj xt+1 +s denotes the projection around xt+1 with constraint s in the L2-norm. 
+
+D. Attraction-Preceding Attack 
+
+The Attraction-Preceding attack is more resource-intensive because the attacker must pretrain two iterations on a copied model (Figure 5). In return, the attacker is able to attack the victim iteration directly with the poisoned iteration. She copies the model and trains the copy first on the poisoned iteration t
+
+and then on the victim iteration t + 1 . The calculation is the same as the targeted PGD, perturbing the poisoned iteration’s data in the direction of the gradient pointing to the minimal loss to the victim iteration label. Because the produced data are pulled together in feature space, the algorithm is hindered from properly discriminating between them, lowering accuracy. The perturbation is computed as 
+
+˜xit,n +1 = Proj xt+1 +s
+
+
+
+˜xit,n − ϵ ∇Jθ (xit, y t+1 )
+
+∥∇ Jθ (xit, y t+1 )∥2
+
+
+
+(5) 
+
+˜xit = arg min 
+
+> ˜xit,n +1
+
+ L(˜ xit,n , y t+1 ) . (6) 
+
+E. Repulsion-Coincident Attack 
+
+The Repulsion-Coincident attack uses only one training phase on the copied model, reducing both computation and required knowledge. Like the Attraction-Coincident attack it attempts to build a victim iteration that prevents itself from being learned, but it attacks the plasticity of the CL strategy rather than stability. The attack pushes the victim iteration data away from the poisoned iteration’s label: when the CL algorithm is trained on the malicious data, it is forced to shift its parameters to learn the input. However, CL algorithms have a built-in stability mechanism to prevent such shifts, so the new data is prevented from being learned. The computation is identical to (3), but the attacker chooses the perturbation with the maximum loss to the targeted label: 
+
+˜xit+1 = arg max 
+
+> ˜xit+1 ,n
+
+ L(˜ xit+1 ,n , y t) . (7) 
+
+F. Repulsion-Preceding Attack 
+
+The Repulsion-Preceding attack applies PGD in our sce-nario but, opposite to the Attraction variant, maximizes the loss between the poisoned iteration’s data and the victim iteration’s label. A copy of the current model is trained with the poisoned iteration t and then the victim iteration t+1 . The loss between the poisoned iteration’s data and the victim iteration label is maximized using the iterative PGD with the L2-norm; the newly generated data with maximized loss is trained into the original model. Due to the separation of the data in feature space, the attack aims to break the possible plasticity of the algorithm: 
+
+˜xit = arg max 
+
+> ˜xit,n +1
+
+ L(˜ xit,n , y t+1 ) . (8) The perturbation step follows (5). V. M ETHODOLOGY 
+
+A. Libraries 
+
+Avalanche [29] is an open-source end-to-end continual learning library based on PyTorch. It consists of five main modules: Benchmark (datasets, splits, helpers), Training (CL strategies, losses, plugins), Evaluation (accuracy, loss, for-getting, CPU/GPU metrics), Model (models and pretrained models), and Logging .
+
+Adversarial Robustness Toolbox (ART) [30] is an open-source Python library designed to evaluate, defend, and certify the robustness of machine learning models against adversarial attacks, and to facilitate the creation of adversarial examples. ART supports TensorFlow, PyTorch, Keras, and scikit-learn, which makes it compatible with Avalanche. Among its attack methods, ART includes PGD. 
+
+B. Datasets 
+
+We use two well-established benchmarks. The MNIST 
+
+dataset [31] consists of 60 ,000 training and 10 ,000 test grayscale images of 28 ×28 pixels of handwritten digits (0–9). It is a simple dataset to develop core ideas. The CIFAR-10 
+
+dataset [32] is a subset of 80 million tiny images, containing 
+
+60 ,000 color images of 32 ×32 pixels in 10 balanced categories (5,000 training and 1,000 test images per category). It is more complex than MNIST as images contain background information. 
+
+C. Hardware 
+
+The MNIST simulations used an Nvidia GeForce RTX 2080 Ti with 11 GB of GPU memory and an Intel i7-8700K CPU. The CIFAR-10 simulations used an NVIDIA H100 GPU with 80 GB, 160 cores, and 2 TB of RAM, and an Intel Xeon Platinum 8380 CPU (up to 8 cores). (a) MNIST (b) CIFAR-10 
+
+Fig. 6: Examples of the benchmark datasets used in our evaluation. TABLE II: Parameters provided to Avalanche and ART.                         
+
+> Parameter Value Library shuffle False Avalanche seed 0Avalanche n experiences 10 Avalanche criterion Cross-entropy loss Avalanche + ART model Reduced ResNet18 / IcarlNet Avalanche + ART norm L2ART eps 6ART eps step 0.3 ART max iter 40 ART num random init 15 ART targeted True ART
+
+D. Experimental Setup 
+
+To systematically evaluate the attacks, we conduct separate simulations with and without the attack mode activated, start-ing 10 independent simulations each and aggregating results by arithmetic mean. Since Avalanche builds on PyTorch, it is non-deterministic; we exploit this non-determinism to run 10 
+
+different simulations. A fixed seed is used in Avalanche only so that tasks remain sorted in ascending order by label. For both datasets, 10 classes (tasks) are used, with the number of CL iterations set to 10 ( n_experiences ). As a basic model, the CL algorithms DER and ER-ACE are based on a reduced implementation of ResNet18 [33], [34]. The exception is iCaRL, which uses its own IcarlNet [13] implemented in Avalanche. Both the cross-entropy loss and a copy of the model are provided to ART as a proxy classifier. The PGD attack uses the L2-norm. The key parameters are listed in Table II. 
+
+E. Attack Scenarios 
+
+We perform attacks on both MNIST and CIFAR-10. MNIST requires significantly less computation and uses only the iCaRL algorithm to reduce overhead; its purpose is to assess how far the poisoned iteration can be moved from the victim iteration while still yielding a successful attack. For the label-exchange attack we start at iteration 1 (Avalanche’s iCaRL assumes exemplars from a previous iteration). For the full-tensor-exchange we start at iteration 0 up to 8. From each poisoned iteration t, we simulate every subsequent victim iteration. This results in 36 poisoned-victim combinations for label-exchange and 45 for full-tensor-exchange on MNIST, plus 10 attack-mode and 10 comparison runs each, totaling 
+
+720 and 900 evaluations respectively. TABLE III: Overview of the evaluation scenarios.                           
+
+> Attack Dataset Algorithm # Runs Label-Exchange MNIST iCaRL 720 CIFAR-10 iCaRL, DER, ER-ACE 480 Full-Tensor-Exchange MNIST iCaRL 900 CIFAR-10 iCaRL, DER, ER-ACE 480 Attraction-Coincident CIFAR-10 iCaRL, DER, ER-ACE 480 Attraction-Preceding CIFAR-10 iCaRL, DER, ER-ACE 480 Repulsion-Coincident CIFAR-10 iCaRL, DER, ER-ACE 480 Repulsion-Preceding CIFAR-10 iCaRL, DER, ER-ACE 480
+> P= 4 ,480
+
+For CIFAR-10, the victim iteration is exactly one iteration ahead of the poisoned iteration, with poisoned iterations ranging from 1 to 8 for a clear comparison across attacks. Each attack is executed using three algorithms. This yields 
+
+480 evaluations per attack. In total, 4,480 runs are performed (Table III). 
+
+F. Metrics 
+
+We use the metrics provided by Avalanche’s evaluation module:  
+
+> •
+
+Top-1 Accuracy : the arithmetic mean over an indicator function comparing the predicted and the true label, returning only the highest prediction. “Accuracy” in this paper refers to this metric.  
+
+> •
+
+Experience Forgetting : the difference between the accu-racy obtained after the first training on a task and the accuracy after subsequent training on a different task. VI. E VALUATION 
+
+We evaluate the six attacks. For each attack we compare the accuracy/forgetting of the attacked scenario (red) with a non-attacked comparison scenario (blue). On MNIST we examine all poisoned-victim combinations for the two flipping attacks; on CIFAR-10 we standardize to the immediate next iteration to enable a consistent comparison across all attack types, as the PGD-based attacks are limited to single-step predictions. 
+
+A. Evaluation on MNIST 1) Label-Exchange Attack: The label-exchange attack achieves a decreased accuracy on the evaluation set of the victim iteration for every pair of iterations. The resulting difference between the attacked and the unattacked scenario is shown in Figure 7; the attack results in a maximum decrease in accuracy of 62% . No discernible pattern emerged that favored a specific distance between iterations; instead, the susceptibility varies among datasets. By modifying the poisoned iteration, the accuracy of the victim iteration can be compromised, demonstrating that plasticity can be diminished for upcoming iterations. 
+
+2) Full-Tensor-Exchange Attack: iCaRL keeps a high accu-racy between 61% and 100% in all 450 runs in the unattacked scenario, but a huge decrease is observed when the first iteration contains the data of a subsequent iteration. The largest accuracy drop occurs when the poisoned iteration is the first iteration, and the attack is most effective when poisoned and Fig. 7: Difference between averaged top-1 accuracy of the victim iteration evaluation data of the attacked and unattacked scenario for the Label-Exchange attack (MNIST). 
+
+Fig. 8: Difference between averaged top-1 accuracy of the victim iteration evaluation data of the attacked and unattacked scenario for the Full-Tensor-Exchange attack (MNIST). victim iterations are far apart. The combination of poisoned iteration 0 and victim iteration 9 yields a total drop of 60% 
+
+(Figure 8). The closer the iterations, the less effective the attack, as seen on the right diagonal of the figure. The timing of the attack is thus crucial: early poisoned iterations yield high success probability. 
+
+B. Evaluation on CIFAR-10 1) Label-Exchange Attack: The label-exchange attack re-duces the accuracy of the victim iteration evaluation data for all considered algorithms. This is particularly evident for DER, where the attack reduces accuracy by up to 40% (Figure 9). ER-ACE and iCaRL also show a strong decrease, except for one label. The attack is successful in reducing the plasticity of all algorithms, confirming that it is an effective technique for building learning blockers to produce a catastrophic learning scenario. 
+
+2) Full-Tensor-Exchange Attack: While the accuracy of the victim iteration evaluation data increases for the first iteration of DER and remains close to the same for subsequent itera-tions, both replay-based algorithms exhibit a partial decrease in accuracy. Crucially, forgetting could be significantly increased by the attack for all three algorithms (Figure 11), reaching up to approximately 25% . The stability of the model is thus affected after the victim iteration. In summary, both plasticity and stability can be attacked; the strength in terms of plasticity depends on the algorithm, while stability can be attacked with varying strength for all algorithms.   
+
+> (a) DER (b) ER-ACE (c) iCaRL
+
+Fig. 9: Averaged top-1 accuracy of the victim iteration evalua-tion data in the Label-Exchange attack after the victim iteration (CIFAR-10).   
+
+> (a) DER (b) ER-ACE (c) iCaRL
+
+Fig. 10: Averaged top-1 accuracy of the victim iteration evaluation data in the Full-Tensor-Exchange attack after the victim iteration (CIFAR-10). 
+
+3) Attraction-Coincident Attack: For all three algorithms, the top-1 accuracy of the victim iteration evaluation dataset is reduced across iterations. Since the training dataset of the victim iteration is slightly perturbed, the accuracy of the evaluation dataset is reduced to near zero, resulting in low adversarial robustness and reduced plasticity (Figure 12). The perturbations are minor and difficult for a human observer to recognize, similar to the original PGD attack. The stability of DER could not be attacked, but the stability of ER-ACE and iCaRL could be deteriorated in over 60% of the iterations. 
+
+4) Attraction-Preceding Attack: The accuracy of the victim iteration for DER aligns with the comparison scenario. For ER-ACE, the accuracy of five out of eight combinations is marginally reduced, while one combination is increased by over 20% . For iCaRL, five of eight combinations show a marginal to significant enhancement in accuracy, while only three result in a decrease (Figure 13). This supports the thesis of Bai et al. [35] that the approximation of tasks can reduce forgetting. However, at the cost of reduced forgetting, a significant degradation on the evaluation dataset of the poisoned iteration takes place—corresponding to the behavior of the PGD attack. 
+
+5) Repulsion-Coincident Attack: All three considered algo-rithms demonstrate near-zero accuracy in the attacked scenario for the victim iteration evaluation data, with one exception in iteration 2 (Figure 14). The DER algorithm performs above 
+
+80% in the non-attacked scenario, the strongest contrast. By perturbing the data, the attack achieves a greatly reduced accuracy on the victim iteration evaluation data and is thus a successful poisoning attack that affects the plasticity of the (a) DER (b) ER-ACE (c) iCaRL 
+
+Fig. 11: Averaged forgetting of the poisoned iteration’s evalu-ation data in the Full-Tensor-Exchange attack after the victim iteration (CIFAR-10).   
+
+> (a) DER (b) ER-ACE (c) iCaRL
+
+Fig. 12: Averaged top-1 accuracy of the victim iteration evaluation data in the Attraction-Coincident attack after the victim iteration (CIFAR-10). CL algorithm. With regard to forgetting, the stability of some iterations could be affected, especially for iCaRL. For ER-ACE and iCaRL, maximizing the loss between poisoned and victim label reduces the accuracy of the unchanged poisoned data for most iterations—a decline in plasticity and stability that collectively contributes to a catastrophic learning scenario. 
+
+6) Repulsion-Preceding Attack: For DER, four out of eight simulations result in decreased accuracy on the victim iteration evaluation dataset, with an outlier showing a strong increase (Figure 15). The same outlier is observed for ER-ACE, while the remaining iterations mostly align. For iCaRL there are three outliers, two generating an increase and one a decrease. The attack simulations exhibit average forgetting values below zero for all three algorithms, indicating that the augmentation of the vector space can mitigate forgetting. Simultaneously, the attack causes a significant decrease in the accuracy of the poisoned iteration’s labels, reaching up to 70% . Depending on the iteration, the plasticity in all algorithms can be reduced by up to 10% . The changes are slight and difficult for a human observer to perceive. 
+
+C. Stealthiness of the PGD-based Attacks 
+
+Because the PGD-based attacks only slightly perturb the data, the changes are difficult for a human observer to perceive. On average, fewer than half of the 5,000 samples per CIFAR-10 iteration are perturbed (Table IV), resulting in an incon-spicuous attack through PGD. A variety of detection and mit-igation techniques for adversarial noise and patch attacks have been proposed in the literature, including high-entropy region detection [36], signal-based features [37], depth contrast [38],   
+
+> (a) DER (b) ER-ACE (c) iCaRL
+
+Fig. 13: Averaged top-1 accuracy of the victim iteration evaluation data in the Attraction-Preceding attack after the victim iteration (CIFAR-10).   
+
+> (a) DER (b) ER-ACE (c) iCaRL
+
+Fig. 14: Averaged top-1 accuracy of the victim iteration evaluation data in the Repulsion-Coincident attack after the victim iteration (CIFAR-10). statistical feature-based analysis [39], and runtime-constrained image preprocessing defenses [40]; the broader challenge of detecting adversarial examples in real-world deployments is discussed in [41]. Adapting such detectors to the continual-learning setting, where poisoned samples target not the current but a future iteration, is an open problem that our threat model makes explicit. Figure 16 exemplifies the original image, the perturbation, and the resulting adversarial image for the Attraction-Coincident attack on CIFAR-10. 
+
+D. Concluding Discussion 
+
+The comprehensive evaluation highlights the vulnerability of CL algorithms. Attacks such as Label-Exchange and Full-Tensor-Exchange consistently demonstrate their capability to impair plasticity , especially when the attack is strategically timed in early or mid-training iterations. The Full-Tensor-Exchange attack was additionally able to significantly reduce stability, suggesting that learning of new information can be effectively reduced by targeted manipulation, and that these learning blockers can induce catastrophic forgetting as a byproduct—an overall catastrophic learning scenario. The Attraction and Repulsion variants, particularly in their coincident form, expose a dual threat to both stability and plasticity. The stability of stored knowledge is not only vulnerable to direct interference but also indirectly affected through our contributed adversarial interference. A central insight is that the success and characteristics of an attack are highly dependent on the architecture and strategy of the target algorithm. Replay-based models such as iCaRL and ER-ACE exhibited unique failure patterns, often producing forgetting or (a) DER (b) ER-ACE (c) iCaRL 
+
+Fig. 15: Averaged top-1 accuracy of the victim iteration evaluation data in the Repulsion-Preceding attack after the victim iteration (CIFAR-10). TABLE IV: Averaged number of perturbed data points per algorithm (out of 5,000 per CIFAR-10 iteration).                
+
+> Attack DER ER-ACE iCaRL Attraction-Coincident 2146.45 2251.34 2324.13 Attraction-Preceding 2247.24 2317.85 2391.15 Repulsion-Coincident 2205.60 2287.51 2320.86 Repulsion-Preceding 2334.08 2310.52 2396.95
+
+reducing the learning of new tasks when exposed to adversarial manipulations. Table V summarizes the empirical effects. 
+
+E. Limitations 
+
+The Avalanche library performs sorting and checks automat-ically, which facilitates a first-time user’s work but required several attempts to circumvent these mechanisms in order to implement the label-exchange attack. The iterative nature of CL algorithms limits parallelization, making simulations time-consuming even on advanced hardware. Full simulations on all three algorithms, including comparison runs, took between one and seven days. The extent to which the order of tasks plays a role could not be investigated due to time constraints. VII. C ONCLUSION AND FUTURE WORK 
+
+This paper addresses the security of continual learning. After an introduction to continual deep learning networks and related attacks, we elaborated a major research gap: the state of the art focuses exclusively on attacks that induce catastrophic forgetting, whereas we showed that not only previous but also upcoming iterations can be attacked. We constructed a novel attack scenario, catastrophic learning , described it with an associated threat model, and defined learning blockers as the means to attack upcoming iterations. To investigate the effectiveness of learning blockers, we contributed six distinct attack implementations and evaluated them over 4,480 simulations across three CL algorithms used as benchmarks in the literature. Our findings reveal that introducing learning blockers is indeed feasible, and that these blockers also led to catastrophic forgetting in specific itera-tions. We can thus answer both research questions positively: an adversary can degrade the accuracy of current or subsequent iterations by manipulating a single iteration’s training data, and attacks aiming at plasticity can also negatively affect stability. 
+
+Future work. In both flipping attacks the entire iteration is manipulated; performing stealthier attacks on small subsets 
+
+(a) Original x (b) Perturbation δ (c) Adversarial ˜x
+
+Fig. 16: Perturbation produced by the Attraction-Coincident attack on CIFAR-10: the perturbation in (b) is added to the original in (a) to obtain the adversarial image in (c). TABLE V: Summary of the evaluation results.                          
+
+> Attack Dataset Algorithm Attacks Label-Exchange MNIST iCaRL Plasticity CIFAR-10 iCaRL, DER, ER-ACE Plasticity Full-Tensor-Exchange MNIST iCaRL Stability & Plasticity CIFAR-10 iCaRL, DER, ER-ACE Stability & Plasticity Attraction-Coincident CIFAR-10 iCaRL, DER, ER-ACE Stability & Plasticity Attraction-Preceding CIFAR-10 iCaRL, DER, ER-ACE Stability Repulsion-Coincident CIFAR-10 iCaRL, DER, ER-ACE Stability & Plasticity Repulsion-Preceding CIFAR-10 iCaRL, DER, ER-ACE Stability & Plasticity
+
+should be investigated. The efficacy of label-exchange in at-tacking plasticity, complemented by the full-tensor-exchange’s promotion of forgetting, suggests that a combination of both should be explored. Further simulations with a different task order could reveal whether the results are iteration-or data-dependent, and larger-scale simulations covering all poisoned-victim pairs for DER and ER-ACE would refine the picture. Finally, it should be investigated to what extent known unlearning strategies can help to remove malicious iterations once learning blockers have been introduced into a CL model. Relatedly, since defenses against adversarial perturbations often trade robustness for clean accuracy [42] and since edge cases generated to probe models share the spirit of our minimal-perturbation poisoning [43], future defenses should be evaluated both on the accuracy cost they impose and on their coverage of the edge-case-like samples produced by learning blockers. REFERENCES [1] N. Akhtar, A. Mian, N. Kardan, and M. Shah, “Threat of adversarial attacks on deep learning in computer vision: A survey II,” CoRR , vol. abs/2108.00401, 2021. [2] M. Zhang et al. , “CIFAR-10/CIFAR-100 dataset split for continual learning,” in NeurIPS , 2022. [3] M. McCloskey and N. J. Cohen, “Catastrophic interference in connec-tionist networks: The sequential learning problem,” in Psychology of Learning and Motivation , G. H. Bower, Ed. Academic Press, 1989, vol. 24, pp. 109–165. [4] M. Mermillod, A. Bugaiska, Y. Larochelle et al. , “The stability-plasticity dilemma in continual learning,” Psychonomic Bulletin & Review , 2019. [5] OpenAI, “GPT-4 technical report,” arXiv:2303.08774, 2023. [6] A. Abbasi, P. Nooralinejad, H. Pirsiavash, and S. Kolouri, “BrainWash: A poisoning attack to forget in continual learning,” in CVPR , 2024, pp. 24 057–24 066. [7] G. Han, J. Choi, H. Hong, and J. Kim, “Training time adversarial attack aiming the vulnerability of continual learning,” in NeurIPS ML Safety Workshop , 2022. [8] S. Kang, Z. Shi, and X. Zhang, “Poisoning generative replay in continual learning to promote forgetting,” in ICML , 2023, pp. 15 769–15 785. [9] M. Umer and R. Polikar, “Adversarial targeted forgetting in regulariza-tion and generative based continual learning models,” in IJCNN , 2021, pp. 1–8. [10] N. Bunzel and A. Schwarte, “Evasion attacks in continual learning,” in 
+
+2025 IEEE 24th International Conference on Trust, Security and Privacy in Computing and Communications (TrustCom) . IEEE, 2025, pp. 2486– 2491. [11] I. Goodfellow, Y. Bengio, and A. Courville, Deep Learning . MIT Press, 2016. [12] G. I. Parisi, R. Kemker, J. L. Part, C. Kanan, and S. Wermter, “Continual lifelong learning with neural networks: A review,” Neural Networks , vol. 113, pp. 54–71, 2019. [13] S.-A. Rebuffi, A. Kolesnikov, G. Sperl, and C. H. Lampert, “iCaRL: Incremental classifier and representation learning,” in CVPR , 2017, pp. 5533–5542. [14] S. Yan, J. Xie, and X. He, “DER: Dynamically expandable representation for class incremental learning,” in CVPR , 2021, pp. 3013–3022. [15] L. Caccia, R. Aljundi, N. Asadi, T. Tuytelaars, J. Pineau, and E. Belilovsky, “New insights on reducing abrupt representation change in online continual learning,” in ICLR , 2022. [16] L. Wang, X. Zhang, H. Su, and J. Zhu, “A comprehensive survey of continual learning: Theory, method and application,” IEEE Transactions on Pattern Analysis & Machine Intelligence , vol. 46, no. 8, pp. 5362– 5383, 2024. [17] A. Demontis, M. Melis, M. Pintor, M. Jagielski, B. Biggio, A. Oprea, C. Nita-Rotaru, and F. Roli, “Why do adversarial attacks transfer? explaining transferability of evasion and poisoning attacks,” in USENIX Security Symposium , 2019, pp. 321–338. [18] G. Klause and N. Bunzel, “Exploring the relationship between network similarity and transferability of adversarial attacks,” in 2025 IEEE 24th International Conference on Trust, Security and Privacy in Computing and Communications (TrustCom) . IEEE, 2025, pp. 1507–1512. [19] D. S. Cox and N. Bunzel, “Quantifying the risk of transferred black box attacks,” CoRR , vol. abs/2511.05102, 2025. [Online]. Available: http://arxiv.org/abs/2511.05102 [20] N. Bunzel, “On the transferability of adversarial attacks from con-volutional neural networks to variants of chatgpt4,” in 2025 55th Annual IEEE/IFIP International Conference on Dependable Systems and Networks Workshops (DSN-W) . IEEE, 2025, pp. 250–255. [21] M. Barreno, B. Nelson, A. D. Joseph, and J. D. Tygar, “The security of machine learning,” Machine Learning , vol. 81, no. 2, pp. 121–148, 2010. [22] A. Hannun et al. , “Adversarial attacks and defences: A survey,” arXiv:1810.00069, 2018. [23] B. Biggio, B. Nelson, and P. Laskov, “Poisoning attacks against support vector machines,” in ICML , 2012, pp. 1467–1474. [24] Anonymous, “Physical-world adversarial patches in the wild,” in Ac-companying Workshop , 2024. [25] N. Bunzel and L. Graner, “A concise analysis of pasting attacks and their impact on image classification,” in 53rd Annual IEEE/IFIP International Conference on Dependable Systems and Networks, DSN 2023 - Workshops, Porto, Portugal, June 27-30, 2023 . IEEE, 2023, pp. 136–140. [26] ——, “Face pasting attack,” CoRR , vol. abs/2210.09153, 2022. [27] N. Bunzel and E. Gelbing, “Adversarial patch robustness against occlu-sion: A case study,” in Proceedings of the 3rd ACM Workshop on Secure and Trustworthy Deep Learning Systems, SecTL 2025, Vietnam, August 25, 2025 . ACM, 2025. [28] N. Bunzel, M. Geißler, and G. Klause, “Measuring the effects of environmental influences on object detection,” in 2024 54th Annual IEEE/IFIP International Conference on Dependable Systems and Net-works Workshops (DSN-W) , 2024, pp. 29–31. [29] V. Lomonaco et al. , “Avalanche: An end-to-end library for continual learning,” Journal of Machine Learning Research , vol. 24, no. 39, pp. 1–13, 2023. [30] M. Pintor et al. , “Adversarial robustness toolbox (ART),” CoRR , vol. abs/1807.01069, 2018. [31] L. Deng, “The MNIST database of handwritten digit images for machine learning research,” IEEE Signal Processing Magazine , vol. 29, no. 6, pp. 141–142, 2012. [32] A. Krizhevsky, V. Nair, and G. Hinton, “CIFAR-10 (canadian institute for advanced research),” 2009. [33] D. Lopez-Paz and M. Ranzato, “Gradient episodic memory for continual learning,” in NeurIPS , 2017, pp. 6470–6479. [34] Facebook Research, “Gradient episodic memory,” https://github.com/ facebookresearch/GradientEpisodicMemory, 2025. [35] X. Bai, J. Shang, Y. Sun, and N. Balasubramanian, “Continual learning with global alignment,” in NeurIPS , 2024, pp. 69 976–69 998. [36] N. Bunzel, A. Siwakoti, and G. Klause, “Adversarial patch detection and mitigation by detecting high entropy regions,” in 53rd Annual IEEE/IFIP International Conference on Dependable Systems and Networks, DSN 2023 - Workshops, Porto, Portugal, June 27-30, 2023 . IEEE, 2023, pp. 124–128. [37] N. Bunzel, R. A. Frick, G. Klause, A. Schwarte, and J. Honermann, “Signals are all you need: Detecting and mitigating digital and real-world adversarial patches using signal-based features,” in Proceedings of the 2nd ACM Workshop on Secure and Trustworthy Deep Learning Systems, SecTL 2024, Singapore, July 2, 2024 . ACM, 2024, pp. 24–34. [38] N. Bunzel and J. Hamborg, “Adversarial patch detection: Leveraging depth contrast for enhanced threat visibility,” in 2024 54th Annual IEEE/IFIP International Conference on Dependable Systems and Net-works Workshops (DSN-W) , 2024, pp. 39–45. [39] N. Bunzel, R. A. Frick, L. Graner, N. G¨ oller, and M. Steinebach, 
+
+Statistical Feature-Based Detection of Adversarial Noise and Patch Attacks in Image and Deepfake Analysis . Cham: Springer Nature Switzerland, 2026, pp. 195–208. [40] N. Bunzel and G. Klause, “Analyzing the effectiveness of image prepro-cessing defenses under runtime constraints,” in 23nd IEEE International Conference on Trust, Security and Privacy in Computing and Communi-cations, TrustCom 2024, Sanya, China, December 17-21, 2024 . IEEE, 2024. [41] N. Bunzel, “Patching the cracks: Detecting and addressing adversarial examples in real-world applications,” in 2024 54th Annual IEEE/IFIP International Conference on Dependable Systems and Networks - Sup-plemental Volume (DSN-S) , 2024, pp. 43–46. [42] ——, “Vanillabench: The hidden accuracy cost of adversarial robustness,” CoRR , vol. abs/2607.12545, 2026. [Online]. Available: http://arxiv.org/abs/2607.12545 [43] N. Bunzel, N. G¨ oller, and R. A. Frick, “Identifying and generating edge cases,” in Proceedings of the 2nd ACM Workshop on Secure and Trustworthy Deep Learning Systems, SecTL 2024, Singapore, July 2, 2024 . ACM, 2024, pp. 16–23.

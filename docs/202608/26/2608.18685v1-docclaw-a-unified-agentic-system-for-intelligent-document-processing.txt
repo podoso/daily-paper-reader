@@ -1,0 +1,379 @@
+Title: DocClaw: A Unified Agentic System for Intelligent Document Processing
+
+URL Source: https://arxiv.org/pdf/2608.18685v1
+
+Published Time: Thu, 20 Aug 2026 00:38:15 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# DocClaw: A Unified Agentic System for Intelligent Document Processing 
+
+Siqi Xiang 1, Zhipeng Xu 2, Yufei Liu 1, Junhao Ji 2, Qing Liu 2, Zulong Chen 2, Zhibo Yang 3,Chunyan Miao 1, Shijian Lu 1∗
+
+> 1
+
+Nanyang Technological University 
+
+> 2
+
+Alibaba Group 
+
+> 3
+
+Qwen Team, Alibaba Group 
+
+Abstract 
+
+Intelligent document processing (IDP) encompasses a broad range of tasks, including optical character recognition (OCR), document question answering (DocQA), and key information extraction (KIE). Despite their distinct objectives, these tasks share a common need to perceive document content, acquire task-relevant information, and progressively refine intermedi-ate results. However, they are typically formulated as separate prediction problems and addressed by task-specific models or processing pipelines. We introduce DocClaw, a unified agen-tic system that formulates diverse intelligent document pro-cessing tasks as a shared process of interaction between an agent and a document. Given a document and a task-specific query, DocClaw follows an appropriate document skill to it-eratively identify the information required, invoke relevant tools, and integrate the resulting observations into the desired output. Throughout this process, a structured document state organizes reusable document knowledge and task-specific in-teraction context, allowing the agent to accumulate, revisit, and progressively refine information as the interaction pro-ceeds. Under this formulation, task-specific requirements are captured by the agent’s interpretation of the query objective and the corresponding document skill, while the underlying interaction loop, tool space, and document state are shared across tasks. Extensive experiments across multiple intelli-gent document processing benchmarks demonstrate that Doc-Claw effectively handles diverse tasks within a single agentic framework and achieves competitive performance compared with both general-purpose VLMs and task-specific methods. 
+
+1 Introduction 
+
+Intelligent document processing (IDP) aims to extract and reason over information jointly conveyed through textual content, spatial layout, and visual elements (Appalaraju et al. 2021; Li et al. 2021b; Tang et al. 2023). It encompasses a broad spectrum of tasks, ranging from fundamental docu-ment perception tasks such as optical character recognition (OCR) to higher-level document understanding tasks such as document question answering (DocQA) and key information extraction (KIE) (Li et al. 2021a; Xu et al. 2020; Ji et al. 2026). Existing IDP methods are predominantly developed around individual task objectives, resulting in separate pro-cessing chains for different document processing tasks. As illustrated in Figure 1, these methods typically follow one of two processing paradigms. Some methods adopt single-pass 
+
+> ∗
+
+Corresponding author. Current Multi-Step Task-Specific Paradigm (e.g., DocQA) Current Single-Pass Prediction Paradigm (e.g., OCR)       
+
+> Task -isolated
+> Processing!
+> No Knowledge
+> Accumulation !
+> state NOT
+> preserved
+> Parsing Query Document
+> Prediction
+> (Single-Pass) Answer: OCRed Text in Markdown Format e.g., OCR this page
+> Document Understanding Query Task-Specific
+> Pipeline
+> Answer: The report concludes that … e.g., What does this report conclude?
+> Existing Paradigms Limitations Our Agentic Document Processing System Advantages
+> Unified
+> Task
+> Handling!
+> Reusable
+> Document
+> Knowledge!
+> Flexibl e
+> Processing
+> Strategy!
+> Document Parsing Query and Agent
+> Document Skills Document State
+> Document Tools
+> Understanding Query
+
+Figure 1: Unlike existing single-pass and multi-step paradigms, the proposed DocClaw formulates intelligent document processing as interactions between an agent and a document, leveraging iterative tool invocation and knowl-edge accumulation across queries. prediction, directly producing task-specific outputs without intermediate processing steps (Ye et al. 2023; Xu et al. 2026; Dong et al. 2026). Others rely on multi-step task-specific pipelines, which decompose document processing into pre-defined sequences of specialized operations, progressively transforming intermediate results into the required outputs. By separating layout analysis from region-level recognition, these pipelines have achieved promising performance in doc-ument parsing (Feng et al. 2025; Duan et al. 2026; Zhang et al. 2025, 2026b; Wang et al. 2026). Despite these advances, most existing work treats intelli-gent document processing as a collection of isolated tasks, leading to two major limitations. First, there remains an ab-sence of a general framework for handling heterogeneous document processing tasks within a unified workflow. Single-pass models rely on rigid, task-specific mappings, while multi-step pipelines remain constrained by predefined task-1arXiv:2608.18685v1 [cs.CV] 19 Aug 2026 specific procedures. As a result, neither paradigm can flex-ibly adapt its processing pattern across diverse intelligent document processing tasks. Second, processing each task in-dependently hinders document knowledge from being accu-mulated, reused, and refined across queries. Document pro-cessing often involves interdependent workloads, where in-termediate results can naturally serve as reusable knowledge for subsequent operations. However, isolated task processing provides no unified mechanism for sharing such knowledge. To address the above limitations, we introduce DocClaw 1,a unified agentic document processing system that reformu-lates document processing as iterative interactions with doc-uments. Through an iterative interaction loop, DocClaw ac-tively explores document content, selects and invokes appro-priate document processing tools, updates the document state with newly acquired knowledge, and progressively refines in-termediate results into task-specific outputs. To support this iterative process, DocClaw maintains a structured document state that serves as the agent’s memory. The document state comprises document memory, which preserves document knowledge for reuse across queries with different objectives, and task memory, which tracks task-specific context through-out the current interaction. To guide the agent’s processing strategy across different query objectives, we introduce doc-ument skills, a set of task-oriented instructions that define document interaction strategies and tool-use patterns. For each query, DocClaw selects the skill corresponding to its objective to guide subsequent planning and tool invocation. We evaluate DocClaw across three representative intelli-gent document processing tasks: optical character recogni-tion (OCR), document question answering (DocQA), and key information extraction (KIE). Experiments show that Doc-Claw achieves competitive performance against both general-purpose vision-language models and task-specific methods, demonstrating its effectiveness in supporting heterogeneous document processing tasks within a unified agentic frame-work. Further ablation studies demonstrate that the document state enables effective accumulation and reuse of document knowledge, whereas document skills provide task-oriented guidance that steers the agent toward task-specific processing strategies, allowing intermediate results to be progressively improved through dedicated refinement operations tailored to different query objectives. Our main contributions are sum-marized as follows: 
+
+• We introduce DocClaw, a unified agentic framework that formulates intelligent document processing as iterative interactions between an agent and a document, allowing different query objectives to be addressed within a shared interaction loop and document processing tool space. 
+
+• We propose a structured document state that organizes persistent document knowledge and task-specific context, supporting progressive knowledge accumulation, reuse, and refinement across interactions and queries. 
+
+• We introduce document skills, a set of task-oriented in-structions that guide the agent toward appropriate pro-cessing strategies and tool-use patterns for different query 
+
+> 1Code is available at https://github.com/sxiangag/DocClaw.
+
+objectives, together with dedicated refinement operations that progressively improve intermediate results. 
+
+2 Related Work 
+
+Intelligent Document Processing Intelligent document processing aims to derive structured or semantic outputs from the textual and visual information embedded in a document. Existing intelligent document processing meth-ods can be broadly categorized into single-pass prediction and multi-step task-specific pipelines. Single-pass predic-tion utilizes specialized models for individual tasks, such as optical character recognition (OCR) and document layout analysis (DLA). These models directly predict task-specific outputs from document images, with their architectures and training objectives designed for corresponding task formula-tions (Dong et al. 2026; Team et al. 2025). While effective for their target tasks, they are generally difficult to adapt to het-erogeneous document processing objectives. Multi-step task-specific pipelines decompose document processing into a se-quence of specialized operations. For example, PaddleOCR-VL (Zhang et al. 2026b) first performs layout analysis to iden-tify and order document regions, then recognizes individual regions and assembles their outputs into a complete doc-ument transcription. Similar multi-step pipelines have also been explored for document understanding, where systems retrieve document content, inspect candidate pages, and gen-erate task-specific outputs (Sun et al. 2025a; Han et al. 2025; Zhang et al. 2026a). However, their operations are typically organized into predefined chains designed for specific tasks. Reusable capabilities such as layout analysis, text recogni-tion, and information retrieval remain embedded in separate task-specific pipelines. In contrast, DocClaw organizes these capabilities within a unified agentic framework that dynami-cally plans and invokes document processing tools according to the query objective and document state. 
+
+Agentic and Tool-Augmented Reasoning. Agentic and tool-augmented reasoning has emerged as an effective paradigm for extending language models beyond text genera-tion. Retrieval-augmented methods ground model outputs in external evidence, while tool-augmented approaches enable models to invoke external tools and incorporate the resulting observations into subsequent reasoning (Lewis et al. 2020; Yao et al. 2023; Schick et al. 2023). Multi-agent frameworks further extend this interaction paradigm by coordinating agents with different roles and capabilities to collaboratively solve complex tasks (Li et al. 2023; Wu et al. 2023; Chan et al. 2024). Despite these advances, most existing agentic systems are designed for general-purpose reasoning and treat external tools as independent resources invoked to solve a particular task. When applied to document processing, they lack a uni-fied mechanism for coordinating heterogeneous document tools and maintaining reusable document knowledge across interactions. Consequently, document knowledge acquired during parsing, retrieval, and reasoning is difficult to accu-mulate, refine, and reuse over time. To address this limitation, DocClaw introduces a unified agentic framework that coor-dinates document tools through an agentic interaction loop and maintains a structured document state to accumulate, 2refine, and reuse document knowledge across interactions. 
+
+3 Methodology 
+
+This section details our proposed framework, DocClaw. We first formulate intelligent document processing as iterative interactions between an agent and a document. We then present the document state, a structured memory that or-ganizes document knowledge and task-specific interaction context throughout the agentic interaction process. Finally, we introduce document skills, a set of task-oriented instruc-tions that guide the agent’s interaction strategies and tool-use patterns under different query objectives. 
+
+3.1 Agentic Document Processing 
+
+Formally, given an input document D and a query q, the goal of intelligent document processing is to produce a task-specific output y in response to q. Depending on the query objective, y may take different forms, such as recognized document content for OCR, extracted field-value pairs for KIE, or answers to questions for DocQA. DocClaw provides a unified formulation for these heterogeneous objectives by treating document processing as iterative interactions be-tween an agent and the document, as illustrated in Figure 2. For each user query q, DocClaw first selects a document skill k ∈ K from a predefined skill set according to the query objective. The selected skill specifies the task-oriented interaction strategy and tool-use patterns that guide subse-quent processing. The document state is then initialized as 
+
+s0 = ( m0, e 0), consisting of document memory m0 and task memory e0. For a previously unseen document, the docu-ment memory is initialized from its page images {pi}Ni=1 ,whereas for a document that has already been processed, the retained document memory serves as the starting state for the new query. In contrast, the task memory is initialized independently for each query and starts empty, i.e., e0 = ∅.After initialization, an LLM-based agent interacts with the document state using document processing tools through a ReAct-style (Yao et al. 2023) agentic loop. At each interac-tion step t, the agent first reads a condensed representation 
+
+ϕ(st) of the current document state, which summarizes what document information has already been acquired and what task-specific interaction progress has been recorded. Condi-tioned on ϕ(st), the user query q, and the selected document skill k, the planner determines the next document processing action: at = ( τt, c t) = πθ (q, k, ϕ (st)) ,τt ∈ T , ct ∈ C (τt), (1) where τt denotes the selected document processing tool, ct
+
+specifies its invocation arguments, and C(τt) denotes the valid argument space of tool τt. This allows the agent to dynamically determine the document operation to perform and its corresponding invocation arguments based on the current document state. The planned action is then executed on the document and produces an execution result rt. Rather than being used as a transient observation, the execution result is incorpo-rated into the document state to support subsequent interac-tions and preserve acquired document knowledge for future queries. We formulate the tool execution and state update as: 
+
+rt = Fτt (D, c t; st) ,st+1 = U(st, a t, r t)=
+
+
+
+Um(mt, a t, r t), Ue(et, a t, r t)
+
+
+
+,
+
+(2) where Fτt denotes the execution of the selected tool τt
+
+with invocation configuration ct, and U denotes the cor-responding state update. The update functions Um and Ue
+
+integrate reusable document knowledge and task-specific interaction context into document memory and task mem-ory, respectively. Specifically, document knowledge acquired through tool execution, such as recognized content and layout structures, is accumulated in document memory, while task-specific context is recorded in task memory. Through this process, successive tool calls progressively enrich the doc-ument state, allowing information accumulated from earlier steps to support subsequent interactions and future queries. After the state update, the planner reads ϕ(st+1 ) of the updated document state to determine the next document-processing action with reference to the user query q and the selected skill k. The interaction continues until the agent determines that sufficient information has been acquired to satisfy the query and selects an output action aout . For the 
+
+j-th query q(j) issued on the document D, the final output and the transition to the next query are formulated as: 
+
+a(j) 
+
+> Tj
+
+= aout ,y(j) = Fout 
+
+
+
+q(j), k (j), s (j)
+
+> Tj
+
+
+
+,m(j+1) 0 = m(j) 
+
+> Tj
+
+, e(j+1) 0 = ∅,
+
+(3) where Tj denotes the final interaction step for query q(j).After the output is generated, the task memory for the com-pleted query is discarded, while the document memory is retained. This allows subsequent queries to reuse previously acquired document knowledge, reducing redundant tool ex-ecution while avoiding irrelevant task-specific context. Through this iterative process, heterogeneous intelligent document processing queries share a unified agentic interac-tion loop, while task-oriented skills guide tool usage and per-sistent state updates enable document knowledge to be pro-gressively accumulated, refined, and reused across queries. 
+
+3.2 Document State 
+
+During iterative agentic interactions, tool execution produces both reusable document knowledge and task-specific context. To organize these two types of information, DocClaw main-tains a structured document state: 
+
+st = ( mt, e t) , (4) where mt denotes persistent document memory and et de-notes query-level task memory. This separation allows tool-acquired document knowledge to be continuously reused and refined while preventing task-specific context from carrying over to subsequent interactions. 32026 Annual Report 
+
+> Input Document AND User Query
+
+0         
+
+> What is the company’s
+> revenue growth in 2025, and what evidence from the report supports this conclusion?
+> User Query:
+> Select Skill
+
+1 Choose task-oriented strategy  
+
+> Selected Skill: DocQA Skill
+> Requires evidence-grounded document understanding .
+> OCR Skill
+> KIE Skill
+> DocQA Skill
+
+End-to-End Workflow of DocClaw 
+
+> Generate Output
+
+4 Return specific result       
+
+> Answer:
+> The report states that the revenue grew by
+> 12% in 2025.
+> Evidence:
+> •Page 3, Region 2
+> •Financial highlights chart
+> Task Memory
+> Iterative Tool Planning and Execution
+
+3 Build initial document memory       
+
+> Planning:
+> I need to inspect the financial highlights chart.
+> Observation:
+> Inspect: P3,Region2. “Revenue increased by 12%”
+> Tool Invocation and State Update:
+> Invoke the chart inspection tool. Update the state.
+
+Repeat until the user query is solved  
+
+> Agent Document Processing Tools
+> Invoke Read
+> Document State
+> Initialize Document State
+
+2 Build document and task memory 
+
+> Create & Load
+> …
+> Document Memory
+> Document
+> Page 1
+> Region 1 Region 2
+> Page N
+> Document Skills
+
+A                   
+
+> OCR-oriented Skill
+> •Objective: Accurate optical character recognition.
+> •Strategy: Layout-guided document parsing.
+> •Output: Page transcription in Markdown.
+> KIE-oriented Skill
+> •Objective: Extract target fields and values.
+> •Strategy: Field-guided localization and extraction.
+> •Output: Structured key-value pairs.
+> DocQA-oriented Skill
+> •Objective: Evidence-grounded question answering.
+> •Strategy: Coarse-to-fine exploration and retrieval.
+> •Output: Grounded answer.
+> Different queries trigger different interaction strategies.
+> Parsing Tools
+> Text Parsing
+> Search Tools
+> Keyword Search
+> Analysis Tools
+> Layout Analysis …
+> The agent selects and invokes tools during execution.
+
+Core Components of DocClaw 
+
+> Document State
+
+B      
+
+> Document Memory Task Memory
+> Reusable across queries Task-specific context
+> Select skill: DocQA
+> Evidence:
+> "Revenue increased by 12% in 2025"
+> Inspected:
+> Pages = 1, 2, 3, … Regions = p3-r2, …
+> …
+> History: search -> …
+> Memory organizes reusable knowledge and task-specific context.
+> Page Page Image OCRed Text Layout
+> Page 1
+> ………
+> …
+> Page 2 Page N
+> ……………
+
+C Document Processing Tools        
+
+> Table Parsing
+> Formula Parsing
+> Chart Parsing
+> Text-based RAG
+> Image-based RAG VLM Search
+> Zoom Crop Image Understanding
+> Task Memory
+> •Selected skill
+> •Evidence
+> •…
+> •History
+> •Inspected Update
+
+Figure 2: Overview of the proposed DocClaw. Given an input document and a user query, DocClaw first selects a relevant task-oriented document skill and initializes the document state for the current query. It then iteratively plans and executes document processing tools, updating the document state until the final task-specific output is generated. 
+
+Document Memory. The document memory mt organizes document knowledge acquired throughout agentic interac-tions. To preserve the intrinsic structure of documents, Doc-Claw organizes this knowledge hierarchically at the docu-ment, page, and region levels. The document level maintains global information about the document and its constituent pages. Each page stores its raw page image together with page-level information acquired during processing, such as OCRed text, layout structure, and reading order. When re-gions are identified, they are associated with their corre-sponding pages and maintain region-level information, in-cluding spatial coordinates, region type, recognized text, and other tool-produced attributes. This hierarchical organization provides a shared structure through which different document processing tools can pro-gressively add and refine document knowledge. For example, layout analysis identifies page regions and their structural properties, while recognition tools attach recognized content to the corresponding pages and regions. Document knowl-edge acquired by different tools is therefore consolidated around shared document entities and remains reusable across queries. During planning, the agent accesses the document state through ϕ(st), which retains only the information nec-essary for planning and tool selection. Therefore, contents such as page images and recognized text remain accessible to document processing tools while being omitted from the planner context, reducing planning context overhead. 
+
+Task Memory. The task memory et maintains the query-specific context throughout agentic interactions. Specifically, it records the selected document skill and progressively accu-mulates information relevant to resolving the query, such as retrieved evidence, inspected pages or regions, intermediate results, and interaction history. As tool execution proceeds, these entries are continuously updated to reflect the evolving context of the current query. As task memory contains detailed information relevant to solving the ongoing query, it provides the context required for subsequent tool planning. Therefore, the task memory 
+
+et is fully exposed to the planner at each interaction step, allowing the agent to directly access accumulated evidence, inspected targets, and interaction history when determining the next action. Once the final output is produced, the task memory is discarded. This prevents query-specific context from carrying over to subsequent queries. 
+
+3.3 Document Skills 
+
+While the agentic interaction formulates a unified execution workflow for intelligent document processing, queries with different objectives require distinct interaction strategies and tool-use patterns. To accommodate these diverse objectives, DocClaw lets the agent select a document skill from a pre-defined document skill set based on its interpretation of the query objective. Each document skill provides task-specific guidance for subsequent planning and tool selection. 4OCR-oriented Skill. The OCR-oriented skill is designed for accurate document transcription. Similar to pipeline-based methods (Zhang et al. 2026b; Wang et al. 2026), it first guides layout analysis to identify document regions and routes different region types to specific parsing tools, in-cluding text recognition, formula parsing, and table parsing. To further improve recognition quality, the skill encourages visual enhancement of low-quality regions and guides the agent to apply zoom, crop, and rotate operations before re-recognition. Together, these instructions allow the agent to adapt its processing strategy to the content and quality of re-gions through specialized parsing and visual enhancement. 
+
+DocQA-oriented Skills. DocQA-oriented skills target re-liable question answering through multimodal search and ev-idence extraction. Since distinct document-based questions may require either localized evidence inspection or broader document-level coverage, we divide the question-answering policy into two complementary skills, the DocQA inspection skill and the DocQA enumeration skill. The inspection skill adopts a coarse-to-fine searching strategy that progressively narrows candidate pages, inspects relevant content, and ex-tracts supporting evidence before answer generation. In con-trast, the enumeration skill prioritizes broad document-level coverage for questions that require document-wide reason-ing. The skill encourages the agent to maintain a sufficiently broad candidate page scope, thereby reducing the risk of insufficient page coverage in document-wide tasks such as occurrence counting and item grouping. 
+
+KIE-oriented Skill. The KIE-oriented skill targets reliable extraction of requested fields from document pages. The skill first guides direct field extraction from the page image. To mitigate errors from purely visual extraction, it then invokes OCR to obtain textual content and performs a second extrac-tion from the recognized text. For fields with inconsistent predictions, the skill further specifies conflict resolution us-ing the original page image as a reference to select the more reliable value. Overall, the skill combines visual extraction, OCR-based extraction, and image-grounded verification to improve the accuracy of structured field-value extraction. 
+
+4 Experiments 
+
+4.1 Experimental Setup 
+
+Benchmarks and Metrics. We evaluate DocClaw on three intelligent document processing tasks: optical character recognition (OCR), document question answering (DocQA), and key information extraction (KIE). The OCR evaluation is conducted on OmniDocBench v1.6 (Ouyang et al. 2025), a document parsing benchmark containing 1,651 PDF pages. Following the official evalu-ation protocol, we report the overall score and category-specific metrics that cover different document modules. Specifically, Text Edit measures normalized edit distance for recognized text, Formula CDM evaluates formula recog-nition, and Table TEDS and Table TEDS-S evaluate table recognition with and without considering cell content, re-spectively. Reading Order Edit measures the correctness of predicted reading sequences. The overall score aggregates performance across text, formula, and table modules. For DocQA, we evaluate DocClaw on MMLongBench-Doc (Ma et al. 2024), a document question answering bench-mark consisting of 135 PDF documents with an average of 47.5 pages per document. Adhering to the official evaluation protocol, raw responses are first normalized through LLM-based answer extraction using GPT-4.1 (OpenAI 2025) and evaluated by rule-based scoring against the ground-truth an-swers. Each question receives a score between 0 and 1 ac-cording to the match between the extracted prediction and the ground-truth answer, and the final accuracy is computed as the average score over all questions. For KIE, we evaluate DocClaw on the KIE subsets of OCRBench (Liu et al. 2024) and OCRBench v2 (Fu et al. 2025). OCRBench contains 200 KIE samples formulated as single-field question answering, where predictions are evalu-ated by checking whether the ground-truth answer appears in the normalized output. OCRBench v2 contains 400 English and 400 Chinese KIE samples, both requiring structured key-value extraction. Following the official evaluation protocol, predictions are parsed into normalized field-value pairs and evaluated by field-level exact matching. 
+
+Implementation Details. We instantiate DocClaw with three multimodal foundation models as agent backbones: GPT-5.2, Gemini-2.5-Flash, and Gemini-2.5-Pro. For each backbone, the same model is used for the planner and model-based document processing tools unless otherwise specified. The document processing toolset spans three categories: parsing, search, and analysis. Parsing tools recognize text, tables, formulas, and charts, primarily using PaddleOCR-VL-1.6 (Zhang et al. 2026b). Search tools support key-word search, text-based retrieval, image-based retrieval, and VLM-based visual search using BM25 (Robertson and Zaragoza 2009), ColBERT (Khattab and Zaharia 2020), ColPali (Faysse et al. 2025), and the backbone VLM, re-spectively. Analysis tools support layout analysis with PP-DocLayout v3 (Sun et al. 2025b), image understanding using the backbone VLM, and visual refinement operations such as zoom, crop, and rotate. Other model-based tools perform OCR quality inspection, evidence extraction, answer gener-ation, and candidate verification using the same backbone as the planner. All experiments are conducted on a server equipped with an Intel Xeon Platinum 8369B CPU and two NVIDIA A100 80GB GPUs. 
+
+4.2 Main Results 
+
+Optical Character Recognition. We report OCR results on OmniDocBench v1.6 in Table 1(a). DocClaw consistently outperforms all baselines across all three backbone models. Particularly, DocClaw with Gemini-2.5-Pro obtains the best overall score of 96.45, compared with PaddleOCR-VL-1.6 at 96.34. Notably, DocClaw achieves the highest scores on Formula CDM, Table TEDS, and Table TEDS-S. These im-provements are due to the targeted refinement of low-quality regions, where DocClaw applies visual enhancement opera-tions such as zoom, crop, and rotate to improve readability and increase recognition accuracy in these regions. 5(a) Optical Character Recognition Type Method Overall ↑ Text Edit ↓ Formula CDM ↑ Table TEDS ↑ Table TEDS -S ↑ Order Edit ↓
+
+General VLMs 
+
+GPT-5.2 86.59 0.114 88.21 82.95 87.93 0.193 Qwen3-VL-235B 89.78 0.063 92.55 83.07 86.75 0.166 Gemini-3-Pro 92.91 0.064 95.99 89.15 92.96 0.165 
+
+Specialized VLMs 
+
+Youtu-Parsing 93.74 0.044 93.63 92.02 95.00 0.116 
+
+Qianfan-OCR 93.90 0.040 95.08 90.53 93.31 0.130 GLM-OCR 95.22 0.044 97.18 92.83 95.39 0.133 MinerU2.5-Pro 95.75 0.036 97.45 93.42 95.92 0.120 PaddleOCR-VL-1.6 96.34 0.033 97.53 94.76 97.10 0.128 
+
+Document Agent 
+
+DocClaw w/ GPT-5.2 96.40 0.035 98.01 94.71 97.10 0.129 DocClaw w/ Gemini-2.5-Flash 96.38 0.034 97.87 94.76 97.13 0.129 DocClaw w/ Gemini-2.5-Pro 96.45 0.034 98.05 94.79 97.13 0.129 
+
+(b) Document Question Answering Type Method ALL TXT LAY CHA TAB FIG UNA General VLMs 
+
+GPT-4o 42.8 46.3 46.0 45.3 50.0 44.1 20.2 Gemini-2.5-Flash 49.6 44.0 53.2 46.0 43.9 48.2 56.7 Gemini-2.5-Pro 58.1 52.1 62.1 55.5 55.3 54.0 59.9 
+
+Specialized Pipelines 
+
+MDocAgent w/ GPT-4o 42.0 – – – – – –DocAgent w/ GPT-4o 51.8 – – – – – –DocDancer w/ Gemini-2.5-Pro 56.3 – – – – – –DocDancer w/ GPT-5.2 57.0 – – – – – –SimpleDoc w/ Gemini-2.5-Pro 56.6 48.4 54.8 55.7 56.1 52.5 59.7 SimpleDoc w/ Claude-4-Sonnet 58.6 52.1 53.3 58.3 62.4 46.9 66.5 
+
+Document Agent 
+
+DocClaw w/ GPT-5.2 59.3 61.0 60.1 58.1 60.4 55.8 58.7 DocClaw w/ Gemini-2.5-Flash 61.0 55.2 57.2 54.9 63.0 55.5 66.8 
+
+DocClaw w/ Gemini-2.5-Pro 61.5 56.4 62.9 60.1 64.8 60.3 56.0 
+
+(c) Key Information Extraction Type Method ALL OCRBench KIE OCRBench v2 KIE (EN) OCRBench v2 KIE (CN) General VLMs 
+
+GPT-5.2 69.8 88.0 76.1 45.4 Gemini-2.5-Flash 76.2 91.8 83.3 53.6 Gemini-2.5-Pro 77.0 93.5 83.3 54.3 
+
+Specialized VLMs 
+
+Qianfan-OCR 84.0 88.0 81.6 82.3 
+
+GLM-OCR 39.7 60.0 29.3 29.1 
+
+Document Agent 
+
+DocClaw w/ GPT-5.2 81.0 92.5 76.6 73.7 DocClaw w/ Gemini-2.5-Flash 84.8 93.5 84.2 76.8 DocClaw w/ Gemini-2.5-Pro 86.9 94.5 87.5 78.7 
+
+Table 1: Main results across optical character recognition, document question answering, and key information extraction. Panels (a) to (c) report results on OmniDocBench v1.6, MMLongBench-Doc, and the KIE subsets of OCRBench and OCRBench v2, respectively. For document question answering, TXT, LAY, CHA, TAB, FIG, and UNA denote text, layout, chart, table, figure, and unanswerable questions. For key information extraction, ALL averages the results across OCRBench KIE and OCRBench v2 subsets. The best and second-best results for each metric are highlighted in bold and underlined, respectively. 
+
+Document Question Answering. As shown in Table 1(b), DocClaw consistently achieves superior performance across different backbone models on MMLongBench-Doc. With Gemini-2.5-Pro, DocClaw reaches the best overall score of 61.5, outperforming the Gemini-2.5-Pro baseline by 3.4 points and all specialized pipelines. These improvements stem from two key designs. First, compared with general VLMs, DocClaw leverages document processing tools to ac-tively locate and inspect relevant content. Second, DocClaw iteratively explores the document and dynamically assesses whether the evidence accumulated in the document state is sufficient to answer the question, thereby efficiently guiding subsequent exploration based on the current document state. 
+
+Key Information Extraction. We report the KIE results in Table 1(c). DocClaw achieves competitive performance 620 40 60 80 100 120 Latency (s) 92 94 96 98 Overall Score 1 5 10 15 20 25 30 Query 28 56 84 112 140 Latency (s)  
+
+> DocClaw w/ State DocClaw w/ Skill DocClaw w/ State and Skill
+
+Figure 3: Ablation of document state and document skills. Left: overall score and average latency when using document state, document skills, or both. Right: latency across 30 con-secutive queries on the same document. across all backbone models, reaching the best overall score of 86.9 and outperforming the specialized Qianfan-OCR by 2.9 points. These improvements are attributed to the KIE docu-ment skill, which guides the agent to extract target field-value pairs through visual and OCR-based extraction, together with image-grounded verification to resolve inconsistent pairs. 
+
+4.3 Ablation Studies 
+
+Effect of Document State and Skills. We study the ef-fects of document state and document skills on a manually constructed set of 30 randomly shuffled queries over the same document, using Gemini-2.5-Flash as the backbone. The set comprises 10 queries each for OCR, DocQA, and KIE. As shown in Figure 3, adding document skills to the state-enabled variant improves the overall score from 92.85 to 97.10, demonstrating the benefit of task-oriented guidance, at the cost of additional processing latency. In contrast, adding document state to the skill-enabled variant reduces the la-tency from 95.81s to 60.70s. The right panel shows that the latency of state-enabled variants decreases as more queries are processed, as accumulated document knowledge can be reused by subsequent queries to avoid repeated processing. 
+
+Effect of OCR Refinement. We analyze the contribution of refinement operations invoked during optical character recognition, including zoom, crop, and rotate. For pages in-volving multiple operations, we evenly distribute the perfor-mance improvement among all applied operations. As shown in Figure 4, refinement is triggered on 433 pages, with zoom applied most frequently to 354 pages, compared with 77 for crop and 41 for rotate. Zoom contributes most of the overall improvement, with an attributed gain of 0.23. It is particularly effective for formula recognition, where zooming improves the visibility of small mathematical symbols. Crop and rotate operations benefit table parsing by correcting region bound-aries and orientations for more reliable recognition results. 
+
+Effect of KIE Verification. We also study the effect of OCR and verification operations in the KIE task on OCR-Bench v2, using Gemini-2.5-Pro as the vanilla VLM base-line. As shown in Figure 5, incorporating OCR improves the 0.0 0.1 0.2 0.3 0.4    
+
+> Overall Text Formula CDM Table TEDS Table TEDS-S Reading Order Zoom Crop Rotate 0100 200 300 400 Number of Pages 354 77 41
+> Zoom Crop Rotate
+
+Figure 4: Ablation of OCR refinement. Left: performance improvement attributed to zoom, crop, and rotate operations. Right: number of pages refined by each operation. Vanilla VLM DocClaw w/ OCR DocClaw w/ Verif.    
+
+> 50 60 70 80 90 100
+> Overall Score  83.3 87.2 87.5 54.3 77.5 78.7
+
+EN CN  
+
+> 020 40 60
+> Percentage (%)
+> 35.3 47.7 OCRBench v2 KIE (EN) OCRBench v2 KIE (CN)
+
+Figure 5: Ablation of OCR and verification for KIE. Left: KIE performance of the vanilla VLM and DocClaw with OCR and verification operations. Right: percentage of vanilla VLM extraction errors corrected by the verification operation. KIE score from 83.3 to 87.2 on the English subset and from 54.3 to 77.5 on the Chinese subset, while verification further improves the scores to 87.5 and 78.7, respectively. Notably, verification corrects 35.3% and 47.7% of the extraction er-rors made by the vanilla VLM on the English and Chinese subsets. These results show that the verification operation can effectively correct erroneous field predictions. 
+
+5 Conclusion 
+
+We introduced DocClaw, a unified agentic system that for-mulates intelligent document processing as interactions be-tween an agent and a document. DocClaw iteratively in-vokes processing tools under the guidance of document skills while maintaining a structured document state that organizes reusable document knowledge and task-specific interaction context. Extensive experiments demonstrate competitive per-formance against general-purpose VLMs and task-specific methods. Further ablation studies validate the effectiveness of document state and skills while demonstrating the contri-bution of task-specific refinement and verification operations. 7References 
+
+Appalaraju, S.; Jasani, B.; Kota, B. U.; Xie, Y.; and Man-matha, R. 2021. Docformer: End-to-end transformer for document understanding. In Proceedings of the IEEE/CVF international conference on computer vision , 993–1003. Chan, C.; Chen, W.; Su, Y.; Yu, J.; Xue, W.; Zhang, S.; Fu, J.; and Liu, Z. 2024. ChatEval: Towards Better LLM-based Evaluators through Multi-Agent Debate. In The Twelfth In-ternational Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net. Dong, D.; Zheng, M.; Xu, D.; Luo, C.; Zhuang, B.; Li, Y.; He, R.; Wang, H.; Zhang, W.; Wang, W.; Wang, Y.; Xiong, X.; Zheng, A.; Zuo, X.; Ou, Z.; Gu, J.; Guo, Q.; Wu, J.; Yin, D.; and Shen, D. 2026. Qianfan-OCR: A Unified End-to-End Model for Document Intelligence. CoRR , abs/2603.13398. Duan, S.; Xue, Y.; Wang, W.; Su, Z.; Liu, H.; Yang, S.; Gan, G.; Wang, G.; Wang, Z.; Yan, S.; Jin, D.; Zhang, Y.; Wen, G.; Wang, Y.; Zhang, Y.; Zhang, X.; Hong, W.; Cen, Y.; Yin, D.; Chen, B.; Yu, W.; Gu, X.; and Tang, J. 2026. GLM-OCR Technical Report. CoRR , abs/2603.10910. Faysse, M.; Sibille, H.; Wu, T.; Omrani, B.; Viaud, G.; Hude-lot, C.; and Colombo, P. 2025. ColPali: Efficient Docu-ment Retrieval with Vision Language Models. In The Thir-teenth International Conference on Learning Representa-tions, ICLR 2025, Singapore, April 24-28, 2025 . OpenRe-view.net. Feng, H.; Wei, S.; Fei, X.; Shi, W.; Han, Y.; Liao, L.; Lu, J.; Wu, B.; Liu, Q.; Lin, C.; Tang, J.; Liu, H.; and Huang, C. 2025. Dolphin: Document Image Parsing via Heterogeneous Anchor Prompting. In Che, W.; Nabende, J.; Shutova, E.; and Pilehvar, M. T., eds., Findings of the Association for Computational Linguistics, ACL 2025, Vienna, Austria, July 27 - August 1, 2025 , volume ACL 2025 of Findings of ACL ,21919–21936. Association for Computational Linguistics. Fu, L.; Kuang, Z.; Song, J.; Huang, M.; Yang, B.; Li, Y.; Zhu, L.; Luo, Q.; Wang, X.; Lu, H.; Li, Z.; Tang, G.; Shan, B.; Lin, C.; Liu, Q.; Wu, B.; Feng, H.; Liu, H.; Huang, C.; Tang, J.; Chen, W.; Jin, L.; Liu, Y.; and Bai, X. 2025. OCR-Bench v2: An Improved Benchmark for Evaluating Large Multimodal Models on Visual Text Localization and Rea-soning. In Belgrave, D.; Zhang, C.; Montoya, L. N.; Lin, H.; Pascanu, R.; Koniusz, P.; Ghassemi, M.; Chen, N.; Ruíz, I. V. M.; and Loaiza-Bonilla, A., eds., Advances in Neu-ral Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2025, NeurIPS 2025, San Diego, CA, USA, December 2-7, 2025 / Mexico City, Mexico, November 30 - December 5, 2025 .Han, S.; Xia, P.; Zhang, R.; Sun, T.; Li, Y.; Zhu, H.; and Yao, H. 2025. MDocAgent: A Multi-Modal Multi-Agent Frame-work for Document Understanding. CoRR , abs/2503.13964. Ji, Y.; Xu, Z.; Liu, Z.; Chen, Z.; Zhang, Q.; Yang, Z.; Lin, J.; Gu, Y.; Yu, G.; and Sun, M. 2026. UNIKIE-BENCH: Benchmarking Large Multimodal Models for Key Informa-tion Extraction in Visual Documents. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 6331–6352. Khattab, O.; and Zaharia, M. 2020. ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT. In Huang, J. X.; Chang, Y.; Cheng, X.; Kamps, J.; Murdock, V.; Wen, J.; and Liu, Y., eds., Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval, SIGIR 2020, Virtual Event, China, July 25-30, 2020 , 39–48. ACM. Lewis, P.; Perez, E.; Piktus, A.; Petroni, F.; Karpukhin, V.; Goyal, N.; Küttler, H.; Lewis, M.; Yih, W.; Rocktäschel, T.; Riedel, S.; and Kiela, D. 2020. Retrieval-Augmented Gen-eration for Knowledge-Intensive NLP Tasks. In Larochelle, H.; Ranzato, M.; Hadsell, R.; Balcan, M.; and Lin, H., eds., 
+
+Advances in Neural Information Processing Systems 33: An-nual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual .Li, G.; Hammoud, H.; Itani, H.; Khizbullin, D.; and Ghanem, B. 2023. CAMEL: Communicative Agents for "Mind" Ex-ploration of Large Language Model Society. In Oh, A.; Naumann, T.; Globerson, A.; Saenko, K.; Hardt, M.; and Levine, S., eds., Advances in Neural Information Process-ing Systems 36: Annual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .Li, M.; Lv, T.; Chen, J.; Cui, L.; Lu, Y.; Florencio, D.; Zhang, C.; Li, Z.; and Wei, F. 2021a. Trocr: Transformer-based optical character recognition with pre-trained models. arXiv preprint arXiv:2109.10282 .Li, Y.; Qian, Y.; Yu, Y.; Qin, X.; Zhang, C.; Liu, Y.; Yao, K.; Han, J.; Liu, J.; and Ding, E. 2021b. Structext: Struc-tured text understanding with multi-modal transformers. In 
+
+Proceedings of the 29th ACM international conference on multimedia , 1912–1920. Liu, Y.; Li, Z.; Huang, M.; Yang, B.; Yu, W.; Li, C.; Yin, X.; Liu, C.; Jin, L.; and Bai, X. 2024. OCRBench: on the hidden mystery of OCR in large multimodal models. Sci. China Inf. Sci. , 67(12). Ma, Y.; Zang, Y.; Chen, L.; Chen, M.; Jiao, Y.; Li, X.; Lu, X.; Liu, Z.; Ma, Y.; Dong, X.; Zhang, P.; Pan, L.; Jiang, Y.; Wang, J.; Cao, Y.; and Sun, A. 2024. MMLONGBENCH-DOC: Benchmarking Long-context Document Understanding with Visualizations. In Globersons, A.; Mackey, L.; Belgrave, D.; Fan, A.; Paquet, U.; Tomczak, J. M.; and Zhang, C., eds., 
+
+Advances in Neural Information Processing Systems 37: An-nual Conference on Neural Information Processing Systems 2024, NeurIPS 2024, Vancouver, BC, Canada, December 10 - 15, 2024 .OpenAI. 2025. Introducing GPT-4.1 in the API. https:// openai.com/index/gpt-4-1/. Ouyang, L.; Qu, Y.; Zhou, H.; Zhu, J.; Zhang, R.; Lin, Q.; Wang, B.; Zhao, Z.; Jiang, M.; Zhao, X.; Shi, J.; Wu, F.; Chu, P.; Liu, M.; Li, Z.; Xu, C.; Zhang, B.; Shi, B.; Tu, Z.; and He, C. 2025. OmniDocBench: Benchmarking Diverse PDF Document Parsing with Comprehensive Annotations. In IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2025, Nashville, TN, USA, June 11-15, 2025 , 24838–24848. Computer Vision Foundation / IEEE. 8Robertson, S. E.; and Zaragoza, H. 2009. The Probabilistic Relevance Framework: BM25 and Beyond. Found. Trends Inf. Retr. , 3(4): 333–389. Schick, T.; Dwivedi-Yu, J.; Dessì, R.; Raileanu, R.; Lomeli, M.; Hambro, E.; Zettlemoyer, L.; Cancedda, N.; and Scialom, T. 2023. Toolformer: Language Models Can Teach Them-selves to Use Tools. In Oh, A.; Naumann, T.; Globerson, A.; Saenko, K.; Hardt, M.; and Levine, S., eds., Advances in Neu-ral Information Processing Systems 36: Annual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .Sun, L.; He, L.; Jia, S.; He, Y.; and You, C. 2025a. DocAgent: An Agentic Framework for Multi-Modal Long-Context Document Understanding. In Christodoulopoulos, C.; Chakraborty, T.; Rose, C.; and Peng, V., eds., Proceed-ings of the 2025 Conference on Empirical Methods in Natural Language Processing, EMNLP 2025, Suzhou, China, Novem-ber 4-9, 2025 , 17701–17716. Association for Computational Linguistics. Sun, T.; Cui, C.; Du, Y.; and Liu, Y. 2025b. PP-DocLayout: A Unified Document Layout Detection Model to Accelerate Large-Scale Data Construction. CoRR , abs/2503.17213. Tang, Z.; Yang, Z.; Wang, G.; Fang, Y.; Liu, Y.; Zhu, C.; Zeng, M.; Zhang, C.; and Bansal, M. 2023. Unifying vision, text, and layout for universal document processing. In Pro-ceedings of the IEEE/CVF conference on computer vision and pattern recognition , 19254–19264. Team, H. V.; Lyu, P.; Wan, X.; Li, G.; Peng, S.; Wang, W.; Wu, L.; Shen, H.; Zhou, Y.; Tang, C.; Yang, Q.; Peng, Q.; Luo, B.; Yang, H.; Zhang, X.; Zhang, J.; Peng, H.; Yang, H.; Xie, S.; Zhou, L.; Pei, G.; Wu, B.; Yan, R.; Wu, K.; Yang, J.; Wang, B.; Liu, K.; Zhu, J.; Jiang, J.; Linus; Hu, H.; and Zhang, C. 2025. HunyuanOCR Technical Report. CoRR ,abs/2511.19575. Wang, B.; He, T.; Ouyang, L.; Wu, F.; Zhao, Z.; Chu, T.; Qu, Y.; Jin, Z.; Zeng, W.; Miao, Z.; Xu, B.; Niu, J.; Cai, M.; Qiu, J.; Zhang, Q.; Ma, D.; Sun, Y.; Dong, H.; Zhang, W.; Xiao, J.; Shi, J.; Liao, P.; Zhao, X.; Zhong, H.; Wei, L.; Yu, J.; Yang, J.; Li, W.; Wang, S.; Wu, Q.; Zhou, X.; Li, W.; Li, Z.; Tu, Z.; Wu, J.; Wu, L.; Xu, C.; Chen, K.; Zhang, W.; Qiao, Y.; Zhou, B.; Lin, D.; and He, C. 2026. MinerU2.5-Pro: Pushing the Limits of Data-Centric Document Parsing at Scale. CoRR ,abs/2604.04771. Wu, Q.; Bansal, G.; Zhang, J.; Wu, Y.; Zhang, S.; Zhu, E.; Li, B.; Jiang, L.; Zhang, X.; and Wang, C. 2023. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Con-versation Framework. CoRR , abs/2308.08155. Xu, Y.; Li, M.; Cui, L.; Huang, S.; Wei, F.; and Zhou, M. 2020. LayoutLM: Pre-training of Text and Layout for Docu-ment Image Understanding. In Gupta, R.; Liu, Y.; Tang, J.; and Prakash, B. A., eds., KDD ’20: The 26th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, Vir-tual Event, CA, USA, August 23-27, 2020 , 1192–1200. ACM. Xu, Z.; Chen, Z.; Liu, Q.; Ji, J.; Hu, J.; Yu, Y.; Wan, J.; Tang, J.; and Li, Z. 2026. Enhancing Large Multimodal Models in Key Information Extraction via Scene-Aware Document Synthesis. arXiv preprint arXiv:2607.04636 .Yao, S.; Zhao, J.; Yu, D.; Du, N.; Shafran, I.; Narasimhan, K. R.; and Cao, Y. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net. Ye, J.; Hu, A.; Xu, H.; Ye, Q.; Yan, M.; Xu, G.; Li, C.; Tian, J.; Qian, Q.; Zhang, J.; et al. 2023. Ureader: Universal ocr-free visually-situated language understanding with multimodal large language model. In Findings of the Association for Computational Linguistics: EMNLP 2023 , 2841–2858. Zhang, J.; Liu, Y.; Wu, Z.; Pang, G.; Ye, Z.; Zhong, Y.; Ma, J.; Wei, T.; Xu, H.; Chen, W.; Wang, Z.; Ji, Q.; Zhou, F.; Zhang, Q.; Hu, Y.; Liu, J.; Li, Z.; Zhang, Z.; Liu, Q.; and Bai, X. 2025. MonkeyOCR v1.5 Technical Report: Unlocking Robust Document Parsing for Complex Patterns. CoRR ,abs/2511.10390. Zhang, Q.; Lv, X.; Wu, J.; Li, B.; Tao, Z.; Yan, G.; Zhang, H.; Wang, B.; Xu, J.; Mi, H.; and Zhang, W. 2026a. DocDancer: Towards Agentic Document-Grounded Information Seeking. 
+
+CoRR , abs/2601.05163. Zhang, Z.; Liu, H.; Liang, S.; Zhang, Y.; Xiang, Y.; Liu, J.; Sun, T.; Lin, M.; Zhang, Y.; Zhou, C.; Gao, T.; Cui, C.; Liu, Y.; Yu, D.; and Ma, Y. 2026b. PaddleOCR-VL-1.6: Expanding the Frontier of Document Parsing with Under-Optimized Region Refinement and Progressive Post-Training. arXiv:2606.03264. 9

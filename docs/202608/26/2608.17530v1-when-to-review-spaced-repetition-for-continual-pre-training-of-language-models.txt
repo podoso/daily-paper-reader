@@ -1,0 +1,550 @@
+Title: When to Review: Spaced Repetition for Continual Pre-Training of Language Models
+
+URL Source: https://arxiv.org/pdf/2608.17530v1
+
+Published Time: Wed, 19 Aug 2026 00:42:59 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# When to Review: Spaced Repetition for Continual Pre-Training of Language Models 
+
+Alankar Atreya 1 Devesh Batra 1 Yoages Kumar Mantri 1 Geremy Bantug 1
+
+Greig A Cowan 1 Raad Khraishi 1,2 
+
+> 1
+
+NatWest AI Research 2University College London 
+
+Abstract 
+
+Continual pre-training of large language mod-els must acquire new information without eras-ing old knowledge. Existing replay methods often choose a global old/new mixture and sam-ple uniformly, ignoring that examples differ in how quickly they are forgotten. We for-mulate continual pre-training as adaptive re-view scheduling: the training loop should de-cide not only how much history to replay, but which examples should return at each step. We introduce Spaced Repetition Training (SRT), a continual learning framework inspired by cognitive science, which schedules sample-rehearsal using the SuperMemo-2 (SM-2) algo-rithm. SRT maintains per-example review state, maps per-example perplexity to a recall-quality signal, and schedules historical examples for retention and new examples for consolidation while leaving the model, objective, and opti-mizer unchanged. On temporally separated Wikipedia and code corpora, SRT improves the stability-plasticity trade-off, recovering 5 to 37 percentage points of old-knowledge accu-racy lost by naive continual pre-training across model scales while preserving or improving new-knowledge acquisition. At larger scale, SRT preserves broad benchmark performance that naive continual pre-training and uniform replay substantially degrade. Experiments with vision and tabular data further suggest that the scheduling principle extends beyond language when paired with an appropriate recall signal. 
+
+1 Introduction 
+
+Large language models are increasingly updated after pre-training as facts change, software ecosys-tems evolve, and new domain corpora appear (Gu-rurangan et al., 2020; Ibrahim et al., 2024). Con-tinual pre-training (CPT) is cheaper than training from scratch, but updates on new data can erase pre-viously learned knowledge: catastrophic forgetting (McCloskey and Cohen, 1989; Kirkpatrick et al., 2017). In LLMs, this forgetting can also degrade broad capabilities such as multitask reasoning and factual recall (Li and Lee, 2024; Ibrahim et al., 2024). Replay is an attractive mitigation strategy be-cause it is architecture-agnostic and scales naturally to LLM training (Rolnick et al., 2019; Chen et al., 2025; Li et al., 2025). Most replay methods, how-ever, operate at the mixture level: they choose how much historical data to include and then sample old examples uniformly or by a fixed curriculum. This ignores heterogeneity in retention difficulty. Some examples remain stable after one review, while oth-ers drift quickly under interference from new learn-ing. Uniform replay can therefore spend budget on already-retained examples while missing fragile ones. We instead treat CPT as an adaptive review-scheduling problem. Drawing on spaced repeti-tion and difficulty-adaptive memory consolidation (Ebbinghaus, 1885; Cepeda et al., 2006), we ask which examples should be reviewed at the current training step, not only how much old data should be mixed in. Algorithms such as SuperMemo-2 already operationalize this idea for human memory through per-item review state (Wozniak, 1998); we adapt the same principle to language model train-ing. We introduce Spaced Repetition Training 
+
+(SRT), a drop-in scheduler for continual pre-training. Each replayable example maintains an ease factor, review count, interval, and due step. At review time, per-example perplexity is converted into a recall-quality score that updates the next interval: difficult examples return sooner, while confidently retained examples receive longer gaps. The scheduler applies symmetrically to historical examples for retention and new examples for con-solidation, and it leaves the model architecture, objective, and optimizer unchanged. 1arXiv:2608.17530v1 [cs.AI] 18 Aug 2026 Our contributions are as follows: 
+
+• We formulate replay-based LLM continual pre-training as adaptive review scheduling, motivated by spaced repetition and heteroge-neous retention difficulty. • We propose SRT, a sample-level SuperMemo-2 scheduler that converts per-example per-plexity into recall quality and schedules both old and new examples without changing the model, loss, or optimizer. • We show that SRT mitigates catastrophic forgetting more effectively than naive CPT and uniform replay while maintaining new-knowledge acquisition on temporally sepa-rated Wikipedia and code corpora, and that it preserves broad benchmark performance that both baselines degrade. Additional vision and tabular experiments suggest that the schedul-ing principle generalises beyond language. 
+
+2 Related Work 
+
+Catastrophic forgetting. Sequential training can overwrite representations needed for earlier tasks (McCloskey and Cohen, 1989). Standard mitiga-tion strategies include regularization, which pro-tects important parameters (Kirkpatrick et al., 2017; Zenke et al., 2017); architectural isolation or ex-pansion (Rusu et al., 2016; Hung et al., 2019); and replay, which interleaves previous examples with new data (Rolnick et al., 2019; Parisi et al., 2019). For LLM CPT, replay is especially practical be-cause task boundaries are weak, parameter growth is undesirable, and gradient-level regularization is expensive. SRT remains within the replay family but shifts the design question from mixture size to per-example review timing. 
+
+Continual pre-training of LLMs. Domain-adaptive pre-training can improve target-domain performance while shifting models away from prior capabilities (Gururangan et al., 2020). Recent CPT work studies learning-rate rewarming and re-decay, data mixtures, replay ratios, curricula, and temporal benchmarks (Ibrahim et al., 2024; Chen et al., 2025; Li et al., 2025). Other studies show that continual updates can degrade established benchmarks such as multitask language understanding and factual recall (Li and Lee, 2024). These methods primarily tune optimization or mixture-level replay. SRT is complementary: given a replay budget, it decides which stored examples should be reviewed now. 
+
+Human-inspired replay. SuperMemo-2 maps recall quality to expanding inter-review intervals through per-item state (Wozniak, 1998). Re-cent neural methods import related ideas via self-synthesized rehearsal, Leitner-style queues, or forgetting-curve replay (Huang et al., 2024; M’hamdi and May, 2024; Feng et al., 2026). SRT differs by maintaining SuperMemo-2 state for indi-vidual training examples and deriving recall quality directly from per-example perplexity computed in the standard forward pass, requiring no synthesis pipeline or held-out probe set. 
+
+3 Method 
+
+3.1 Problem Setup 
+
+Let pθ denote a language model with parame-ters θ initialized from a pre-trained checkpoint. We consider a continual pre-training setting in which the model is updated on an incoming cor-pus Dnew = {xnew  
+
+> j
+
+} while also retaining access to a historical corpus Dold = {xold  
+
+> i
+
+} representing knowledge acquired before the update. The goal of continual pre-training is not simply to minimize next-token loss on Dnew , but to acquire new infor-mation while preserving performance on Dold . We express this as a weighted combination of evalua-tion risks, 
+
+min  
+
+> θ′
+
+λ Rold (θ′) + (1 − λ) Rnew (θ′), (1) where Rold and Rnew are evaluation risks on old and new data respectively, and λ ∈ [0 , 1] controls the stability-plasticity trade-off. In practice, training operates under a finite bud-get of optimization steps and tokens. At step t,a mini-batch Bt of size B must allocate exposure between old and new examples, 
+
+Bt = Bold  
+
+> t
+
+∪ B new  
+
+> t
+
+, |B old  
+
+> t
+
+| + |B new  
+
+> t
+
+| ≤ B. (2) Naive continual pre-training sets |B old  
+
+> t
+
+| = 0 and spends the entire batch on Dnew . Replay-based methods instead allocate a fraction of each batch to examples drawn from Dold . The central design question is therefore not only how much of each batch to allocate to old data, but which specific examples should be drawn from each pool at step 
+
+t, given that retention difficulty varies across both corpora. 
+
+3.2 Spaced Repetition Training 
+
+SRT addresses this question by maintaining review state and scheduling using the SuperMemo-2 al-2gorithm (Wozniak, 1998). Each example xi ∈Dold ∪ D new is associated with a review state 
+
+si(t) =  Ei(t), n i(t), I i(t), d i(t), (3) where Ei is the ease factor controlling interval growth, ni is the number of consecutive success-ful reviews, Ii is the current inter-review interval measured in training steps, and di is the next due step. Following standard SuperMemo-2 initializa-tion, we set Ei = 2 .5, ni = 0 , and Ii = 1 , with initial due times staggered uniformly over the first few training steps to avoid reviewing all items si-multaneously. State is maintained symmetrically for examples in Dold and Dnew , so SRT applies the same scheduling logic to historical examples (where it determines replay timing) and to incom-ing examples (where it determines consolidation timing). 
+
+Due-set sampling. At training step t, we define the sets of examples in Dold and Dnew whose next review is due, 
+
+Mold  
+
+> t
+
+= {xi ∈ D old : di ≤ t}, (4) 
+
+Mnew  
+
+> t
+
+= {xj ∈ D new : dj ≤ t}. (5) The training batch at step t allocates ⌊ρB ⌋ slots to due old examples sampled from Mold  
+
+> t
+
+and the remaining slots to due new examples sampled from 
+
+Mnew  
+
+> t
+
+, where ρ ∈ [0 , 1] is the target old-exposure fraction. Both old and new examples are therefore selected by the scheduler, not only those drawn from Dold . If either due set is empty at step t, the unused budget is released to the other stream, ensur-ing that scheduling never blocks training progress. 
+
+Perplexity-derived recall quality. When a se-lected example xi = (xi, 1, . . . , x i,T i ) is re-viewed, we compute its token-average negative log-likelihood under the current model, 
+
+Li(t) = − 1
+
+TiTiX
+
+> k=1
+
+log pθt (xi,k | xi,<k ), (6) and its perplexity PPL i(t) = exp( Li(t)) . Per-plexity is computed during the standard forward pass and requires no auxiliary evaluation. We con-vert perplexity into the discrete recall quality score 
+
+qi(t) ∈ { 1, 2, 3, 4, 5} used by SuperMemo-2 via monotonically increasing thresholds 0 < τ 5 <τ4 < τ 3 < τ 2 < τ 1 that partition model perfor-mance into quality levels, 
+
+qi(t) = max 0, 5 −
+
+> 5
+
+X
+
+> k=1
+
+1[PPL i(t) ≥ τk]
+
+!
+
+.
+
+(7) Lower perplexity yields higher recall quality, with 
+
+q = 5 corresponding to fluent retention and q = 0 
+
+to essentially no model on the example. Threshold values were selected empirically; Section 6 analy-ses sensitivity to their scaling. The recall quality qi(t) is computed from the training-time loss at the current parameters θt, that is, from the same forward pass used to obtain the gradient, before the optimizer step that produces 
+
+θt+1 . It therefore reflects how well the model re-tained xi prior to the current update, not how well it fits xi after being trained on it. For non-generative models where perplexity is not defined, the same scheduler can be applied by replacing PPL i(t) with an alternative confidence-based signal. Details of this adaptation are provided in Appendix C.2. 
+
+Review state update. Given recall quality qi, the ease factor is updated according to the SuperMemo-2 rule, 
+
+∆( qi) = 0 .1 − (5 − qi) 0.08 + 0 .02(5 − qi),
+
+(8) 
+
+Ei ← max  1.3, E i + ∆( qi). (9) If qi < 3, the example is treated as forgotten and we reset ni ← 0 and Ii ← 1, scheduling immediate re-review. Otherwise we increment ni and update the interval according to 
+
+Ii ←
+
+
+
+1, ni = 1 ,
+
+6, ni = 2 ,
+
+⌈IiEi⌉, ni > 2.
+
+(10) The next review is scheduled by setting di ← t+Ii.The model parameters θ are updated using standard next-token cross-entropy loss on Bt, identical to the underlying language modelling objective. SRT therefore introduces no additional loss terms, no architectural changes, and no learned parameters beyond those already present in pθ. The full proce-dure is summarized in Algorithm 1. 
+
+4 Experimental Setup 
+
+4.1 Corpora 
+
+We construct temporally grounded corpora in two domains where knowledge evolves measurably 3Algorithm 1 One SRT training step.                                                                                
+
+> Require: corpora Dold ,Dnew , old-exposure cap ρ, batch size
+> B, step t
+> 1: Mold
+> t← { xi∈ D old :di≤t}▷due old examples 2: Mnew
+> t← { xj∈ D new :dj≤t}▷due new examples 3: bold ←min  |M old
+> t|,⌊ρB ⌋
+> 4: sample Bold
+> t⊆ M old
+> twith |B old
+> t|=bold
+> 5: sample Bnew
+> t⊆ M new
+> tto fill remaining slots 6: Bt← B old
+> t∪ B new
+> t
+> 7: for xi∈ B tdo ▷scored at θt, before the update 8: compute PPL i(t)via Eq. 6 and qi(t)via Eq. 7 9: end for
+> 10: update θon Btusing next-token loss ▷ θ t→θt+1
+> 11: for xi∈ B tdo ▷update review state only 12: update Ei,ni,Iivia Eqs. 9–10 13: set di←t+Ii
+> 14: end for
+
+over time: encyclopedic text and source code. Both domains are split into an old corpus Dold represent-ing information available before a temporal cutoff and a new corpus Dnew representing post-cutoff information, enabling evaluation that distinguishes retained knowledge from acquired knowledge. 
+
+Wikipedia. For encyclopedic text, we align timestamped English Wikipedia snapshots by nor-malized article title, producing aligned old-new pairs corresponding to the same entity at different points in time. This formulation follows tempo-ral knowledge benchmarks that evaluate whether language models can acquire updated information while retaining prior knowledge (Jang et al., 2022; Cheng et al., 2024; Li et al., 2025). The new-data corpus is extracted from sentence-level diffs be-tween aligned pairs, capturing inserted spans and the updated side of modified spans, which pre-serves localized factual updates while filtering un-changed text. Full snapshot selection, topic stratifi-cation, and diff-extraction details are provided in Appendix A.1. 
+
+Code. For source code, we construct temporally separated corpora from GitHub repositories se-lected by creation and commit timestamps. Old examples are drawn from repositories that existed before January 2022, and new examples from repos-itories created after July 2024, with verification that 
+
+Dnew repositories did not exist before the cutoff window. Repositories span thirteen widely used programming languages. Unlike the Wikipedia cor-pus, old and new code examples are not aligned revisions of the same artifact; they represent tem-porally distinct samples from evolving software distributions, reflecting how software ecosystems shift through new libraries, repositories, and con-ventions rather than incremental edits to existing artifacts. Full repository selection criteria and lan-guage coverage are provided in Appendix A.2. 
+
+Corpus statistics. Corpus sizes for both domains are summarized in Appendix A (Table 8). For Wikipedia, the old and new training corpora each contain 31 ,729 aligned examples. For code, the old corpus contains 22 ,055 examples and the new corpus contains 70 ,643 examples. 
+
+4.2 Models and Training 
+
+We evaluate SRT across two model scales. Smaller-scale experiments use TinyLlama-1.1B-Chat (Zhang et al., 2024), which provides a fast iteration platform for ablations and main compar-isons. Larger-scale experiments use Llama-3.2-3B-Instruct (Grattafiori et al., 2024; Meta AI, 2024), a 3-billion-parameter instruction-tuned model re-leased by Meta with a knowledge cutoff of De-cember 2023. We continually pre-train from the instruction-tuned checkpoint rather than a base checkpoint because updating already-deployed in-struct models on fresh data is the realistic practi-tioner scenario our method targets. All conditions use the same continual pre-training recipe, following established practice for replay-based LLM continual pre-training (Ibrahim et al., 2024). We use causal language model-ing with the next-token cross-entropy objective, AdamW optimization, linear learning-rate schedul-ing with warmup and decay, gradient clipping, and bfloat16 precision where supported. Hyperparame-ters were tuned on a held-out development split and held fixed across all baselines and SRT conditions to ensure that performance differences reflect the replay strategy rather than optimization differences. Complete hyperparameter values are provided in Appendix B. 
+
+4.3 Baselines 
+
+We compare four conditions against the original pre-trained checkpoint. Base is the pre-trained model before continual update. It establishes the starting point for both old-knowledge retention and new-knowledge acquisition. CPT is naive con-tinual pre-training, where each training batch is drawn entirely from Dnew . This represents the stan-dard no-replay baseline and exhibits the canonical forgetting failure mode. Uniform Replay draws each batch using a nominal 20/80 old/new expo-sure ratio, with old examples sampled uniformly at 4random from Dold and new examples sampled uni-formly at random from Dnew . This baseline shares the same nominal replay budget and pool struc-ture as SRT but uses no per-example scheduling for either pool, isolating the contribution of adap-tive review timing. PPL-Prioritised is a difficulty-aware replay baseline that isolates whether SRT’s gains come from spaced-repetition scheduling or simply from attending to hard examples. It uses the same 20/80 old/new exposure ratio as Uniform Replay and SRT, but within each pool it selects the highest-perplexity examples rather than sampling uniformly, without maintaining any SM-2 review state or interval scheduling. It therefore replays the currently hardest examples at every step. Be-cause its role is to separate difficulty-prioritisation from interval-based scheduling rather than to serve as a scale-general baseline, we evaluate it on both TinyLlama settings (Wikipedia and code) as a diag-nostic control. SRT uses the same nominal 20/80 old/new exposure cap and pool structure as Uni-form Replay, but selects examples in each batch us-ing SuperMemo-2 due times and perplexity-derived recall quality as described in Section 3.2. Both old and new examples are selected by the scheduler. The old-exposure fraction is set to ρ = 0 .2, match-ing Uniform Replay so that the only difference between the two conditions is whether within-pool selection is scheduled or uniform. 
+
+4.4 Evaluation 
+
+We evaluate along two complementary axes. Source-grounded question answering measures re-tention and acquisition on the temporally split cor-pora. Standard capability benchmarks measure whether continual updates degrade broad model abilities beyond the updated domains. 
+
+Source-grounded QA. For each of the Wikipedia and code domains, we generate multiple-choice QA benchmarks in MMLU-style format directly from source passages in Dold and 
+
+Dnew , producing matched old and new evaluation splits of 500 questions each. Questions are generated from source content and manually checked for answerability and label support. We report accuracy as the mean across questions together with the bootstrap standard deviation computed from 10 ,000 resamples. 
+
+Broad capability benchmarks. We evaluate on four widely used benchmarks: MMLU (Hendrycks et al., 2021) for multitask knowledge and rea-soning, BBH (Suzgun et al., 2023) for hard rea-soning tasks, GSM8K (Cobbe et al., 2021) for grade-school mathematical reasoning, and PIQA (Bisk et al., 2020) for physical commonsense. All broad capability benchmarks are evaluated us-ing the EleutherAI LM Evaluation Harness (Gao et al., 2023), which provides standardized few-shot prompts, scoring procedures, and task implemen-tations across models. Using a single evaluation framework ensures that benchmark scores are di-rectly comparable across baselines and SRT, and that our reported numbers are reproducible by other researchers. These benchmarks are not optimiza-tion targets for any condition and serve to detect whether continual updates damage capabilities un-related to the updated domains. 
+
+5 Results 
+
+We evaluate SRT along two axes: source-grounded temporal QA (Section 5.1) and broad capability benchmarks (Section 5.2). 
+
+5.1 Temporal QA: Retention and Acquisition 
+
+Table 1 reports source-grounded QA accuracy across both models. The pattern is consistent at both scales: naive CPT improves new-knowledge accuracy at the cost of retention, uniform re-play partially mitigates the drop, and SRT recov-ers retention while preserving or improving new-knowledge accuracy. 
+
+Naive CPT degrades retention. On TinyLlama, CPT raises new accuracy from 13 .1% to 17 .0% 
+
+on Wikipedia data but old accuracy collapses from 
+
+54 .3% to 11 .7% . The same pattern holds on Llama-3.2-3B-Instruct, where old Wikipedia accuracy drops from 50 .2% to 43 .0% .
+
+Scheduling, not exposure, drives SRT’s gains. 
+
+UNIFORM REPLAY reaches 25 .2% and 46 .2% old Wikipedia accuracy on TinyLlama and Llama-3.2-3B-Instruct respectively, in both cases substantially above CPT but below SRT ( 49 .0% and 51 .6% ). Because U NIFORM REPLAY and SRT share the same 20 /80 exposure cap and pool structure and differ only in within-pool selection, this gap is at-tributable to scheduling rather than exposure. The gap is larger at the smaller model scale ( 23 .8 per-centage points on TinyLlama versus 5.4 on Llama-3.2-3B-Instruct), suggesting that smaller models benefit more from prioritized review while larger models retain more knowledge under uniform re-play alone. 5Scheduling versus difficulty alone. To separate interval-based scheduling from simple difficulty-prioritisation, we compare SRT against a PPL-Prioritised baseline that replays the highest-perplexity old examples without SM-2 review state (Table 1). Difficulty-awareness alone is clearly ben-eficial: on Wikipedia, PPL-Prioritised improves old-knowledge retention over U NIFORM REPLAY 
+
+(27 .4% vs. 25 .2% ) and achieves the highest new-knowledge accuracy of any method ( 38 .8% ). How-ever, the two difficulty-aware methods occupy dif-ferent points on the stability-plasticity spectrum. PPL-Prioritised is markedly more plastic, acquir-ing new knowledge aggressively but recovering far less old knowledge than SRT ( 27 .4% vs. 49 .0% 
+
+on Wikipedia, a 21 .6-point retention gap). We at-tribute this to its greedy focus on the currently hardest examples, which neglects intermediate-difficulty examples that SRT’s interval scheduling continues to revisit along their forgetting trajec-tory. On code, SRT outperforms PPL-Prioritised on all three metrics. Overall, SRT achieves the best old-knowledge retention on both domains and the best combined score, while PPL-Prioritised attains stronger new-knowledge accuracy on Wikipedia; interval-based scheduling thus provides a substan-tially better retention-acquisition balance than one-shot difficulty ranking, though the two methods prioritise that balance differently. 
+
+SRT improves both retention and acquisition. 
+
+SRT produces the best combined score on every model-domain pair in Table 1. On Wikipedia, it restores old accuracy to or above the base-model level at both scales while matching or exceeding CPT on new accuracy. On code QA, SRT is the only method that simultaneously improves both old and new accuracy relative to CPT on both mod-els. U NIFORM REPLAY is competitive with CPT on code at both scales but trails SRT consistently, confirming that scheduling provides value across model scales even when uniform replay alone is adequate. To corroborate these findings on a bench-mark we did not construct, we additionally eval-uate on TemporalWiki (Jang et al., 2022), an ex-ternal factual-probe set. SRT substantially limits the perplexity degradation that CPT incurs on this benchmark, consistent with the retention advantage measured on our source-grounded QA. Full results and caveats are provided in Appendix D. 
+
+5.2 Broad Capability Preservation 
+
+Table 2 reports accuracy on MMLU, BBH, GSM8K, and PIQA. On TinyLlama, all methods re-main within standard-deviation bounds of the base model, reflecting that the base model’s MMLU and GSM8K scores are near random and leave little signal to disturb. The Llama-3.2-3B-Instruct results reveal a stark pattern. CPT substantially degrades all four bench-marks, with the largest drop on GSM8K ( 77 .6% 
+
+to 38 .8% ): a 38 .8-point decline despite no obvi-ous relationship between the temporally localized training data and grade-school math. U NIFORM 
+
+REPLAY performs even worse on reasoning, drop-ping BBH to 8.4% and GSM8K to 6.8% . Re-exposing the model to old data uniformly there-fore damages reasoning capabilities more severely than no replay at all, suggesting that uniform re-play introduces interference patterns that disrupt reasoning circuits rather than mitigating forgetting. SRT largely preserves base-model performance across all four benchmarks ( 57 .8% , 52 .6% , 76 .7% ,
+
+74 .3% ), and as shown in Table 1, this preservation does not come at the cost of adaptation. 
+
+5.3 Auxiliary Non-Language Evidence 
+
+To test whether the scheduler is tied to language perplexity, we also summarize class-incremental vision and tabular experiments, with details in Appendix C. Replacing perplexity with predicted-class confidence gives the same qualitative pattern: on MNIST, Fashion-MNIST, CIFAR-10, and Wine, SRT obtains the highest overall accuracy ( 91 .6% ,
+
+65 .8% , 53 .1% , and 53 .3% , respectively). We treat these experiments as supporting evidence that adap-tive review scheduling is modality-agnostic when paired with an appropriate recall signal; the central claim remains LLM continual pre-training. 
+
+5.4 Computational Overhead 
+
+SRT adds a forward pass per reviewed example beyond standard continual pre-training to compute the perplexity-based recall quality score, which in-troduces some computational cost. To quantify this overhead, we measure wall-clock time, per-step time, and throughput for CPT, U NIFORM REPLAY ,and SRT under matched configurations on the same hardware. Table 3 reports the results. The overhead of SRT relative to CPT is 14 .7% 
+
+in wall-clock time, corresponding to a 14 .6% re-duction in tokens per second. U NIFORM REPLAY 
+
+6Wikipedia QA Code QA Model Method Old New Combined Old New Combined TinyLlama BASE 54 .3 ± 2.1 13 .1 ± 1.5 33 .7 ± 1.5 19 .5 ± 1.8 11 .6 ± 1.4 15 .6 ± 1.1                                                                                                                                                  
+
+> CPT 11 .7±1.417 .0±1.414 .4±1.117 .4±1.714 .8±1.616 .6±1.2
+> UNIFORM REPLAY 25 .2±1.913 .6±1.519 .4±1.414 .0±1.615 .4±1.614 .7±1.1
+> PPL-Prior. 27 .4±2.038 .8±2.233 .1±1.520 .8±3.613 .6±3.017 .2±2.3
+> SRT 49 .0±2.120 .0±1.734 .6±1.524 .4±1.920 .7±1.822 .6±1.3
+> Llama-3.2-3B-Inst. BASE 50 .2±2.239 .8±2.145 .0±1.555 .0±2.252 .6±2.253 .8±1.5
+> CPT 43 .0±2.242 .4±2.242 .7±1.554 .6±2.253 .2±2.253 .9±1.5
+> UNIFORM REPLAY 46 .2±2.239 .8±2.143 .0±1.556 .0±2.257 .2±2.256 .6±1.6
+> SRT 51 .6±2.242 .4±2.247 .0±1.560 .8±2.257 .8±2.259 .3±1.5
+
+Table 1: Source-grounded QA accuracy (mean ± bootstrap standard deviation, %). Each old/new split has 500 
+
+held-out questions. U NIFORM REPLAY and SRT share the same 20 /80 exposure cap and pool structure, differing only in whether within-pool selection is uniform or scheduled.                                                                                                        
+
+> Model Method MMLU BBH GSM8K PIQA TinyLlama BASE 24 .9±3.627 .1±0.12.4±0.073 .4±0.0
+> CPT 24 .9±0.026 .9±0.02.0±0.073 .3±1.0
+> UNIFORM REPLAY 24 .4±0.026 .8±0.03.3±0.073 .2±0.0
+> SRT 24 .4±0.025 .8±0.02.5±0.072 .2±0.0
+> Llama-3.2-3B-Inst. BASE 57 .5±0.053 .9±0.077 .6±1.275 .1±1.0
+> CPT 51 .4±0.444 .3±0.638 .8±1.369 .0±0.7
+> UNIFORM REPLAY 50 .0±0.08.4±0.06.8±0.174 .9±1.0
+> SRT 57 .8±0.152 .6±0.176 .7±1.274 .3±1.0
+
+Table 2: Broad capability benchmark accuracy (mean ± standard deviation, %). At the Llama-3.2-3B-Instruct scale, both CPT and U NIFORM REPLAY degrade reasoning benchmarks (BBH, GSM8K) substantially; SRT preserves base-model performance. 
+
+also incurs overhead relative to CPT ( 10 .8% wall-clock, 13 .0% throughput reduction), reflecting the cost of sampling and combining old and new ex-amples into each batch. The additional cost of SRT relative to U NIFORM REPLAY is therefore only 3.5% in wall-clock time, attributable to the recall quality computation and SuperMemo-2 state updates. Given the substantial retention gains re-ported in Section 5.1, this scheduling overhead is a favourable trade-off for practitioners who care about old-knowledge preservation. 
+
+6 Ablations 
+
+We conduct three ablation studies to evaluate the sensitivity of SRT to its main design choices: the replay budget, the perplexity-to-quality threshold scaling, and the initial ease factor. The replay-ratio ablation uses TinyLlama Wikipedia QA to probe sensitivity to old-new exposure allocation, while the threshold and ease-factor ablations use TinyLlama code QA as a representative domain. 
+
+Replay budget. Table 4 sweeps the old/new ex-posure ratio ρ on TinyLlama Wikipedia. The best configuration is 20 /80 , reaching 49 .6% old and 
+
+20 .0% new accuracy. Performance is sensitive to the budget at both extremes. Old-heavy schedules (50 /50 and beyond) reduce exposure to new data and fail to recover old-knowledge accuracy because the model has less budget for both consolidation and adaptation. New-heavy schedules ( 5/95 ) be-have closer to CPT and lose old knowledge for the same reason. The 20 /80 split aligns with the matched-budget design used in the main compar-ison and provides enough old-data exposure for SRT’s scheduler to operate while preserving suffi-cient adaptation capacity. 
+
+Perplexity-to-quality threshold scaling. We test sensitivity to the threshold values used in Eq. 7. A scalar multiplier α is applied uniformly to all five thresholds (τ1, . . . , τ 5), so α < 1 produces stricter scoring (examples need lower perplexity to be considered retained) and α > 1 produces relaxed scoring. Table 5 reports TinyLlama code QA accuracy across α ∈ { 0.5, 1.0, 1.5}. The de-fault α = 1 .0 is best, reaching 22 .6% combined accuracy. Both stricter ( α = 0 .5) and more relaxed (α = 1 .5) thresholds degrade performance. The effect is asymmetric: relaxation hurts more than 7Metric CPT UNIFORM REPLAY SRT Wall-clock time (s) 960 .07 1063 .87 1101 .36                 
+
+> Time per step (s) 9.19 10 .33 10 .75
+> Tokens per second 455 .83 396 .51 380 .90
+> Tokens per step 4096 4096 4096
+> Overhead vs. CPT —+10 .8% +14 .7%
+> Overhead vs. U NIFORM REPLAY ——+3 .5%
+
+Table 3: Computational overhead of U NIFORM REPLAY and SRT relative to CPT under matched configurations. SRT adds approximately 15% wall-clock overhead relative to no-replay training, of which most is shared with UNIFORM REPLAY due to batch construction cost; the additional scheduling-specific overhead is only 3.5% .                                                                  
+
+> Old/New Old New Combined
+> 5/95 23 .6±1.813 .3±1.518 .4±1.320 /80 49 .6±2.120 .0±1.734 .6±1.535 /65 23 .4±1.915 .4±1.619 .4±1.250 /50 21 .8±1.913 .8±1.517 .8±1.165 /35 20 .6±1.812 .2±1.416 .4±1.280 /20 23 .5±1.914 .2±1.618 .8±1.295 /527 .4±1.919 .7±1.723 .6±1.3
+
+Table 4: TinyLlama Wikipedia QA accuracy as a func-tion of the SRT old/new exposure ratio. Accuracy is mean ± bootstrap standard deviation, %.                               
+
+> αCode Old Code New Combined
+> 0.513 .2±1.48.6±1.210 .9±1.01.024 .4±1.920 .7±1.822 .6±1.31.54.8±1.15.4±1.05.1±0.9
+
+Table 5: Sensitivity to perplexity threshold scaling on TinyLlama code QA. The scalar multiplier α is applied uniformly to all five thresholds in Eq. 7. 
+
+equivalent strictness, because over-relaxed thresh-olds assign high quality to poorly retained exam-ples and stop scheduling them for review. 
+
+Initial ease factor. We vary the initial ease factor 
+
+E0, which controls how quickly review intervals ex-pand after early successful reviews. Table 6 reports TinyLlama code QA across E0 ∈ { 1.5, 2.5, 3.5}.The default SM-2 value E0 = 2 .5 is best, again reaching 22 .6% combined accuracy. Smaller val-ues keep intervals short and over-schedule exam-ples that have already been retained, reducing ex-posure for examples that genuinely need review. Larger values inflate intervals too quickly and let fragile examples drift out of the review schedule before they are stably retained. The default value chosen by the original SM-2 algorithm (Wozniak, 1998) is therefore a reasonable starting point for LLM continual pre-training as well.                               
+
+> E0Code Old Code New Combined
+> 1.512 .2±1.514 .2±1.513 .2±1.12.524 .4±1.920 .7±1.822 .6±1.33.512 .0±1.49.0±1.210 .5±1.0
+
+Table 6: Sensitivity to the initial ease factor E0 on TinyLlama code QA. The default SM-2 value E0 = 2 .5
+
+achieves the best combined accuracy. 
+
+7 Discussion 
+
+The results support a specific claim: SRT improves continual pre-training when old and new knowl-edge must share a finite training budget and when retention difficulty is heterogeneous across exam-ples. We discuss three implications of this finding. 
+
+Scheduling is the active ingredient, not exposure. 
+
+Naive continual pre-training is the headline prac-tical comparison because it captures the realistic no-review update regime, but it does not isolate the mechanism behind SRT’s gains. Uniform re-play serves this role. Because Uniform Replay and SRT share the same 20 /80 exposure cap and pool structure, the only experimental variable separating them is whether within-pool selection is uniform or scheduled. On TinyLlama Wikipedia, this single variable is responsible for a 23 .8 percentage-point gap in old-knowledge accuracy. The same order-ing, CPT < UNIFORM REPLAY < SRT, holds on Llama-3.2-3B-Instruct Wikipedia. These results indicate that scheduling, not mere re-exposure, is what produces SRT’s retention advantage. Replay budgets that look adequate in aggregate can still fail when allocated uniformly across examples with heterogeneous retention difficulty. 
+
+Uniform replay can damage reasoning capabil-ities. A more surprising finding is that uniform replay does not merely fall short of SRT on broad capabilities; it can be substantially worse than naive CPT itself. On Llama-3.2-3B-Instruct, Uniform 8Replay drops BBH from a CPT baseline of 44 .3% 
+
+to 8.4% and GSM8K from 38 .8% to 6.8% , while SRT preserves both close to the original model. We do not claim direct evidence for the underly-ing mechanism; one possible explanation is that re-exposing the model to old data without schedul-ing introduces interference dynamics that disrupt reasoning-relevant computation more severely than no replay at all, but verifying this would require representational analysis beyond the scope of this work. Regardless of mechanism, the result has an immediate practical implication: practitioners considering replay as a simple add-on to continual updates should be cautious, because a poorly de-signed replay schedule can degrade capabilities the no-replay baseline preserves. 
+
+SRT is a scheduling layer, not a replacement. 
+
+SRT addresses a question that mixture-level replay does not: among reviewable examples, which ones should return now? It does so without modify-ing the architecture, the training objective, or the choice of replay budget. SRT can therefore be combined with learning-rate rewarming (Ibrahim et al., 2024), data-mixture selection (Chen et al., 2025), parameter-efficient tuning, or synthetic re-hearsal (Huang et al., 2024). Its contribution is orthogonal to these methods, addressing the within-pool selection problem they leave unspeci-fied. We see scheduling as a complementary layer that practitioners can adopt alongside existing CPT recipes rather than as an alternative to them. The SRT scheduler is also architecture-agnostic: aux-iliary experiments on vision and tabular classifi-cation benchmarks (Appendix C) show that the same scheduling, with predicted-class confidence in place of perplexity as the recall signal, mitigates class-incremental forgetting more effectively than naive continual training and Elastic Weight Consol-idation. 
+
+8 Conclusion 
+
+We introduced Spaced Repetition Training, a cog-nitively inspired continual pre-training method that schedules per-example review using SuperMemo-2 and perplexity-derived recall quality. The central insight is that continual pre-training is not solely a mixture problem but a scheduling problem: among reviewable examples, the model should revisit those it is currently struggling to retain, not those it has already learned. On temporally grounded Wikipedia and code QA benchmarks across two model scales, SRT recovers old-knowledge ac-curacy that naive continual pre-training discards, while matching or exceeding new-knowledge ac-quisition. At the larger model scale, SRT preserves broad capability benchmark performance that both naive CPT and uniform replay degrade, in some cases substantially. Together these results suggest that adaptive review timing is a simple, architecture-agnostic, and effective mechanism for improving the stability-plasticity trade-off in continual pre-training, and that established principles from hu-man memory research transfer productively to lan-guage model training. 
+
+Limitations 
+
+Our language experiments use TinyLlama-1.1B and Llama-3.2-3B-Instruct, both from the Llama family, and evaluation is restricted to English; be-haviour at larger scales, across different model fam-ilies, and in multilingual settings remains open, even though our cross-modality evidence demon-strates the effectiveness of SRT. The temporal QA benchmarks are constructed for this work and should be interpreted as in-domain measure-ments of retention and acquisition on our specific corpora rather than as community-standard tests. The broad-capability results in Table 2 are ob-tained from a single training run per condition, evaluated over multiple evaluation seeds; the re-ported variance therefore reflects evaluation noise rather than training-run variability. While the reasoning-benchmark degradation under uniform replay is consistent across two independent bench-marks (BBH and GSM8K) and is not exhibited by SRT under identical conditions, which makes a single-run artifact less likely, confirming its sta-bility would require multiple independent training runs. We leave this to future work. Finally, the perplexity-to-quality mapping uses fixed thresholds that may need recalibration for substantially differ-ent model scales or domains, and SRT introduces a forward pass per reviewed example beyond the normal training pass; a learned quality function and empirical overhead measurement at larger scales are natural extensions for future work. 
+
+Ethics and Reproducibility 
+
+Continual updates can introduce factual errors, pre-serve outdated information, or reinforce unsafe code patterns; source-grounded multiple-choice ac-curacy is not deployment reliability. Replay as-9sumes access to historical examples, so buffers and SRT state must respect retention limits, deletion requests, and data-governance obligations. Exact benchmark artifacts, code, logs, and QA items are proprietary and are not released. Repli-cation is supported by the algorithm, recall-quality mapping, corpus criteria, hyperparameters, evalua-tion protocol, and reported results, which are suffi-cient to recreate comparable public-data pipelines. Benchmark generation used LLM assistance with manual checks (Appendix A.3). 
+
+References 
+
+Stefan Aeberhard, Danny Coomans, and Olivier De Vel. Comparative analysis of statistical pattern recogni-tion methods in high dimensional settings. Pattern Recognition , 27(8):1065–1077, 1994. Yonatan Bisk, Rowan Zellers, Ronan Le Bras, Jianfeng Gao, and Yejin Choi. PIQA: Reasoning about phys-ical commonsense in natural language. In Proceed-ings of the AAAI Conference on Artificial Intelligence ,volume 34, pages 7432–7439, 2020. Nicholas J. Cepeda, Harold Pashler, Edward Vul, John T. Wixted, and Doug Rohrer. Distributed practice in ver-bal recall tasks: A review and quantitative synthesis. 
+
+Psychological Bulletin , 132(3):354–380, 2006. Jie Chen, Zhipeng Chen, Jiapeng Wang, Kun Zhou, Yu-tao Zhu, Jinhao Jiang, Yingqian Min, Wayne Xin Zhao, Zhicheng Dou, Jiaxin Mao, Yankai Lin, Rui-hua Song, Jun Xu, Xu Chen, Rui Yan, Zhewei Wei, Di Hu, Wenbing Huang, and Ji-Rong Wen. Towards effective and efficient continual pre-training of large language models. In Proceedings of the 63rd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 5779– 5795, Vienna, Austria, 2025. Association for Com-putational Linguistics. doi: 10.18653/v1/2025.acl-l ong.289. Jeffrey Cheng, Marc Marone, Orion Weller, Dawn Lawrie, Daniel Khashabi, and Benjamin Van Durme. Dated data: Tracing knowledge cutoffs in large lan-guage models, 2024. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. Training verifiers to solve math word problems. In 
+
+arXiv preprint arXiv:2110.14168 , 2021. Hermann Ebbinghaus. Memory: A Contribution to Experimental Psychology . 1885. English translation reprinted in Annals of Neurosciences, 2013. Yujie Feng, Hao Wang, Jian Li, Xu Chu, Zhaolu Kang, Yiran Liu, Yasha Wang, Philip S. Yu, and Xiao-Ming Wu. Forever: Forgetting curve-inspired memory re-play for language model continual learning, 2026. Leo Gao, Jonathan Tow, Baber Abbasi, Stella Biderman, Sid Black, Anthony DiPofi, Charles Foster, Laurence Golding, Jeffrey Hsu, Alain Le Noac’h, Haonan Li, Kyle McDonell, Niklas Muennighoff, Chris Ociepa, Jason Phang, Laria Reynolds, Hailey Schoelkopf, Aviya Skowron, Lintang Sutawika, Eric Tang, Anish Thite, Ben Wang, Kevin Wang, and Andy Zou. A framework for few-shot language model evaluation, 12 2023. URL https://zenodo.org/records/1 0256836 .Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. 
+
+arXiv preprint arXiv:2407.21783 , 2024. Suchin Gururangan, Ana Marasovi´ c, Swabha Swayamdipta, Kyle Lo, Iz Beltagy, Doug Downey, and Noah A. Smith. Don’t stop pretraining: Adapt language models to domains and tasks. In Proceed-ings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 8342–8360. Association for Computational Linguistics, 2020. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understand-ing. Proceedings of the International Conference on Learning Representations , 2021. Jianheng Huang, Leyang Cui, Ante Wang, Chengyi Yang, Xinting Liao, Linfeng Song, Junfeng Yao, and Jinsong Su. Mitigating catastrophic forgetting in large language models with self-synthesized re-hearsal. arXiv preprint arXiv:2403.01244 , 2024. Ching-Yi Hung, Cheng-Hao Tu, Cheng-En Wu, Chien-Hung Chen, Yi-Ming Chan, and Chu-Song Chen. Compacting, picking and growing for unforgetting continual learning. In Advances in Neural Informa-tion Processing Systems , volume 32, 2019. Adam Ibrahim, Benjamin Thérien, Kshitij Gupta, Mats L. Richter, Quentin Anthony, Timothée Lesort, Eugene Belilovsky, and Irina Rish. Simple and scalable strategies to continually pre-train large lan-guage models. Transactions on Machine Learning Research , 2024. Joel Jang, Seonghyeon Ye, Changho Lee, Sohee Yang, Joongbo Shin, Janghoon Han, Gyeonghun Kim, and Minjoon Seo. Temporalwiki: A lifelong benchmark for training and evaluating ever-evolving language models. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing ,pages 6237–6250, 2022. James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz, Joel Veness, Guillaume Desjardins, Andrei A. Rusu, Kieran Milan, John Quan, Tiago Ramalho, Ag-nieszka Grabska-Barwinska, et al. Overcoming catas-trophic forgetting in neural networks. Proceedings of the National Academy of Sciences , 114(13):3521– 3526, 2017. 
+
+10 Alex Krizhevsky, Geoffrey Hinton, et al. Learning mul-tiple layers of features from tiny images. Technical report, University of Toronto, 2009. Yann LeCun. The MNIST database of handwritten digits, 1998. URL http://yann.lecun.com/exd b/mnist/ .Chen-An Li and Hung-yi Lee. Examining forgetting in continual pre-training of aligned large language models. arXiv preprint arXiv:2401.03129 , 2024. Jeffrey Li, Mohammadreza Armandpour, Seyed Iman Mirzadeh, Sachin Mehta, Vaishaal Shankar, Raviteja Vemulapalli, Samy Bengio, Oncel Tuzel, Mehrdad Farajtabar, Hadi Pouransari, and Fartash Faghri. TiC-LM: A web-scale benchmark for time-continual LLM pretraining. In Proceedings of the 63rd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 32231–32273, Vi-enna, Austria, 2025. Association for Computational Linguistics. doi: 10.18653/v1/2025.acl-long.1551. Michael McCloskey and Neal J. Cohen. Catastrophic interference in connectionist networks: The sequen-tial learning problem. Psychology of Learning and Motivation , 24:109–165, 1989. Meta AI. Llama 3.2: Revolutionizing Edge AI and Vision with Open, Customizable Models, September 2024. URL https://ai.meta.com/blog/llama-3 -2-connect-2024-vision-edge-mobile-devic es/ .Meryem M’hamdi and Jonathan May. Leitner-guided memory replay for cross-lingual continual learning. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computa-tional Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 7808–7821, Mexico City, Mexico, 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024.naacl-long.432. German I. Parisi, Ronald Kemker, Jose L. Part, Christo-pher Kanan, and Stefan Wermter. Continual lifelong learning with neural networks: A review. Neural Networks , 113:54–71, 2019. David Rolnick, Arun Ahuja, Jonathan Schwarz, Timo-thy Lillicrap, and Gregory Wayne. Experience replay for continual learning. In Advances in Neural Infor-mation Processing Systems , volume 32, 2019. Andrei A. Rusu, Neil C. Rabinowitz, Guillaume Des-jardins, Hubert Soyer, James Kirkpatrick, Koray Kavukcuoglu, Razvan Pascanu, and Raia Hadsell. Progressive neural networks. In arXiv preprint arXiv:1606.04671 , 2016. Mirac Suzgun, Nathan Scales, Nathanael Schärli, Se-bastian Gehrmann, Yi Tay, Hyung Won Chung, Aakanksha Chowdhery, Quoc V. Le, Ed H. Chi, Denny Zhou, and Jason Wei. Challenging big-bench tasks and whether chain-of-thought can solve them. 
+
+Findings of the Association for Computational Lin-guistics: ACL 2023 , pages 13003–13051, 2023. Piotr A. Wozniak. Supermemo 2 algorithm. Technical note, 1998. Han Xiao, Kashif Rasul, and Roland Vollgraf. Fashion-MNIST: A novel image dataset for benchmark-ing machine learning algorithms. arXiv preprint arXiv:1708.07747 , 2017. Friedemann Zenke, Ben Poole, and Surya Ganguli. Con-tinual learning through synaptic intelligence. In In-ternational Conference on Machine Learning , pages 3987–3995. PMLR, 2017. Peiyuan Zhang, Guangtao Zeng, Tianduo Wang, and Wei Lu. Tinyllama: An open-source small language model, 2024. 
+
+A Corpora Construction Details 
+
+This appendix provides extended construction details for the Wikipedia and code corpora de-scribed in Section 4.1, together with the question-answering evaluation sets derived from each do-main. 
+
+A.1 Wikipedia Corpora Snapshot selection. We construct Wikipedia cor-pora from timestamped English Wikipedia snap-shots. For TinyLlama-1.1B-Chat experiments, snapshot dates are chosen to bracket the model’s pre-training data assembly window in mid-2023, with the old snapshot near that window and the new snapshot drawn from a sufficiently later date that revisions reflect post-cutoff information. For Llama-3.2-3B-Instruct experiments, we use November 2023 and January 2024 snapshots. The short two-month gap creates a challenging setting in which the model must integrate recent factual updates while retaining closely related prior knowl-edge. 
+
+Diff extraction. For each aligned article pair, we segment both versions into sentences and compute sequence-level diffs to identify inserted, deleted, and modified spans. The Dnew training corpus con-sists of inserted sentences together with the updated side of modified spans. This procedure reduces unchanged text while preserving localized factual updates relevant for continual pre-training, and en-sures that Dnew training examples reflect content not present in the corresponding Dold articles. 
+
+Topic stratification. For Llama-3.2-3B-Instruct experiments, candidate articles are stratified by topic and magnitude of change. Topics span poli-tics, current affairs, computer science and artificial 11 Corpus Construction Rows Old median words New median words Median sent. diff TinyLlama reference diff Added/modified update text 31,729 – – –Llama-3 title-aligned reconstruction 2023-11 → 2024-01 28,946 543 546 0Llama-3 topic-stratified corpus 2023-11 → 2024-01, topic/change stratified 31,729 593 614 3
+
+Table 7: Wikipedia corpora used for language-model continual pre-training.                 
+
+> Domain Dold Train Dnew Train Dold QA Dnew QA Wikipedia text 31 ,729 31 ,729 500 500
+> Source code 22 ,055 70 ,643 500 500
+
+Table 8: Continual pre-training corpus sizes. Old examples represent pre-cutoff knowledge to be retained, and new examples represent post-cutoff information to be acquired. QA sets are held out exclusively for evaluation. 
+
+intelligence, business and economics, science and medicine, law and policy, and sports and enter-tainment. Stratification ensures balanced coverage across domains rather than over-representation of any single topic area. 
+
+A.2 Code Corpora Repository selection. We collect repositories from GitHub using creation and commit times-tamps as the temporal axis. Old examples come from repositories that existed before January 2022, while new examples come from repositories created after July 2024. We explicitly verify that reposito-ries selected for Dnew did not exist before the cutoff window to prevent temporal leakage between splits. 
+
+Language coverage. Repositories span thirteen widely used programming languages: Python, JavaScript, TypeScript, Java, C, C++, Go, Rust, C#, Ruby, PHP, Swift, Kotlin, and Scala. Each training example contains structured code text including the source file path and file content. Unlike the Wikipedia corpus, old and new code examples are not aligned revisions of the same artifact, reflecting that real software ecosystems evolve through new repositories and libraries rather than incremental revisions to existing files. 
+
+A.3 Evaluation Question-Answering Sets 
+
+For each domain, we construct held-out multiple-choice question-answering benchmarks with 500 
+
+questions per split, disjoint from the training cor-pora. Wikipedia questions are generated from held-out articles in an MMLU-style format (Hendrycks et al., 2021), with four answer choices per question and a single correct answer grounded in the source passage. Code-domain questions are generated analogously from held-out repositories and target repository-specific functionality, API usage, con-figuration semantics, and implementation details. All questions are manually checked for answerabil-ity and source support. The Dold QA sets measure retention of pre-cutoff knowledge, while the Dnew 
+
+QA sets measure acquisition of post-cutoff infor-mation. 
+
+B Training Details 
+
+This appendix provides the full training config-uration used in all continual pre-training experi-ments. The same hyperparameters are used for both TinyLlama-1.1B-Chat and Llama-3.2-3B-Instruct, and across all conditions (CPT, Uniform Replay, and SRT), so that performance differences reflect the replay strategy rather than optimization differ-ences. Hyperparameters are summarized in Ta-ble 9. 
+
+Hardware and training duration. All exper-iments are conducted using bfloat16 mixed-precision training with gradient checkpointing en-abled to reduce memory consumption. The effec-tive batch size of 512 (per-device batch size 32 ×
+
+gradient accumulation 16 ) is held constant across model scales. Training is run for sufficient steps to consume a single pass over Dnew at the configured replay ratio; exact step counts depend on corpus size and are listed in the experiment logs released with the code. 
+
+SRT thresholds. The perplexity thresholds in Table 9 correspond to the τk values defined in Eq. 7. Lower perplexity yields higher recall quality, with 
+
+q = 5 assigned when PPL < τ 5 = 50 and q = 0 
+
+assigned when PPL ≥ τ1 = 5000 . Sensitivity to a uniform scaling of these thresholds is analysed in Section 6. 12 Hyperparameter Value                           
+
+> Optimization
+> Optimizer AdamW (fused)
+> β1,β20.9,0.999
+> ϵ1e −8
+> Weight decay 0.001
+> Gradient clipping (max norm) 1.0
+> Learning rate schedule
+> Learning rate 1e −4
+> Scheduler Linear Warmup steps 200
+> Batch and sequence
+> Per-device batch size 32
+> Gradient accumulation steps 16
+> Effective batch size 512
+> Sequence length 2,048
+> Precision and memory
+> Mixed precision bfloat16 Gradient checkpointing Yes
+> SRT-specific
+> Old-exposure ratio ρ0.2
+> Initial ease factor E02.5
+> Initial repetitions n00
+> Initial interval I01
+> Minimum ease factor 1.3
+> Evaluation
+> QA accuracy bootstrap resamples 10 ,000
+
+Table 9: Training and evaluation hyperparameters. The same configuration is used across all model scales and all replay conditions. 
+
+C Auxiliary Vision and Tabular Experiments 
+
+Although the central contribution of this paper con-cerns language model continual pre-training, the underlying SRT scheduler is architecture-agnostic and can be applied to other modalities. In an earlier version of this work, we evaluated SRT on small vision and tabular classification benchmarks un-der class-incremental learning, providing a sanity check that the scheduling mechanism generalizes beyond text. We summarize these auxiliary ex-periments here. The results are consistent with the main language-model findings: naive continual training rapidly forgets old classes, regularization-based methods provide partial mitigation, and SRT retains substantially more old-class accuracy while continuing to learn new classes. 
+
+C.1 Datasets and Class-Incremental Setup 
+
+We use four standard publicly available bench-marks spanning vision and tabular modalities: MNIST handwritten digits (LeCun, 1998), Fashion-MNIST clothing images (Xiao et al., 2017),                   
+
+> Dataset Class assignment MNIST Old: {0,1,2,3,4,5,6}
+> New: {7,8,9}
+> Fashion Old: T-shirt, Trouser, Dress, Coat, Sandal, Bag, Boot New: Pullover, Shirt, Sneaker CIFAR-10 Old: Airplane, Automobile, Bird, Cat, Deer, Ship New: Truck, Frog, Dog, Horse Wine Old: classes {1,2}
+> New: class {3}
+
+Table 10: Class-incremental splits used in the auxiliary vision and tabular experiments. Vision datasets use semantically confusable class assignments to induce stronger interference. 
+
+CIFAR-10 natural images (Krizhevsky et al., 2009), and the UCI Wine dataset (Aeberhard et al., 1994). For each dataset, classes are partitioned into an old 
+
+subset (used to train the base model) and a new sub-set (introduced sequentially in the continual update phase). For the image datasets, the partition uses semantically confusable classes to induce stronger interference between old and new representations. Table 10 reports the exact class assignments. 
+
+C.2 Recall Quality for Non-Generative Models 
+
+For language models, SRT derives the SuperMemo-2 recall quality from per-example perplexity. For classification models, perplexity is not defined, so we use the model’s predicted-class confidence in place of perplexity. Specifically, for an example 
+
+xi with true label yi, the recall quality is computed from the predicted probability pθ(yi | xi): high confidence in the correct label corresponds to high recall quality (longer next interval), while low con-fidence corresponds to low recall quality (shorter next interval). The remaining SM-2 update logic is identical to the language-model formulation in Section 3.2. 
+
+C.3 Baseline: Elastic Weight Consolidation 
+
+For the vision and tabular experiments, we addition-ally compare against Elastic Weight Consolidation (EWC) (Kirkpatrick et al., 2017), a regularization-based continual learning method that penalizes updates to parameters important for previously learned tasks. EWC estimates per-parameter im-portance using the diagonal of the Fisher Informa-tion Matrix computed on the old data and adds a 13 quadratic penalty 
+
+LEWC (θ) = Lnew (θ) + λ
+
+2
+
+X
+
+> i
+
+Fi(θi − θ∗ 
+
+> i
+
+)2, (11) where θ∗ denotes the parameters at the end of train-ing on the old data, Fi is the Fisher importance of parameter θi, and λ controls the regularization strength. EWC is a natural comparison for the vision setting because the small fully-connected and convolutional models used here permit Fisher computation at low overhead. In language-model continual pre-training, gradient-level regularization of this kind is significantly more expensive and is not the focus of our main experiments. 
+
+C.4 Model Architectures 
+
+All vision and tabular models are simple feed-forward or convolutional networks implemented in PyTorch with ReLU activations. The MNIST and Fashion-MNIST models use two convolution-pooling blocks followed by two fully connected layers. The CIFAR-10 model uses the same convo-lutional structure with dropout in the classifier head. The Wine model is a three-layer multilayer percep-tron operating on the 13-dimensional UCI feature vector. All models are trained with cross-entropy loss and AdamW. 
+
+C.5 Results 
+
+Table 11 reports accuracy across all four datasets for the Base model, naive CPT, EWC, and SRT, averaged over 10 random seeds. The pattern is consistent across modalities. Naive CPT loses es-sentially all old-class accuracy on vision datasets while reaching high new-class accuracy, mirroring the catastrophic-forgetting failure mode observed at language scale. EWC partially mitigates for-getting on MNIST and Wine but performs poorly on Fashion-MNIST and CIFAR-10, where seman-tic similarity between old and new classes makes parameter-importance estimates less informative. SRT retains substantially more old-class accuracy than both baselines across all four datasets while maintaining competitive or superior new-class ac-curacy, achieving the highest overall accuracy in every setting. These auxiliary experiments are not intended as central evidence for the central claim of this paper, which concerns language model continual pre-training. They do, however, suggest that the scheduling mechanism underlying SRT general-izes beyond text to non-generative classification settings, where the recall quality signal is derived from predicted-class confidence rather than per-plexity. 
+
+D External Validation on TemporalWiki 
+
+To provide external corroboration beyond our source-grounded QA, we evaluate on Temporal-Wiki (Jang et al., 2022), an established bench-mark that measures factual knowledge via perplex-ity on subject-relation-object probes. Probes are categorised as Changed (facts that differ between consecutive Wikipedia snapshots) and Unchanged 
+
+(facts that persist). Lower perplexity indicates bet-ter retention of the probed fact. We score each probe by the perplexity the model assigns to the object tokens conditioned on the subject and relation, and report the mean over each category. Table 12 reports results for Base, CPT, and SRT on Llama-3.2-3B-Instruct. CPT nearly triples perplexity on both categories relative to the base model, a clear signature of catas-trophic forgetting. SRT limits the degradation to roughly 30% above base ( 2785 vs. 2112 average), corroborating on an external benchmark the reten-tion advantage observed on our source-grounded QA. Two caveats apply to this evaluation. First, ab-solute perplexity values are not comparable to those in the original TemporalWiki paper, which used GPT-2-family models; perplexity is tokenizer-dependent, so only the relative ordering across our conditions is meaningful. Second, the publicly re-leased TemporalWiki snapshots predate the knowl-edge cutoff of Llama-3.2-3B-Instruct, so both the Changed and Unchanged categories represent pre-cutoff knowledge for our models. This evalua-tion therefore serves as an external retention check rather than a test of new-knowledge acquisition; constructing date-aligned probes that postdate the model cutoff is left to future work. 14 Dataset Method Old New Overall MNIST BASE 98 .9 ± 0.6 0.0 ± 0.0 69 .5 ± 0.4
+
+CPT 0.0 ± 0.0 98 .3 ± 0.7 29 .2 ± 0.2
+
+EWC 67 .3 ± 5.4 57 .3 ± 7.1 29 .5 ± 0.2
+
+SRT 98 .5 ± 1.1 75 .1 ± 9.4 91 .6 ± 2.6
+
+Fashion BASE 97 .0 ± 0.4 0.0 ± 0.0 67 .9 ± 0.0
+
+CPT 0.0 ± 0.1 94 .4 ± 0.5 28 .4 ± 0.2
+
+EWC 29 .1 ± 0.2 95 .3 ± 0.2 28 .6 ± 0.0
+
+SRT 53 .7 ± 4.3 94 .2 ± 0.5 65 .8 ± 3.1
+
+CIFAR-10 BASE 83 .6 ± 0.3 0.0 ± 0.0 50 .1 ± 0.0
+
+CPT 0.0 ± 0.1 43 .7 ± 27 .2 17 .5 ± 10 .9
+
+EWC 20 .4 ± 12 .8 57 .7 ± 31 .2 23 .1 ± 12 .5
+
+SRT 43 .5 ± 10 .7 67 .6 ± 21 .6 53 .1 ± 14 .0
+
+Wine BASE 97 .1 ± 0.2 0.0 ± 0.0 70 .2 ± 0.0
+
+CPT 4.1 ± 0.1 100 .0 ± 0.0 30 .0 ± 0.0
+
+EWC 8.2 ± 0.2 100 .0 ± 0.0 33 .9 ± 0.1
+
+SRT 42 .1 ± 0.1 82 .7 ± 0.2 53 .3 ± 0.1
+
+Table 11: Vision and tabular results under class-incremental learning. Accuracy is reported as mean ± standard deviation over 10 random seeds (%). SRT achieves the highest overall accuracy on all four datasets. 
+
+Model Changed PPL Unchanged PPL Avg. PPL Base 1961 2263 2112 
+
+CPT 5713 6706 6209 
+
+SRT 2519 3052 2785 
+
+Table 12: TemporalWiki (Jang et al., 2022) object-perplexity on Llama-3.2-3B-Instruct (lower is better). CPT nearly triples perplexity relative to Base on both categories, indicating catastrophic forgetting, while SRT limits the degradation to roughly 30% above Base. 
+
+15

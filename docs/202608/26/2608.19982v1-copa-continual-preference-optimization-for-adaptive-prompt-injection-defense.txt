@@ -1,0 +1,384 @@
+Title: COPA: Continual Preference Optimization for Adaptive Prompt Injection Defense
+
+URL Source: https://arxiv.org/pdf/2608.19982v1
+
+Published Time: Fri, 21 Aug 2026 00:51:03 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# COPA: Continual Preference Optimization for Adaptive Prompt Injection Defense 
+
+Roshan Sood 1, Onat Gungor 2, Tajana Rosing 1
+
+> 1
+
+University of California, San Diego, CA, USA 
+
+> 2
+
+West Virginia University, Morgantown, WV, USA 
+
+{rosood, tajana }@ucsd.edu, onat.gungor@wvu.edu 
+
+Abstract —LLMs remain vulnerable to prompt injection at-tacks, where adversarial instructions embedded in user inputs or external content manipulate model behavior and bypass safeguards. Existing defenses are predominantly static, relying on fixed alignment objectives or attack-specific filtering mech-anisms that require redesign as new attack strategies emerge. While recent lifelong alignment methods address shifting user preferences, they do not account for adaptive adversaries that continually evolve to exploit weaknesses in previously learned defenses. This limitation is particularly important in real-world deployments, where evolving attack distributions necessitate continual adaptation without sacrificing robustness to previously encountered threats. We present COPA, a continual preference optimization framework that treats prompt-injection defense as a lifelong learning problem. Instead of one-time alignment, COPA incrementally incorporates feedback from newly ob-served attacks via GRPO-based optimization and uses margin-weighted experience replay to retain defenses against prior attack classes. This enables continuous adaptation to emerging threats while mitigating catastrophic forgetting and preserving general-purpose model capabilities. Across lifelong prompt injection attack streams, COPA reduces attack success rate by up to 6.3×
+
+and 4.4× on average compared to state-of-the-art defenses. These results highlight continual preference optimization as an effective paradigm for defending LLMs against adaptive adversaries. 
+
+Index Terms —large language models, continual learning, prompt injection, preference optimization, replay buffer 
+
+I. I NTRODUCTION 
+
+As large language models (LLMs) are increasingly deployed in enterprise settings, they are being integrated into complex tool-augmented workflows that significantly expand their secu-rity attack surface [1], [2]. Despite their widespread adoption in production systems, securing these deployments remains an open challenge. Recent studies demonstrate that widely used systems such as GitHub Copilot and Microsoft Copilot remain vulnerable to carefully crafted prompt injection attacks that can manipulate downstream model behavior [3], [4]. Re-flecting this risk, OWASP consistently ranks prompt injection as the top security vulnerability in LLM-based applications across recent editions of its threat taxonomy [5]. Existing defenses against prompt injection attacks typically rely on alignment [6], [7] or classifier-based filtering [8], [9], treating security as a one-time optimization problem. While effective against known attacks, existing defenses struggle to generalize to emerging prompt injection strategies, leaving them vulnerable to adaptive adversaries. As Figure 1 shows, an undefended Meta Llama 3.1 8B reaches an ASR of 0.74 on S1 S2 S3  
+
+> Prompt Injection Attack Scenario
+> 0.0 0.2 0.4 0.6 0.8
+> Attack Success Rate (ASR)  ↓
+> No Defense SOTA (SecAlign) COPA (Ours)
+> 0.15 0.55 0.74 0.12 0.15 0.25 0.03 0.05 0.06
+
+Fig. 1: Attack success rate (ASR; lower is better) under three escalating prompt injection scenarios (S1–S3). COPA holds ASR below 0.06 throughout, while the undefended model and prior defense degrade to 0.74 and 0.25 respectively at S3. the most challenging scenario, and the state-of-the-art defense SecAlign [7] still degrades to 0.25, offering no consistent protection as attack complexity grows. While recent lifelong safety alignment frameworks [10], [11] address evolving pref-erences and safety objectives, they are not designed to counter adaptive prompt injection attacks. This leaves a critical gap: no existing defense sustains robustness as the attack distribution evolves, motivating a dedicated continual defense framework. We address this gap by framing prompt injection defense as continual security alignment , a lifelong learning problem in which the adversarial distribution evolves over time and robustness must be preserved across the full history of ob-served attacks. Unlike prior lifelong alignment settings that focus on shifting user preferences, our setting is inherently adversarial: each new task corresponds to an attack strategy designed to bypass existing safeguards. This distinction has an important consequence: a model must simultaneously retain defenses against previously seen attacks while adapting to new ones, without degrading performance on benign requests. Without jointly satisfying these objectives, continual updates can silently erode earlier defenses even as performance im-proves on the latest attack distribution, introducing a security-critical form of forgetting that static defenses cannot address. We propose Continual Preference Optimization for Adaptive arXiv:2608.19982v1 [cs.CR] 20 Aug 2026 Prompt-Injection Defense (COPA), a lifelong learning frame-work for prompt injection defense that adapts sequentially to evolving attack variants. Unlike existing defenses that optimize against a fixed threat model, COPA formulates defense as a continual preference optimization problem, implemented as a lightweight LoRA adapter trained via Group Relative Policy Optimization (GRPO) [12] across a sequential curriculum of attack variants, with a margin-weighted replay buffer that prioritizes examples where the model’s preference margin is low. Our key contributions are threefold: (1) Lifelong defense framework. We introduce the first continual learning pipeline for prompt injection defense, enabling sequential adaptation to new attack types without retraining from scratch while preserving defenses against previously observed attacks. (2) Margin-weighted experience replay. We propose a replay buffer that ranks rehearsal examples by the model’s GRPO preference margin, focusing updates on the attacks the model handles least reliably and reducing catastrophic forgetting of previously learned defenses. (3) Online policy optimization for sequential defense. We utilize GRPO based online policy updates to adapt the defender at each stage of the attack stream, allowing the model to learn from newly seen attack variants. These contributions shift prompt-injection defense from a static alignment problem to a continual optimiza-tion framework that balances robustness, general utility, and preservation. COPA achieves attack success rates up to 6.3 ×
+
+lower than state-of-the-art defenses [7], [8], while improving backward transfer by 0.119 and average performance by 0.156 over the strongest defense baseline, delivering a defense that strengthens as attacks evolve. II. R ELATED WORK 
+
+Prompt Injection Attacks. Prompt injection is widely recognized as a critical vulnerability in LLM-based systems, ranked first in the OWASP Top Ten for LLMs [13]. These at-tacks exploit instruction-following behavior to redirect model outputs toward attacker-controlled objectives, either through direct user inputs or indirect injections via external sources such as retrieved documents or tool outputs. Recent studies show that deployed systems remain vulnerable to carefully crafted injection strategies [3], [4], while adversarial training on known patterns offers limited generalization to unseen vari-ants [14]. Thus, prompt injection is increasingly understood as a dynamic, evolving threat rather than a static failure mode. 
+
+Defenses Against Prompt Injection. Existing defenses against prompt injection attacks fall into two broad categories: alignment-based approaches, which fine-tune models to dis-tinguish legitimate instructions from injected ones [6], [7], [15], [16], and filtering mechanisms, which detect and block malicious inputs [8], [9], [17], [18]. While effective against known attack distributions, both categories treat security as a one-time optimization problem and fail to adapt to an evolving threat landscape. Consequently, they remain vulnerable to adaptive adversaries that exploit this static design. 
+
+Lifelong Safety Alignment. Lifelong alignment studies how models can continuously adapt to changing objectives while retaining previously acquired behaviors. Wang et al. [10] propose a lifelong safety alignment framework that incremen-tally updates models to address emerging jailbreak strategies, while LifeAlign [11] mitigates catastrophic forgetting under sequential alignment tasks [11]. Dabas et al. [19] further observe that many novel attacks arise from recombinations of previously observed adversarial patterns, suggesting recurring structure within the threat space. However, existing lifelong alignment frameworks assume sequential changes in alignment objectives, whereas prompt injection defense requires adapting to an evolving adversarial distribution. This distinction moti-vates continual security alignment, where robustness must be maintained against both past and emerging attack strategies. 
+
+Replay-Based Continual Learning. Replay-based strate-gies are widely used in continual learning to mitigate catas-trophic forgetting by storing and revisiting past examples [10], [11]. In alignment settings, replayed samples typically consist of previously observed preference pairs that help preserve earlier objectives. However, existing methods generally replay samples uniformly, overlooking differences in difficulty and informativeness. This limitation is particularly pronounced un-der evolving adversarial distributions, where model uncertainty varies substantially across attack types. III. COPA F RAMEWORK 
+
+Figure 2 presents COPA, our continual preference opti-mization framework for defending LLMs against evolving prompt injection attacks. Rather than assuming a fixed attack distribution, COPA frames defense as a sequential learning problem in which the defender must adapt to new injection strategies without forgetting how to handle earlier ones. The framework comprises four components: (1) a continual formulation that organizes prompt injection variants into a sequential task stream; (2) a preference alignment stage that produces a security-aware backbone via GRPO; (3) a margin-weighted replay buffer that prioritizes preference pairs the defender does not yet handle correctly; and (4) a lifelong GRPO update that interleaves new-task learning with prior-itized replay to mitigate catastrophic forgetting. 
+
+A. Problem Formulation 
+
+Let A = {A1, A 2, . . . , A T } denote a sequence of prompt injection variants (e.g., ignore previous instructions , token smuggling , system mode ). For each variant At, the defender receives a set of preference pairs 
+
+Dt = {(x(t) 
+
+> i
+
+, y (t) 
+
+> s,i
+
+, y (t)
+
+> u,i
+
+)}Nt
+
+> i=1
+
+, (1) where x(t) 
+
+> i
+
+is an adversarial input drawn from At, y(t) 
+
+> s,i
+
+is a safe response, and y(t) 
+
+> u,i
+
+is an unsafe response induced by the attack. The defender πθ is updated over T stages; after stage 
+
+t it must defend against At as well as all previously observed variants A1: t−1. Formally, COPA must satisfy three objectives simultaneously: 1) Robustness. After training on At, the defender prefers the safe response to the unsafe one on inputs drawn from 
+
+At.frozen trainable (LoRA) 
+
+STAGE 1 Preference Alignment     
+
+> Cybersecurity
+> preference data D0
+> safe ysunsafe yu
+
+LoRA + GRPO 
+
+> LoRA adapter (A, B)
+> frozen base model
+> base-aligned defender
+
+# πθ0
+
+> security-aware backbone
+> for lifelong adaptation
+
+STAGE 2 Lifelong Adversarial Training       
+
+> A1
+> token smuggling
+> A2
+> system mode
+> A8
+> mixed techniques
+> A9
+> many-shot
+> margin-weighted replay buffer B
+> entry preference margin (priority)
+> A90.91
+> A50.63
+> A20.42
+> A70.24
+
+Lifelong GRPO   
+
+> preference margin mθ
+> low high
+> updates LoRA only
+> base remains frozen
+> prioritized replay insert with margin
+> initialize
+> defender model
+
+# πθT
+
+> base frozen + LoRA trained
+
+EVALUATION      
+
+> Backward Transfer (BWT) Average Performance (AP) Attack Success Rate (ASR)
+> ASR scenarios
+> S1 Held-out CyberSecEval
+> variants
+> S2 Text-based attacks
+> direct · ignore · completion · hybrid
+> S3 Optimization-based
+> UAT · GCG
+
+Fig. 2: Overview of COPA. COPA aligns a frozen base model on safety preferences and then continually adapts a lightweight adapter against an evolving curriculum of prompt injection attacks, improving robustness over time without forgetting. 2) Retention. After training on A1: T , performance on earlier variants A1, . . . , A T −1 does not degrade through catastrophic forgetting. 3) Generalization. The defender resists held-out variants 
+
+AT +1: T +M that are never seen during training. 
+
+B. Threat Model 
+
+We consider an LLM-based defender deployed in a security-sensitive, instruction-following setting where user inputs may contain malicious instructions, placing both the integrity of the model’s responses and the reliability of its safety behavior at risk. A successful attack may expose confidential information, elicit unsafe outputs, or override system instructions. The adversary is external, with access only to the model’s input interface: knowing the prompt format, it injects ma-licious instructions into the data portion of a query and uses a surrogate LLM to mass-produce adversarial inputs. The adversary cannot modify the defender’s weights, replay buffer, training data, or optimization process. Crucially, we assume the attack distribution is non-stationary : novel variants 
+
+AT +1 , A T +2 , . . . emerge after deployment, reflecting the real-world evolution of prompt injection strategies [10]. COPA ad-dresses this setting through continual preference optimization with margin-weighted replay, adapting to new attacks while limiting forgetting of earlier defenses. 
+
+C. Stage 1: Preference Alignment 
+
+Before continual training begins, the defender requires a consistent cybersecurity foundation. Different pretrained back-bones exhibit varying levels of safety tuning, instruction-following capability, and sensitivity to adversarial prompts. If Stage 2 were applied directly to these heterogeneous models, the lifelong learning signal would be confounded by these initialization differences rather than reflecting true continual adaptation. Stage 1 mitigates this issue by aligning all backbones to a shared cybersecurity baseline prior to any attack-specific train-ing. We construct a general cybersecurity preference dataset 
+
+D0 from the DeepTeam red-teaming framework [20], consist-ing of paired benign and adversarial cybersecurity prompts spanning scenarios such as phishing, malware distribution, unauthorized access, and social engineering. Each pair is assigned a binary preference label using an automatic safety judge that determines whether the model response satisfies cybersecurity safety constraints. We then use D0 to perform preference optimization via Group Relative Policy Optimization (GRPO) [12]. We adopt GRPO because group-based normalization stabilizes learning under sparse binary safety rewards and reduces the high-variance gradients of scalar reward estimation, making it well-suited for safety-critical preference optimization with discrete, imbalanced signals. The base model is frozen and a low-rank adapter ∆W = AB ⊤, with A, B ∈ Rd×r and r ≪ d, is inserted into each transformer layer; only (A, B ) are trained. For each input x, GRPO samples a group of G candidate responses {o1, . . . , o G} ∼ πθold (· | x) and scores each with the binary safety judge, ri = R(x, o i) ∈ { 0, 1} (safe responses receive 1, unsafe responses 0). Within each group, rewards are normalized into advantages: 
+
+ˆAi = ri − μx
+
+σx + ϵ ,μx = 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+rj ,σx = std( {rj }Gj=1 )
+
+(2) where ϵ > 0 is a small numerical stability constant preventing division by zero when a sampled group yields uniform safety rewards. The adapter is optimized with the clipped GRPO objective and a KL penalty to a frozen reference policy πref :
+
+LGRPO = −Ex∼X , {oi}∼ πold 
+
+"
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+min( ρi ˆAi, clip( ρi) ˆAi)
+
+− βD KL (πθ ∥πref )
+
+#
+
+(3) where ρi = πθ (oi | x)/π θold (oi | x) and X represents the corresponding prompt distribution ( D0 in Stage 1). Optimizing Eq. 3 yields the base-aligned defender πθ0 , a security-aware backbone that serves as the starting point and reference policy for the lifelong stage. Because Stage 1 and Stage 2 operate on disjoint data and address complementary objectives (gen-eral alignment versus variant-specific defense), the continual learning dynamics observed in Stage 2 reflect adaptation to evolving attacks rather than uneven baseline alignment. 
+
+D. Stage 2: Lifelong Adversarial Training 
+
+Stage 2 adapts πθ0 to the attack stream while preserving earlier defenses. It uses a variant-tagged corpus D1 labeled with 15 prompt injection variants from the CyberSecEval benchmark [21]; the first nine variants form the lifelong training stream A = {A1, . . . , A 9} and the remaining six are held out for evaluation (Section IV-A). Training proceeds variant by variant with the same GRPO objective as Stage 1, augmented with a margin-weighted replay buffer. 
+
+Log-likelihood margin as a replay-priority signal. GRPO drives the policy update, but to decide which past examples to rehearse we score each stored preference pair by a lightweight log-likelihood margin measuring how strongly the current defender favors the safe response over the unsafe one: 
+
+mθ (x, y s, y u) = log πθ (ys | x) − log πθ (yu | x). (4) A large positive mθ indicates the defender reliably prefers the safe response, effectively neutralizing the attack; a small or negative mθ identifies a pair the defender does not yet handle correctly. Unlike judge- or generation-based scoring, 
+
+mθ requires only two log-probability evaluations on stored text, making it inexpensive to maintain across the buffer. 
+
+Margin-weighted replay buffer. COPA maintains a per-variant replay buffer B = {B 1, B2, . . . }, where each Bt is a bounded reservoir of pairs from variant At and each entry 
+
+b = ( x, y s, y u, m b) stores its tracking margin. Because the policy πθ continuously shifts during lifelong learning, margins calculated at initialization or insertion become stale over time, failing to reflect subsequent catastrophic forgetting. To ensure prioritization remains sensitive to emerging vulnerabilities, we execute a lightweight margin refresh step over all entries in the historical buffer B1: t−1 at the initiation of each new task stage. To focus rehearsal on the attacks the defender handles least reliably, we sample a batch of replay entries b from B1: t−1
+
+via a softmax distribution over their negated margins: 
+
+p(b) = exp( −mb/η )
+
+P 
+
+> b′∈B 1: t−1
+
+exp( −mb′ /η ) (5) Low-margin pairs, those the defense is currently failing to defend against, are thus replayed more frequently. The tem-perature η controls the sharpness of the prioritization on these hard cases. We bucket replay by variant so that replay is balanced across attack types, allowing the buffer to (i) preserve accumulated robustness, (ii) regularize the adapter against overfitting to the current variant, and (iii) focus capacity on attacks the defender remains vulnerable to. 
+
+Lifelong GRPO update. At task t, COPA forms a mixed set of prompts from the new-task pairs Dt and a prioritized replay set Rt drawn from B1: t−1 via Eq. 5, and applies the GRPO objective over this combination: 
+
+LCOPA (θ; t) = LGRPO 
+
+ θ; Dt ∪ R t
+
+. (6) For every prompt, GRPO samples a fresh group of comple-tions, scores them with the binary judge, and updates only the LoRA adapter (A, B ); the base model remains frozen, i.e., ∇Wbase LCOPA = 0 and ∇A,B LCOPA ̸ = 0 . After task t
+
+completes, its pairs Dt are inserted into Bt with their freshly observed margins (Eq. 4), and the adapter checkpoint is saved for backward-transfer evaluation. IV. E XPERIMENTAL ANALYSIS 
+
+A. Experimental Setup 
+
+Experimental Configuration. Unless otherwise stated, all experiments use Meta-Llama-3.1-8B-Instruct as the backbone model. COPA is implemented with LoRA ( r = 64 , dropout 
+
+= 0.1) and 4-bit NF4 quantization. The initial alignment stage trains on D0 for one epoch with a learning rate of 
+
+2 × 10 −4. During continual adaptation, COPA performs 30 GRPO updates per task using a learning rate of 1 × 10 −4. The replay buffer stores 60 preference pairs. All experiments are conducted on a single NVIDIA A100 GPU. 
+
+Datasets and Evaluation Protocol. COPA is first aligned on D0, a set of 102 cybersecurity preference pairs from the PromptInjection module of the DeepTeam Red Teaming Framework [20]. Continual adaptation then proceeds over a stream of prompt injection variants from the CyberSecEval benchmark [21], ordered by increasing complexity: nine vari-ants D1:9 form the sequential training stream, while six disjoint variants D10:15 are held out for evaluation. All splits are drawn from disjoint prompt pools to prevent train-test leakage. We assess robustness under three scenarios of escalating distribution shift, matching the S1–S3 settings in Figure 1. 
+
+S1 (held-out CyberSecEval variants) uses the six unseen variants D10:15 to measure in-family generalization. S2 (text-based injections) evaluates direct, ignore, completion, and hybrid attacks [22], representing common real-world strategies outside the training family. S3 (optimization-based attacks) 
+
+evaluates UAT [23] and GCG [24], which craft prompts through gradient-based search. 
+
+Baselines. We compare COPA against representative state-of-the-art defenses from two categories. Detection-based de-fenses filter malicious inputs before they reach the target model: LlamaGuard [9] uses a separate safety classifier to identify injected instructions, and DataSentinel [8] fine-tunes a detection LLM under a minimax objective to flag contami-nated inputs. Preference optimization defenses instead align the target model directly: SecAlign [7] performs defensive preference optimization on a static training set. For a fair comparison, we embed every baseline within the same lifelong training pipeline as COPA: each method is initialized from the same backbone, aligned on the same preference dataset D0, and given the same opportunity to adapt as new attack variants emerge. The only difference is the alignment strategy itself, allowing us to isolate the contribution of our margin-weighted replay and GRPO optimization. 
+
+Evaluation Metrics. We evaluate robustness and knowledge retention with three metrics. For a test split of variant Aj with 
+
+Nj adversarial prompts, the attack success rate (ASR) after training through variant Ai is 
+
+Ri,j = 1
+
+NjNj
+
+X
+
+> k=1
+
+⊮[success k], (7) where ⊮[success k] = 1 when the k-th prompt bypasses the defense. Lower ASR is better: Ri,j = 0 means every attack was defended, and Ri,j = 1 means every attack succeeded. We report ASR both per variant and across the sequence. To quantify retention and overall effectiveness, we adopt the standard lifelong learning metrics Backward Transfer (BWT) and Average Performance (AP) [11], defined over a perfor-mance matrix mi,j = 1 − Ri,j , the defense success rate on variant Aj after training through variant Ai, where T is the number of variants in the lifelong sequence. 
+
+Backward Transfer (BWT) measures whether the defender retains robustness on earlier variants after the full sequence: 
+
+BWT = 1
+
+T − 1 
+
+> T−1
+
+X
+
+> j=1
+
+ mT,j − mj,j 
+
+. (8) Here mj,j is the defense success rate on variant Aj immedi-ately after it is learned, and mT,j is the rate on the same variant after the entire sequence. A positive BWT indicates retained ASR ↓ BWT ↑ AP ↑ 
+
+> −0.2 0.0 0.2 0.4 0.6 0.8
+> Metric Value
+> 0.221 -0.176 0.603 0.132 -0.118 0.661 0.104 -0.091 0.694 0.035 0.028 0.850
+> SecAlign DataSentinel LlamaGuard COPA (Ours)
+
+Fig. 3: Attack success rate (ASR; ↓), backward transfer (BWT; 
+
+↑), and average performance (AP; ↑) for COPA versus state-of-the-art defenses. COPA is best on every metric (ASR 0.035, BWT +0 .028 , AP 0.850), improving robustness significantly. or improved robustness on earlier variants, while a negative BWT signals catastrophic forgetting. BWT therefore directly tests whether margin-weighted replay preserves stability. 
+
+Average Performance (AP) measures cumulative defense quality across the entire trajectory: 
+
+AP = 1
+
+T
+
+> T
+
+X
+
+> k=1
+
+1
+
+k
+
+> k
+
+X
+
+> i=1
+
+mk,i . (9) After each stage k, performance is averaged over all variants seen so far, and these per-stage averages are then averaged across the sequence. Higher AP indicates that the defender sustains strong defense throughout the sequence, not only at its final state. Unlike a single end-of-training evaluation, AP penalizes defenders that lose robustness on earlier variants mid-sequence even if they recover, complementing BWT by capturing the full trajectory of defense quality. 
+
+Utility. To verify that improved prompt injection robustness does not come at the expense of general capability, we evaluate utility preservation on MMLU-Pro [25] and GPQA [26], reporting QA accuracy on both. 
+
+B. Results 
+
+Robustness and Knowledge Retention. Figure 3 compares COPA against state-of-the-art defenses on attack success rate (ASR), backward transfer (BWT), and average performance (AP) across the lifelong attack sequence. COPA achieves the lowest ASR of 0.035 , up to 6.3× lower than SecAlign (0.221) and 3.0× lower than the strongest baseline (LlamaGuard, 0.104), while DataSentinel (0.132) remains more vulnerable. The root cause of this gap is architectural as static defenses optimize against a fixed snapshot of threat distribution, failing to incorporate new feedback from attack variants after deploy-ment. When the attack distribution shifts at every stage of the lifelong sequence, their learned decision boundaries become misaligned and therefore force ASR to rise. COPA avoids this GPQA MMLU 
+
+> 0.0 0.1 0.2 0.3 0.4
+> QA Accuracy  ↑
+> 0.187 0.286 0.165 0.245 0.136 0.181 0.310 0.340
+> SecAlign DataSentinel LlamaGuard COPA (Ours)
+
+Fig. 4: QA accuracy on GPQA and MMLU. COPA achieves the highest accuracy on both, showing that COPA improves robustness without degrading general ability. failure mode because GRPO updates continuously reshape the adapter to ensure earlier decision boundaries are reinforced rather than overwritten. COPA also attains the best backward transfer ( +0 .028 ), indicating that it retains robustness against previously seen attacks rather than overwriting earlier defenses as it adapts, whereas every baseline exhibits negative BWT and thus greater forgetting. Finally, COPA reaches the highest average performance ( 0.850 ), confirming that it sustains strong defense throughout the sequence rather than only at its final state. 
+
+Utility Comparison. Figure 4 reports QA accuracy on GPQA and MMLU for all defenses, measuring whether im-proved robustness comes at the cost of general capability. The static defenses sacrifice substantial utility, with accuracy dropping to as low as 0.136 on GPQA and 0.181 on MMLU. This stems from alignment and classifier-based defenses shift-ing the model’s output space, suppressing the very features needed for general reasoning. In contrast, COPA attains the highest accuracy on both benchmarks ( 0.310 on GPQA and 
+
+0.340 on MMLU), matching or exceeding the undefended base model ( 0.300 and 0.332 ). COPA preserves utility by confining updates to a low-rank adapter over a frozen base and using GRPO’s group-relative objective to favor safe completions over unsafe ones. Unlike prior defenses that buy robustness by degrading clean performance, COPA strengthens defense while preserving the model’s general reasoning ability. 
+
+Generalization Across LLM Backbones. Figure 5 evalu-ates COPA on three LLMs (Llama 3.1 8B, Mistral 7B v0.3, Qwen 2.5 7B) across all four metrics. COPA maintains low ASR ( 0.035 to 0.054 ), near-zero BWT ( −0.052 to 0.028 ), strong AP ( 0.786 to 0.850 ), and QA accuracy of 0.210 to 
+
+0.316 , regardless of the underlying architecture. The three backbones differ in tokenizer design, pretraining corpus, and safety tuning, yet COPA delivers consistent gains on each. This suggests the preference margin COPA exploits arises from alignment optimization rather than any specific model 0.00 0.02 0.04 0.06             
+
+> 0.035 0.054 0.047
+> ASR ↓
+> −0.06 −0.04 −0.02 0.00 0.02 0.04 +0.028 −0.052 −0.044
+> BWT ↑
+> 0.0 0.2 0.4 0.6 0.8 1.0 0.850 0.786 0.809
+> AP ↑
+> 0.0 0.1 0.2 0.3 0.4
+> 0.310 0.230 0.210
+> QA Accuracy ↑
+> Llama 3.1 8B Mistral 7B v0.3 Qwen 2.5 7B
+
+Fig. 5: COPA across three LLM backbones (Llama 3.1 8B, Mistral 7B v0.3, Qwen 2.5 7B) on ASR ( ↓), BWT ( ↑), AP (↑), and GPQA accuracy ( ↑). Consistent performance across all backbones indicates that COPA is architecture-agnostic. family. Operating at the adapter level, COPA inherits the representation capacity of its backbone without architecture-specific tuning, supporting its use as a model agnostic frame-work for lifelong prompt injection defense. 
+
+C. Ablation Studies 
+
+Effect of margin-weighted replay. We isolate the contri-bution of margin-weighted replay by replacing it with uniform replay while holding the rest of the COPA pipeline fixed: in the full configuration, replay samples are drawn with probabil-ity proportional to a softmax over negated GRPO preference margins so that low-margin examples are rehearsed more frequently, whereas uniform replay samples all buffer entries with equal probability. As shown in Table I, margin-weighted replay achieves a substantially better balance between adapting to new attacks and preserving defenses against earlier ones, reducing attack success rate from 0.163 to 0.035 (−0.128 )and improving backward transfer from +0 .003 to +0 .028 .The gap is largest on average performance ( 0.850 vs. 0.600 ,
+
++0 .250 ). Uniform replay suffers pronounced mid-sequence defense degradation, whereas concentrating rehearsal on low-margin examples sustains high defense quality throughout the lifelong sequence. 
+
+Effect of Training Objective. In Table II, we compare DPO and GRPO under the same lifelong training sequence as COPA. Across the full sequence, DPO yields an ASR of 
+
+0.335 , a backward transfer value of −0.231 , and an average performance of 0.626 . DPO’s offline preference updates overfit the adapter to the current scenario and overwrite earlier defenses faster than replay can recover them. In contrast, GRPO remains stable, achieving an ASR of 0.035 , a backward TABLE I: Ablation of the replay strategy in COPA. 
+
+Metric Margin-Weighted Uniform Improvement 
+
+ASR ( ↓) 0.035 0.163 +0 .128 
+
+BWT ( ↑) +0.028 +0 .003 +0 .025 
+
+AP ( ↑) 0.850 0.600 +0 .250 
+
+TABLE II: Training objective ablation: GRPO vs. DPO. 
+
+Metric GRPO DPO Improvement 
+
+ASR ( ↓) 0.035 0.335 +0 .300 
+
+BWT ( ↑) +0.028 −0.231 +0 .259 
+
+AP ( ↑) 0.850 0.626 +0 .224 
+
+transfer of +0 .028 , and an average performance of 0.850 .GRPO’s optimization against the model’s current behavior plausibly creates a self-correcting update signal: when the defender becomes uncertain on replayed examples, the GRPO margin exposes that weakness and guides the adapter back toward safer behavior without erasing the gains on the current task. These results reveal that COPA’s gains depend not only on replay, but on pairing replay with an optimizer that can adapt without repeatedly forgetting. V. C ONCLUSION 
+
+We introduced COPA, a continual preference optimization framework for defending LLM-based systems against prompt injection attacks. Rather than treating defense as a one-time alignment against a fixed attack distribution, COPA formulates it as a lifelong learning problem: it adapts to a stream of evolving injection variants while a margin-weighted replay buffer preserves robustness against previously seen attacks. Using the GRPO preference margin as a label-free signal of defender uncertainty, COPA concentrates rehearsal on the attacks the model handles least confidently. Across held-out, text-based, and optimization-based scenarios, COPA reduces attack success rate by up to 6.3× relative to state-of-the-art defenses while achieving positive backward transfer and preserving general QA accuracy, delivering a defense that holds up as attacks evolve. ACKNOWLEDGEMENTS 
+
+This work has been funded in part by NSF, with award num-bers #2112665, #2112167, #2003279, #2120019, #2211386, #2052809, #1911095 and in part by PRISM and CoCoSys, centers in JUMP 2.0, an SRC program sponsored by DARPA. REFERENCES [1] S. K. Ravindran, “Unified threat detection and mitigation frame-work (UTDMF): Combating prompt injection, deception, and bias in enterprise-scale transformers,” arXiv preprint arXiv:2510.04528 , 2025. [2] M. A. Ferrag, O. Friha, D. Hamouda, L. Maglaras, and H. Janicke, “Generative AI and large language models for cyber security: All insights you need,” arXiv preprint arXiv:2405.12750 , 2024. [3] D. Schmotz, L. Beurer-Kellner, S. Abdelnabi, and M. Andriushchenko, “Skill-inject: Measuring agent vulnerability to skill file attacks,” arXiv preprint arXiv:2602.20156 , 2026. [4] P. Reddy and A. S. Gujral, “EchoLeak: The first real-world zero-click prompt injection exploit in a production LLM system,” in Proceedings of the AAAI Symposium Series , vol. 7, no. 1, 2025, pp. 303–311. [5] OWASP Foundation, “Owasp top 10 for large language model applications,” https://owasp.org/ www-project-top-10-for-large-language-model-applications/, 2023, accessed: 2026-06-18. [6] S. Chen, J. Piet, C. Sitawarin, and D. Wagner, “ {StruQ }: Defending against prompt injection with structured queries,” in 34th USENIX Security Symposium (USENIX Security 25) , 2025, pp. 2383–2400. [7] S. Chen et al. , “Secalign: Defending against prompt injection with preference optimization,” in Proceedings of the 2025 ACM SIGSAC Conference on Computer and Communications Security , 2025, pp. 2833–2847. [8] Y. Liu, Y. Jia, J. Jia, D. Song, and N. Z. Gong, “Datasentinel: A game-theoretic detection of prompt injection attacks,” in 2025 IEEE Symposium on Security and Privacy (SP) . IEEE, 2025, pp. 2190–2208. [9] H. Inan et al. , “Llama guard: LLM-based input-output safeguard for human-AI conversations,” arXiv preprint arXiv:2312.06674 , 2023. [10] H. Wang, Y. Zhao, Z. Qin, C. Du, M. Lin, X. Wang, and T. Pang, “Lifelong safety alignment for language models,” Advances in Neural Information Processing Systems , vol. 38, pp. 19 908–19 938, 2026. [11] J. Li et al. , “Lifealign: Lifelong alignment for large language models with memory-augmented focalized preference optimization,” in Proceed-ings of the AAAI Conference on Artificial Intelligence , vol. 40, no. 37, 2026, pp. 31 618–31 626. [12] Z. Shao et al. , “Deepseekmath: Pushing the limits of mathematical reasoning in open language models,” arXiv preprint arXiv:2402.03300 ,2024. [13] OWASP GenAI Security Project, “Owasp top 10 for large language model applications 2025,” 2025, accessed: 2025-08-28. [Online]. Available: https://genai.owasp.org/llm-top-10/ [14] H. Lin et al. , “Uniguardian: A unified defense for detecting prompt injection, backdoor attacks and adversarial attacks in large language models,” arXiv preprint arXiv:2502.13141 , 2025. [15] J. Piet, M. Alrashed, C. Sitawarin, S. Chen, Z. Wei, E. Sun, B. Alomair, and D. Wagner, “Jatmo: Prompt injection defense by task-specific finetuning,” in European Symposium on Research in Computer Security .Springer, 2024, pp. 105–124. [16] O. Gungor, R. Sood, J. Zhou, and T. Rosing, “Eager: Edge-aligned llm defense for robust, efficient, and accurate cybersecurity question answering,” arXiv preprint arXiv:2511.19523 , 2025. [17] H. Li, X. Liu, N. Zhang, and C. Xiao, “Piguard: Prompt injection guardrail via mitigating overdefense for free,” in Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2025, pp. 30 420–30 437. [18] K.-H. Hung et al. , “Attention tracker: Detecting prompt injection attacks in llms,” in Findings of the Association for Computational Linguistics: NAACL 2025 , 2025, pp. 2309–2322. [19] M. Dabas et al. , “Adversarial d \’ej \a vu: Jailbreak dictionary learn-ing for stronger generalization to unseen attacks,” arXiv preprint arXiv:2510.21910 , 2025. [20] Confident AI, “Deepteam: Open-source llm red-teaming framework,” https://github.com/confident-ai/deepteam, 2025, accessed: 2025-07-15. [21] S. Wan, C. Nikolaidis, D. Song, D. Molnar, J. Crnkovich, J. Grace, M. Bhatt, S. Chennabasappa, S. Whitman, S. Ding et al. , “Cyberseceval 3: Advancing the evaluation of cybersecurity risks and capabilities in large language models,” arXiv preprint arXiv:2408.01605 , 2024. [22] Y. Liu, Y. Jia, R. Geng, J. Jia, and N. Z. Gong, “Formalizing and benchmarking prompt injection attacks and defenses,” in 33rd USENIX Security Symposium (USENIX Security 24) , 2024, pp. 1831–1847. [23] X. Liu, Z. Yu, Y. Zhang, N. Zhang, and C. Xiao, “Automatic and universal prompt injection attacks against large language models,” arXiv preprint arXiv:2403.04957 , 2024. [24] X. Li, W. Zhang, Z. Li, Q. Li, S. PernChua, B. Lee, J. Cui, Y. Huang, and X. Hu, “Faster-gcg: Efficient discrete optimization jailbreak attacks against aligned large language models,” arXiv preprint arXiv:2410.15362 , 2024. [25] Y. Wang et al. , “Mmlu-pro: A more robust and challenging multi-task language understanding benchmark,” Advances in Neural Information Processing Systems , vol. 37, pp. 95 266–95 290, 2024. [26] D. Rein, B. L. Hou, A. C. Stickland, J. Petty, R. Y. Pang, J. Dirani, J. Michael, and S. R. Bowman, “Gpqa: A graduate-level google-proof q&a benchmark,” arXiv preprint arXiv:2311.12022 , 2023.

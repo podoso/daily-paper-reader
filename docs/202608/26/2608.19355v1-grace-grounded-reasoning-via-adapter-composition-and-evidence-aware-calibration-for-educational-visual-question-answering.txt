@@ -1,0 +1,360 @@
+Title: GRACE: Grounded Reasoning via Adapter Composition and Evidence-Aware Calibration for Educational Visual Question Answering
+
+URL Source: https://arxiv.org/pdf/2608.19355v1
+
+Published Time: Fri, 21 Aug 2026 00:07:04 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# GRACE: Grounded Reasoning via Adapter Composition and Evidence-Aware Calibration for Educational Visual Question Answering 
+
+Xinjin Li 1†, Yudi Xia 2†, Xi Zhao 1†, Yiliu Xu 3, Yining Liu 4, Cheng Lu 5, Yujian Long 6, Yu Ma 3, Jinghan Cao 7, Liang Fan 8, and Yeyun Xu 9* 
+
+> 1
+
+Columbia University, New York, NY, USA 
+
+li.xinjin@columbia.edu; xz3124@tc.columbia.edu  
+
+> 2
+
+Independent Researcher 
+
+171250011xyd@gmail.com  
+
+> 3
+
+Carnegie Mellon University, Pittsburgh, PA, USA 
+
+yiliux@alumni.cmu.edu; yuma13926@gmail.com  
+
+> 4
+
+University of California, Berkeley, Berkeley, CA, USA 
+
+yiningliu610@berkeley.edu  
+
+> 5
+
+Stevens Institute of Technology, Hoboken, NJ, USA 
+
+chenglu@ieee.org  
+
+> 6
+
+Georgetown University, Washington, DC, USA 
+
+yl1140@georgetown.edu  
+
+> 7
+
+San Francisco State University, San Francisco, CA, USA 
+
+jcao3@alumni.sfsu.edu  
+
+> 8
+
+Loughborough University, Loughborough, UK 
+
+L.Fan@lboro.ac.uk  
+
+> 9
+
+Texas A&M University, College Station, TX, USA 
+
+yeyun.xu1@gmail.com 
+
+> †
+
+These authors contributed equally to this work. 
+
+> *
+
+Corresponding author: Yeyun Xu 
+
+Abstract. Educational visual question answering (VQA) requires mod-els to solve curriculum-oriented multiple-choice questions using both language and visual evidence. Compared with conventional open-ended VQA, educational examples often include structured assessment meta-data, diagrams or image contexts, and semantically close answer op-tions, creating strong opportunities for question–option shortcuts. We develop and evaluate a parameter-efficient adaptation framework for a frozen multimodal large language model in this setting. We introduce 
+
+GRACE (Grounded Reasoning via Adapter Composition and Evidence-Aware Calibration), a framework that uses each question’s pedagogical state to specialize lightweight language and vision adaptation. The state combines inference-visible subject, grouped skill, grade, visual-context, question-intent, and option-structure cues. GRACE uses factor-specific prompts and lightweight visual adapters, then applies evidence-aware op-tion calibration to score all candidates under a shared multimodal con-text. On ScienceQA, GRACE improves a shared-adapter baseline from 90.5% to 93.1% overall accuracy and from 88.7% to 91.2% on image-context questions. Removing pedagogical composition, option calibra-arXiv:2608.19355v1 [cs.MM] 19 Aug 2026 2 Li et al. tion, or the visual adapter reduces overall accuracy by 1.4, 1.0, and 1.5 points, respectively. These controlled results show that structured edu-cational state is an effective routing signal for parameter-efficient multi-modal adaptation.  
+
+> Keywords: Educational Visual Question Answering · Visual Grounding · Adapter Tuning · Multimodal Reasoning · ScienceQA
+
+# 1 Introduction 
+
+Multimodal large language models (MLLMs) have substantially improved visual question answering by combining image encoders with instruction-following lan-guage decoders [17, 14, 6, 28]. Educational visual question answering, represented by ScienceQA [20], is more structured. Models must answer curriculum-oriented multiple-choice questions from a question stem, candidate options, optional di-agrams or natural images, and assessment metadata. Correct prediction often requires deciding whether visual evidence is relevant, extracting the appropri-ate visual cue, connecting it to grade-appropriate concepts, and discriminating among plausible distractors. This makes educational VQA a useful setting for studying both multimodal reasoning and task-specific adaptation. The adaptation problem is also different from generic visual instruction fol-lowing. BLIP-2 [14] demonstrates that frozen image and language models can be connected through a compact learned interface, while InstructBLIP [6] and LLaVA [17] show the effectiveness of instruction-aware multimodal adaptation and visual instruction tuning. ScienceQA adds explicit educational structure— subject, grade, skill, visual context, and option format—which we use to allocate limited trainable capacity on a per-example basis. A second challenge is language shortcut learning. Educational questions of-ten contain rich textual context, answer options, subject labels, and grade-level cues, so a model can sometimes answer from question–option statistics without relying sufficiently on the image. Aggregate accuracy alone does not reveal this behavior. At the same time, fully fine-tuning a large MLLM is expensive and unnecessary for a controlled adaptation study. We therefore keep the visual-transformer blocks and language decoder frozen, while training the multimodal connector and lightweight adaptation modules. Our key observation is that educational benchmarks already expose struc-ture that is useful for adaptation. Subject, grouped skill, grade, visual-context attributes, and question–option format cues are either part of the assessment in-stance or can be derived from fields visible before prediction. We combine these signals into a sample-specific pedagogical state . Rather than assigning every ex-ample to one shared prompt or adapter, GRACE uses the state to compose a small bank of factor-specific prompt components and to gate residual visual adapters. This allows examples to share parameters along individual educational factors while still receiving different adaptation paths. We additionally align the prediction rule with the multiple-choice task. All options for a question are scored under the same multimodal context. Our GRACE 3
+
+evidence-aware calibration is instantiated by Option-Calibrated Answer Veri-fication (OCAV), which combines length-normalized option likelihood with a lightweight multimodal verifier conditioned on the image, question, option, and pedagogical state. We additionally run a matched image-removal evaluation to quantify visual dependence of the resulting decision function. We evaluate GRACE on ScienceQA using Qwen2.5-VL-7B-Instruct as the common backbone for the controlled comparisons. Relative to a shared adapter, GRACE improves overall accuracy from 90.5% to 93.1% and IMG accuracy from 88.7% to 91.2%. Relative to the frozen backbone, the gains are 5.6 and 6.3 points, respectively. Component ablations further show that pedagogical composition, option calibration, and visual adaptation each contribute to the final result. Our contributions are as follows: 1. We formulate educational VQA as a metadata-structured parameter-efficient adaptation problem in which inference-visible educational factors determine how limited trainable capacity is allocated across heterogeneous questions. 2. We introduce pedagogy-aware adapter composition, which factorizes sub-ject, skill, grade, visual context, question intent, and option structure into a sample-specific state that composes language prefixes and gates visual resid-ual adapters. 3. We introduce evidence-aware option calibration through OCAV, which scores the supplied candidates directly under a shared multimodal context and trains the correct option to outrank its distractors. 4. Controlled ScienceQA experiments compare a frozen backbone, LoRA, a shared adapter, the full GRACE configuration, and core ablations. GRACE reaches 93.1% overall accuracy and outperforms all controlled parameter-efficient baselines. 
+
+# 2 Related Work 
+
+2.1 Educational VQA 
+
+ScienceQA [20] introduced a large-scale multimodal multiple-choice benchmark for science education, where examples can include questions, answer options, im-ages, subject and grade metadata, lectures, and explanations. Unlike the open-ended answer generation emphasized in conventional VQA [2], ScienceQA makes option comparison explicit and couples it with curriculum metadata and edu-cational visual reasoning. Rationale-augmented approaches such as Multimodal-CoT [26] use generated or annotated reasoning chains to improve answer infer-ence. Our study targets a different axis: how inference-visible educational struc-ture can route parameter-efficient adaptation. Lectures and explanations are not used to construct the routing state or answer-prediction input. 
+
+2.2 Parameter-Efficient Adaptation of Vision-Language Models 
+
+Parameter-efficient tuning keeps most pretrained weights fixed while optimizing compact modules such as prefix tuning [15], prompt tuning [13], adapters [11, 4 Li et al. 
+
+4], and LoRA [12]. Multimodal extensions adapt vision-language representa-tions with limited trainable capacity [24, 22, 21]. Importantly, prior multimodal PEFT is not restricted to a single shared update: LaVIN’s Mixture-of-Modality Adaptation (MMA) [21], for example, includes modality-aware routing between single- and multimodal instructions. GRACE differs in the routing signal and composition granularity. It factorizes multiple educational properties—subject, skill, grade, visual context, question intent, and option structure—and composes several factor-specific components for each assessment item rather than routing primarily by modality. Related adaptive designs have also been explored in multi-agent learning, including Bayesian critique-tuning with adaptive pressure for multi-intersection traffic signal control [7] and low-frequency truncation for adaptive context-length optimization in multi-agent reinforcement learning [9]. MAVEN-T further pro-vides an efficiency-oriented example by using reinforced heterogeneous distilla-tion for real-time multi-agent trajectory prediction [8]. 
+
+2.3 Visual Reliance and Multiple-Choice Scoring 
+
+VQA systems can exploit dataset priors and language statistics even when visual evidence is weak [10, 1]. For image-context educational questions, matched image interventions provide a direct way to measure how much the decision changes when visual content is removed. Multiple-choice evaluation also benefits from scoring the supplied candidates directly rather than relying on unconstrained answer strings; prior work on language-model evaluation and calibration shows that option and prompt biases can materially affect finite-choice decisions [27]. GRACE addresses these issues separately: OCAV aligns training and inference with the candidate set, while the image-removal analysis measures visual depen-dence. 
+
+# 3 Method 
+
+3.1 Problem Setup & Overview 
+
+We consider multiple-choice educational VQA. Let 
+
+ei = ( Ii, q i, O i, y i, m i)
+
+denote an example, where Ii is an image or visual context, qi is the question, 
+
+Oi = {oi1, . . . , o iK } is the candidate set, yi is the correct option index, and mi is benchmark metadata. The backbone is Qwen2.5-VL-7B-Instruct [3]. Its visual-transformer blocks and language decoder remain frozen; the visual-to-language multimodal connector and lightweight modules ΘA are trainable. At inference, the model receives only the image or visual context, question, candidate options, and inference-visible metadata. Gold answers, solution fields, lectures, explana-tions, and post-answer labels are never used to construct the adaptation state or prediction input. GRACE 5
+
+Fig. 1. Overview of GRACE. Inference-visible educational fields define a pedagogical state that composes factor-specific language prefixes and gates lightweight visual resid-ual adapters. The visual-transformer blocks and language decoder are frozen, while the multimodal connector and lightweight adaptation modules are trained. Candidate options are scored under the same multimodal context by evidence-aware option cali-bration. 
+
+The model predicts 
+
+ˆyi = arg max  
+
+> j
+
+Sij ,
+
+where Sij is the evidence-aware calibrated score assigned to option oij .Figure 1 summarizes the pipeline. A pedagogical state first encodes the ed-ucational characteristics of the example. The state controls language-side prefix composition and visual-side residual adaptation. The adapted representations are then used to score every answer option under a common context. 
+
+3.2 Pedagogy-Aware Adapter Composition 
+
+Given an example, GRACE constructs a pedagogical state 
+
+zi = {si, t i, c i, g i, u i, v i},
+
+where si is subject or topic, ti is a grouped pedagogical skill category, ci is visual context, gi is grade level, ui is question-intent category, and vi is an option-structure descriptor. The components (si, t i, c i, g i) come from benchmark metadata, while (ui, v i) are computed from inference-visible question and option fields. We maintain the factorized prompt bank 
+
+P = {P0, P s, P t, P c, P g , P qi , P os },6 Li et al. 
+
+where P0 is shared and the remaining banks correspond to the observed state factors. The final implementation contains 93 prompt components, each with prefix length l = 10 . For state zi, the composed prefix is 
+
+P (zi) = P0 + αsP ssi + αtP tti + αcP cci + αg P ggi
+
++ αqi P qi  
+
+> ui
+
++ αos P os  
+
+> vi
+
+.
+
+The coefficients α are produced by a small gating network over embeddings of the active metadata categories and question–option descriptors; missing fields use an explicit unknown-category embedding. This factorization lets related questions share individual subject, skill, grade, or visual-context components without re-quiring a separate expert for every joint state. If factor f has nf observed categories, a monolithic expert for every joint state would scale approximately with Q 
+
+> f
+
+nf , whereas the factorized bank scales with 1 + P 
+
+> f
+
+nf . The latter is better matched to educational datasets in which many joint combinations are sparse. 
+
+3.3 State-Conditioned Visual Adaptation 
+
+Language-side composition alone does not specialize visual feature processing. We therefore insert two-layer bottleneck adapters with bottleneck dimension 256 at visual-transformer blocks 4 and 8. For hidden representation h(ℓ) 
+
+> i
+
+at an adapted layer ℓ, the residual adapter is 
+
+Aℓ(h) = W (ℓ)up σ
+
+
+
+W (ℓ)down h
+
+
+
+,
+
+and the state-conditioned update is 
+
+˜h(ℓ) 
+
+> i
+
+= h(ℓ) 
+
+> i
+
++ a(ℓ) 
+
+> i
+
+Aℓ
+
+
+
+h(ℓ)
+
+> i
+
+
+
+, a(ℓ) 
+
+> i
+
+= Gℓ(zi) ∈ [0 , 1] .
+
+The gate Gℓ uses the same pedagogical state as the prompt composer. Thus, the language and visual paths are conditioned on a common educational description while operating on different representations. 
+
+3.4 Evidence-Aware Option Calibration 
+
+Free-form generation is poorly matched to a finite candidate set because format-ting and verbose output can introduce avoidable answer-normalization errors. We instead score every supplied option under the same multimodal context. For option oij , we compute the length-normalized conditional log-likelihood 
+
+ℓij = 1
+
+|oij | 
+
+> |oij |
+
+X
+
+> t=1
+
+log pθ,Θ A (oij,t | Ii, q i, O i, z i, o ij,<t ).GRACE 7
+
+Length normalization removes the mechanical accumulation advantage of shorter or longer option strings. A lightweight verifier Vη then evaluates the candidate jointly with the image, question, and pedagogical state. The final score is 
+
+Sij = λℓ ij + γV η (Ii, q i, o ij , z i).
+
+We use λ = 1 and γ = 1 in the final configuration. We refer to this mechanism as Evidence-Aware Calibration : the finite answer set is calibrated using both conditional option likelihood and a verifier that has access to the same multi-modal evidence used by the predictor. The verifier treats the correct option as positive and the remaining options as negatives. OCAV is the listwise training implementation of this calibration mechanism. The option-calibrated objective is 
+
+Locav = − log exp( Siy i )
+
+PKj=1 exp( Sij ) .
+
+This directly trains the correct option to outrank all distractors in the same question. 
+
+3.5 Training Objective and Visual-Dependence Evaluation 
+
+The answer loss is 
+
+Lans = − log pθ,Θ A (oiy i | Ii, q i, O i, z i),
+
+and the final training objective is 
+
+L = Lans + λoLocav ,
+
+with λo = 1 .0 in the final configuration. For visual-dependence evaluation on image-available examples, we compare the original image with an all-gray control image of the same size, processed through the identical model and preprocessing path. We run the same option-scoring rule in both conditions and report full-image accuracy, blank-image accu-racy, and their difference on the image subset. This matched intervention changes only visual content and is used for evaluation; it is not an additional inference input. 
+
+3.6 Parameter Efficiency 
+
+We train the multimodal connector together with the grouped prompt bank, metadata gates, visual adapters, and option verifier. These components total approximately 49.3M trainable parameters, about 0.7% of the 7B checkpoint. The visual-transformer blocks and language decoder remain frozen. 8 Li et al. 
+
+# 4 Experiments 
+
+4.1 Experimental Setup 
+
+Dataset and protocol. We evaluate on ScienceQA [20], which contains 21,208 multimodal multiple-choice questions with official train, validation, and test splits of 12,726, 4,241, and 4,241 examples. We use the official splits. The ped-agogical state is constructed only from information visible before answer pre-diction: benchmark-provided subject, grade, topic/category/skill, and visual-context metadata, together with question-intent and option-structure descriptors derived from the question and candidate options. No gold answer, answer index, validation/test label, solution field, lecture, explanation, or other post-answer annotation is used by the state parser, prompt composer, visual-adapter gate, option verifier, or any answer-prediction component at validation or test time. Hyperparameters are selected on the validation split, and the test split is evalu-ated after model selection. We use no additional ScienceQA training examples, synthetic questions, evidence boxes, or manually added annotations. 
+
+Controlled comparison setting. All author-run comparisons use Qwen2.5-VL-7B-Instruct [3], the same ScienceQA splits, processor, prompt template, and evaluation code. The controlled baselines are the frozen backbone, LoRA [12], and our shared adapter baseline implemented as a single Houlsby-style adapter path without pedagogical composition [11]. Published methods in Table 1 are included for task context; the controlled conclusions are drawn from the common-backbone author-run rows. 
+
+Backbone and adapters. The Qwen2.5-VL visual-transformer blocks and lan-guage decoder are frozen, while the visual-to-language connector is trainable. The grouped prompt bank contains 93 length-10 components. Visual adapters are two-layer bottleneck MLPs with bottleneck dimension 256 and are inserted at visual-transformer blocks 4 and 8. The full model contains approximately 49.3M trainable parameters. 
+
+Training details. We optimize the trainable connector, prompt bank, metadata gates, visual adapters, and option verifier with AdamW [19], using learning rate 
+
+2 × 10 −4, batch size 16, weight decay 0.01, and a maximum of 5 epochs. Early stopping is based on validation accuracy. All controlled baselines use the same Qwen2.5-VL processor settings, prompt formatting, and evaluation script. 
+
+Metrics. The main metric is multiple-choice accuracy on the ScienceQA test set. We report Overall accuracy, image-available accuracy (IMG), textual-context ac-curacy (TXT), and grades 1–6 accuracy (G1–6). IMG and TXT are benchmark-defined slices and are not necessarily disjoint. For the visual-dependence analysis, we also report full-image and blank-image accuracy on the image subset. GRACE 9                                                                  
+
+> Table 1. Main results on ScienceQA. Published methods are reference rows; the Qwen2.5-VL rows are controlled author-run comparisons under the same backbone and evaluation protocol.
+> Method Backbone TXT IMG G1–6 Overall
+> Published reference results
+> CoT GPT-3 (ALE) [20] GPT-3 74.68 67.43 78.23 75.17 LLaMA-Adapter [24] LLaMA-7B 83.72 80.32 85.83 85.19 Multimodal-CoT Large [26] T5-large 90.13 88.25 91.12 90.45 LLaVA+GPT-4 (judge) [17] Vicuna-13B 90.62 88.99 92.73 92.53
+> Controlled Qwen2.5-VL-7B comparisons
+> Qwen2.5-VL-7B frozen [3] Qwen2.5-VL-7B 88.0 84.9 88.8 87.5 LoRA [12] Qwen2.5-VL-7B 90.5 87.6 91.0 90.0 Shared adapter (ours) [11] Qwen2.5-VL-7B 91.1 88.7 91.7 90.5
+> GRACE Qwen2.5-VL-7B 93.7 91.2 93.8 93.1 Table 2. Core ablations on ScienceQA. Drop is the Overall accuracy decrease relative to the full GRACE configuration.
+> Variant IMG TXT Overall Drop GRACE 91.2 93.7 93.1 –w/o pedagogical composition 89.2 92.0 91.7 1.4 w/o option calibration 90.1 92.8 92.1 1.0 w/o visual adapter 88.8 92.4 91.6 1.5
+
+4.2 Main Comparison 
+
+Table 1 shows a consistent advantage for GRACE under the common Qwen2.5-VL backbone. Compared with the frozen model, GRACE improves Overall ac-curacy from 87.5% to 93.1% (+5.6 points) and IMG accuracy from 84.9% to 91.2% (+6.3 points). The stricter comparison is the shared adapter, which uses the same backbone and a comparable lightweight adaptation path without ped-agogical composition. GRACE improves that baseline by 2.6 points Overall, 2.5 points on IMG, 2.6 points on TXT, and 2.1 points on G1–6. It also exceeds LoRA by 3.1 points Overall and 3.6 points on IMG. The published rows use different backbones and training protocols, so we use them as reference points rather than as controlled estimates of the GRACE effect. 
+
+4.3 Core Ablation Study 
+
+Table 2 isolates the three mechanisms that define the current architecture. Re-moving the visual adapter causes the largest Overall decrease (1.5 points) and reduces IMG accuracy from 91.2% to 88.8%, confirming that the trainable visual residual path is important for image-context questions. Removing pedagogical composition reduces Overall accuracy by 1.4 points and lowers both IMG and 10 Li et al.         
+
+> Table 3. Visual-dependence evaluation on the ScienceQA image subset. The blank-image condition replaces the image with an all-gray input of the same size while pre-serving the model and preprocessing path.
+> Method Full image Blank image Gap
+> Shared adapter (ours) 88.7 80.9 7.8
+> GRACE 91.2 78.4 12.8
+
+TXT accuracy, showing that state-conditioned routing contributes beyond a sin-gle shared update. Removing evidence-aware option calibration reduces Overall accuracy by 1.0 point, demonstrating that candidate-level ranking contributes on top of representation adaptation. 
+
+4.4 Visual-Dependence Analysis 
+
+The matched intervention in Table 3 shows that GRACE both improves full-image accuracy and increases the full–blank gap from 7.8 to 12.8 points relative to the shared adapter. The larger paired degradation after visual content is removed shows that the resulting decision function relies more strongly on image content for image-context questions. 
+
+# 5 Conclusion 
+
+We presented GRACE, a parameter-efficient framework for educational VQA that uses inference-visible pedagogical state to compose language prefixes and gate visual residual adapters while keeping the large visual-transformer blocks and language decoder frozen. Evidence-aware option calibration aligns the model with the finite multiple-choice decision, and the common-backbone ScienceQA experiments show that the resulting architecture improves the shared-adapter baseline from 90.5% to 93.1% Overall and from 88.7% to 91.2% on IMG. Core ablations show independent performance losses when pedagogical composition, option calibration, or the visual adapter is removed, and the matched blank-image analysis shows stronger visual dependence than the shared adapter. To-gether, these results establish structured educational state as an effective routing signal for parameter-efficient multimodal adaptation on ScienceQA. 
+
+Limitations. The current evaluation is centered on ScienceQA and assumes that inference-visible educational metadata such as subject and grade is available. The blank-image intervention measures dependence on visual content but does not identify which image region caused a prediction. Evaluation on additional ed-ucational benchmarks, backbones, and metadata regimes is needed to determine how broadly the same routing design transfers. 
+
+Disclosure of Interests. The authors have no competing interests to declare that are relevant to the content of this article. GRACE 11 
+
+# References 
+
+1. Agrawal, A., Batra, D., Parikh, D., Kembhavi, A.: Don’t just assume; look and answer: Overcoming priors for visual question answering. In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. pp. 4971– 4980 (June 2018), https://openaccess.thecvf.com/content_cvpr_2018/html/ Agrawal_Dont_Just_Assume_CVPR_2018_paper.html 
+
+2. Antol, S., Agrawal, A., Lu, J., Mitchell, M., Batra, D., Zitnick, C.L., Parikh, D.: VQA: Visual question answering. In: Proceedings of the IEEE International Conference on Computer Vision. pp. 2425–2433 (2015). https://doi.org/10.1109/ICCV.2015.279, https://openaccess.thecvf.com/ content_iccv_2015/html/Antol_VQA_Visual_Question_ICCV_2015_paper.html 
+
+3. Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang, K., Wang, P., Wang, S., Tang, J., Zhong, H., Zhu, Y., Yang, M., Li, Z., Wan, J., Wang, P., Ding, W., Fu, Z., Xu, Y., Ye, J., Zhang, X., Xie, T., Cheng, Z., Zhang, H., Yang, Z., Xu, H., Lin, J.: Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 (2025). https://doi.org/10.48550/arXiv.2502.13923, https://arxiv.org/abs/2502.13923 
+
+4. Chen, S., Ge, C., Tong, Z., Wang, J., Song, Y., Wang, J., Luo, P.: AdaptFormer: Adapting vision transformers for scalable visual recognition. In: Advances in Neural Information Processing Systems. vol. 35, pp. 16664–16678 (2022), https://papers.nips.cc/paper_files/paper/2022/hash/ 69e2f49ab0837b71b0e0cb7c555990f8-Abstract-Conference.html 
+
+5. Chen, W., Wu, L., Hu, Y., Li, Z., Cheng, Z., Qian, Y., Zhu, L., Hu, Z., Liang, L., Tang, Q., Liu, Z., Yang, H.: Autoneural: Co-designing vision-language models for npu inference (2025), https://arxiv.org/abs/2512.02924 
+
+6. Dai, W., Li, J., Li, D., Tiong, A.M.H., Zhao, J., Wang, W., Li, B., Fung, P.N., Hoi, S.C.H.: InstructBLIP: Towards general-purpose vision-language models with instruction tuning. In: Advances in Neural Information Processing Systems. vol. 36, pp. 49250–49267 (2023), https://proceedings.neurips.cc/paper_files/paper/ 2023/hash/9a6a435e75419a836fe47ab6793623e6-Abstract-Conference.html 
+
+7. Duan, W., Gao, Z., He, J., Xian, J.: Bayesian critique-tune-based reinforcement learning with adaptive pressure for multi-intersection traffic signal control. IEEE Transactions on Intelligent Transportation Systems 26 (10), 14968–14983 (2025). https://doi.org/10.1109/TITS.2025.3581858 8. Duan, W., Gao, Z., Xian, J., Shi, Y.: Maven-t: Reinforced heterogeneous distillation for real-time multi-agent trajectory prediction. arXiv preprint arXiv:2604.10169 (2026), https://arxiv.org/abs/2604.10169 
+
+9. Duan, W., Yu, Y., He, J., Shi, Y.: Adaptive context length optimization with low-frequency truncation for multi-agent reinforcement learning. In: The Thirty-ninth Annual Conference on Neural Information Processing Systems 10. Goyal, Y., Khot, T., Summers-Stay, D., Batra, D., Parikh, D.: Mak-ing the V in VQA matter: Elevating the role of image understand-ing in visual question answering. In: Proceedings of the IEEE Confer-ence on Computer Vision and Pattern Recognition. pp. 6904–6913 (July 2017). https://doi.org/10.1109/CVPR.2017.670, https://openaccess.thecvf. com/content_cvpr_2017/html/Goyal_Making_the_v_CVPR_2017_paper.html 
+
+11. Houlsby, N., Giurgiu, A., Jastrzebski, S., Morrone, B., De Laroussilhe, Q., Ges-mundo, A., Attariyan, M., Gelly, S.: Parameter-efficient transfer learning for NLP. In: Proceedings of the 36th International Conference on Machine Learning. Pro-ceedings of Machine Learning Research, vol. 97, pp. 2790–2799. PMLR (2019), 
+
+https://proceedings.mlr.press/v97/houlsby19a.html 12 Li et al. 12. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W.: LoRA: Low-rank adaptation of large language models. In: International Con-ference on Learning Representations (2022), https://openreview.net/forum?id= nZeVKeeFYf9 
+
+13. Lester, B., Al-Rfou, R., Constant, N.: The power of scale for parameter-efficient prompt tuning. In: Proceedings of the 2021 Conference on Empirical Meth-ods in Natural Language Processing. pp. 3045–3059. Association for Computa-tional Linguistics, Online and Punta Cana, Dominican Republic (November 2021). https://doi.org/10.18653/v1/2021.emnlp-main.243, https://aclanthology.org/ 2021.emnlp-main.243/ 
+
+14. Li, J., Li, D., Savarese, S., Hoi, S.C.H.: BLIP-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In: Pro-ceedings of the 40th International Conference on Machine Learning. Proceed-ings of Machine Learning Research, vol. 202, pp. 19730–19742. PMLR (2023), 
+
+https://proceedings.mlr.press/v202/li23q.html 
+
+15. Li, X.L., Liang, P.: Prefix-tuning: Optimizing continuous prompts for generation. In: Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers). pp. 4582–4597. Association for Computa-tional Linguistics, Online (2021). https://doi.org/10.18653/v1/2021.acl-long.353, 
+
+https://aclanthology.org/2021.acl-long.353/ 
+
+16. Liang, Z., van der Laan, L., Alaa, A.: Hybrid meta-learners for estimating hetero-geneous treatment effects (2026), https://arxiv.org/abs/2506.13680 
+
+17. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. In: Advances in Neu-ral Information Processing Systems. vol. 36, pp. 34892–34916. Curran Associates, Inc. (2023), https://proceedings.neurips.cc/paper_files/paper/2023/hash/ 6dcf277ea32ce3288914faf369fe6de0-Abstract-Conference.html 
+
+18. Liu, J., Liu, J.: Megaslide-dit: Memory-centric adaptation and deformable local attention for efficient video diffusion (2026), https://arxiv.org/abs/2607.22696 
+
+19. Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. In: International Conference on Learning Representations (2019), https://openreview.net/forum? id=Bkg6RiCqY7 
+
+20. Lu, P., Mishra, S., Xia, T., Qiu, L., Chang, K.W., Zhu, S.C., Tafjord, O., Clark, P., Kalyan, A.: Learn to explain: Multimodal reasoning via thought chains for science question answering. In: Advances in Neural Information Processing Systems. vol. 35, pp. 2507–2521 (2022), https://proceedings.neurips.cc/paper_files/ paper/2022/hash/11332b6b6cf4485b84afadb1352d3a9a-Abstract-Conference. html 
+
+21. Luo, G., Zhou, Y., Ren, T., Chen, S., Sun, X., Ji, R.: Cheap and quick: Efficient vision-language instruction tuning for large language mod-els. In: Advances in Neural Information Processing Systems. vol. 36, pp. 29615–29627 (2023), https://proceedings.neurips.cc/paper_files/paper/ 2023/hash/5e84e4413268b713f0d4a1b23a9dae57-Abstract-Conference.html 
+
+22. Yang, L., Zhang, R.Y., Wang, Y., Xie, X.: MMA: Multi-modal adapter for vision-language models. In: Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition. pp. 23826–23837 (June 2024), https://openaccess.thecvf.com/content/CVPR2024/html/Yang_MMA_ Multi-Modal_Adapter_for_Vision-Language_Models_CVPR_2024_paper.html 
+
+23. Zhang, F., Fan, S., Wang, H.: Rethinking activation function: A simple path to efficient and accurate time series forecasting. IEEE Transactions on Knowledge and Data Engineering pp. 1–18 (2026). https://doi.org/10.1109/TKDE.2026.3716656 GRACE 13 24. Zhang, R., Han, J., Liu, C., Zhou, A., Lu, P., Qiao, Y., Li, H., Gao, P.: LLaMA-Adapter: Efficient fine-tuning of large language models with zero-initialized at-tention. In: International Conference on Learning Representations. vol. 2024, pp. 44389–44418 (2024), https://proceedings.iclr.cc/paper_files/paper/2024/ hash/c196239c5f9481e0db2755f31fe4585f-Abstract-Conference.html 
+
+25. Zhang, Y., Xiang, Z., Xu, H.: Performance-efficiency trade-offs in human preference prediction: A comparative study of traditional machine learning and large language models. In: 2026 IEEE Symposium on Computers and Communications (ISCC). IEEE (2026) 26. Zhang, Z., Zhang, A., Li, M., Zhao, H., Karypis, G., Smola, A.: Multimodal chain-of-thought reasoning in language models. Transactions on Machine Learning Re-search (2024), https://openreview.net/forum?id=y1pPWFVfvR 
+
+27. Zhao, Z., Wallace, E., Feng, S., Klein, D., Singh, S.: Calibrate before use: Im-proving few-shot performance of language models. In: Proceedings of the 38th International Conference on Machine Learning. Proceedings of Machine Learning Research, vol. 139, pp. 12697–12706. PMLR (2021), https://proceedings.mlr. press/v139/zhao21c.html 
+
+28. Zhu, D., Chen, J., Shen, X., Li, X., Elhoseiny, M.: MiniGPT-4: Enhanc-ing vision-language understanding with advanced large language models. In: International Conference on Learning Representations. vol. 2024, pp. 18378– 18394 (2024), https://proceedings.iclr.cc/paper_files/paper/2024/hash/ 50623630a2372839c078474efa6c0cb8-Abstract-Conference.html

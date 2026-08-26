@@ -1,0 +1,810 @@
+Title: GAP-Prompt: Gated Adaptive Prompting for Efficient Continual Learning
+
+URL Source: https://arxiv.org/pdf/2608.23782v1
+
+Published Time: Wed, 26 Aug 2026 00:12:09 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# GAP-Prompt: Gated Adaptive Prompting for Efficient Con-tinual Learning 
+
+Trung-Anh Dang trung-anh.dang@univ-orleans.fr LIFO UR 4022 Université d’Orléans, INSA CVL, Orléans, 45067, France 
+
+Duy-Cuong Bui duy-cuong.bui@ensea.fr ETIS CY Cergy Paris University, ENSEA, CNRS, Cergy, 95000, France 
+
+Ngoc-Son Vu son.vu@utt.fr LIST3N Université de Technologie de Troyes, Troyes, 10010, France 
+
+Christel Vrain christel.vrain@univ-orleans.fr LIFO UR 4022 Université d’Orléans, INSA CVL, Orléans, 45067, France 
+
+Vincent Nguyen vincent.nguyen@univ-orleans.fr LIFO UR 4022 Université d’Orléans, INSA CVL, Orléans, 45067, France 
+
+# Abstract 
+
+Continual learning faces the persistent challenge of catastrophic forgetting, where sequential task updates degrade previously acquired knowledge. While prompt-based methods inte-grated with pre-trained models offer a compelling solution by freezing the backbone, they often rely on static, task-level prompting strategies that overlook fine-grained intra-task diversity. In this paper, we propose Gated Adaptive Prompting (GAP-Prompt), a novel method that introduces instance-level adaptability to the prompting process. GAP-Prompt consists of three synergistic modules: (1) instance-conditioned gating, which dynamically de-termines optimal prompt injection layers for each individual image; (2) dynamic knowledge fusion, which performs instance-aware aggregation of current and historical prompts, en-abling knowledge integration across tasks; and (3) shared prompt distillation, which anchors foundational knowledge in early shared layers to mitigate forgetting. Extensive evaluations on CIFAR-100, ImageNet-R, and CUB-200 benchmarks demonstrate that GAP-Prompt consistently achieves state-of-the-art performance. Notably, on the fine-grained CUB-200 dataset, GAP-Prompt reaches 87.29% accuracy, approaching the joint training upper bound (88.00%) and outperforming existing methods by a significant margin. 
+
+# 1 Introduction 
+
+Continual learning (CL) seeks to develop autonomous systems capable of acquiring knowledge from a sequen-tial stream of tasks, mimicking the lifelong learning process of biological systems. However, standard neural networks struggle with catastrophic forgetting (McCloskey & Cohen, 1989; Robins, 1995), where the weight updates required for new tasks disrupt previously learned knowledge. Traditional mitigation strategies, such as regularization-based methods (Zenke et al., 2017a; Fini et al., 2022; Jung et al., 2020) and experience replay (Buzzega et al., 2020; Madaan et al., 2022; Cha et al., 2021), often encounter a fundamental trade-off between memory efficiency, data privacy, and computational overhead as the number of tasks increases. 1arXiv:2608.23782v1 [cs.LG] 24 Aug 2026 Recently, the paradigm of prompt-based CL has emerged as a compelling solution, particularly when in-tegrated with large-scale pre-trained models like the Vision Transformer (ViT) (Dosovitskiy et al., 2020). Building on visual prompt tuning (Jia et al., 2022), prompt-based CL keeps the backbone model’s weights frozen to preserve foundational knowledge. Instead, it optimizes a small set of task-specific parameters known as prompts . These prompts serve as dynamic instructions that guide the pre-trained model to adapt to novel tasks without altering its core parameters (Wang et al., 2022b;a; Smith et al., 2023). Consequently, this approach significantly alleviates catastrophic forgetting while ensuring high scalability in complex, real-world learning environments. Existing prompt-based CL methods typically adopt one of two strategies for managing prompts across tasks. Some approaches rely on a shared prompt pool (Wang et al., 2022b; Smith et al., 2023) that is reused across tasks, which can lead to interference as new tasks overwrite previously useful prompts. In contrast, other methods learn task-specific prompts independently (Wang et al., 2022a; 2023a), limiting effective knowledge reuse from previously learned prompts. These limitations highlight the need for mechanisms that can dynamically combine useful prompt knowledge across tasks. (a) Static gating      
+
+> 112
+> Task 1 Task 2
+> MSA Layers 112
+> Task 1 Task 2
+> MSA Layers 112
+> Task 1 Task 2
+> MSA Layers
+> (b) Task-Conditioned Gating (c) Instance-Conditioned Gating (Ours)
+> Gating module
+> 0.0 1.0 soft gate values
+
+Figure 1: Conceptual comparison of different prompt gating mechanisms, i.e., determining where prompts are injected into multi-head self-attention (MSA) layers, used in existing prompt-based CL methods. (a) 
+
+Static gating prepends prompts to a fixed, pre-defined subset of layers for all tasks and instances. (b) Task-conditioned gating learns a specific layer-wise topology per task but remains fixed for all instances within that task. (c) Instance-conditioned gating (ours) dynamically computes soft gate values for prompts at each layer for every input image via a learnable task-specific gating module. The varying intensity of each position illustrates our model’s ability to adaptively weight layer-wise prompts based on the fine-grained visual context of each instance. A recent study analyzing the internal representations of ViT (Raghu et al., 2021) suggests that lower layers encode generic, low-level visual features associated with local attention patterns that are largely task-agnostic and transferable across tasks, while higher layers capture higher-level semantic concepts. This hierarchical distinction implies that uniformly injecting prompts across all layers, as done in OVOR (Huang et al., 2024), or in a fixed subset of early layers as in L2P (Wang et al., 2022b) and CODA-Prompt (Smith et al., 2023), may be suboptimal. Indeed, DualPrompt empirically demonstrates that separating general and 
+
+expert prompt locations improves performance. CODA-Prompt further improves prompt capacity through input-conditioned composition of decomposed prompt components, but follows a similar predefined prompt-insertion strategy. From a topology perspective, these methods still adopt a static prompting topology or 
+
+static gating (see Figure 1a), where prompts are injected into every layer or a fixed subset of blocks. Such designs apply the same prompt activation pattern to all samples, leading to uniform computational and parameter usage regardless of task difficulty or input complexity. RainbowPrompt (Hong et al., 2025) partially relaxes this limitation by introducing task-conditioned probabilistic gates that learn where to insert prompts across layers for each task (Figure 1b). This task-level topology improves over manually predefined prompt locations and complements its diversity-enhanced prompt evolution mechanism. However, its gating mechanism remains task-conditioned , the learned topology is shared across all inputs within a task, ignoring instance-level variations that may require adaptation at different depths. Motivated by this observation, we introduce an input-conditioned prompt gating mechanism (see Figure 1c) that enables more precise layer-wise prompt activation for each individual input. This mechanism establishes an instance-specific topology that dynamically adjusts to the visual characteristics of each image. Inputs requiring fine-grained visual details may trigger prompts in the early layers with greater emphasis to refine low-level features, whereas images that align well with the frozen backbone may rely more on prompts in higher layers to facilitate label mapping. Furthermore, the gated prompts from previous tasks are dynam-2ically aggregated with the current task prompt, enabling effective knowledge reuse across tasks through a dynamic knowledge fusion process. We hypothesize that this instance-conditioned prompting topology improves (1) the model’s ability to capture fine-grained intra-task variations, and (2) long-term knowledge retention by selectively engaging only relevant historical prompt knowledge for each input. Besides improving instance-level adaptability, this design is also prompt-efficient: it avoids dense component-based composition and additional prompt-evolving transformation modules, relying instead on compact task-specific prompts and lightweight gating modules. The main contributions of our work are as follows: • We propose a novel prompt-based CL method, gated adaptive prompting (GAP-Prompt), which in-troduces input-conditioned gates to modulate layer-wise prompt activation for each instance. More-over, by progressively integrating prompts from previous tasks with the current task prompt, GAP-Prompt forms an instance-specific prompting topology that enables adaptive knowledge reuse across tasks. • Our method achieves state-of-the-art (SoTA) results across multiple CL benchmarks, consistently improving accuracy while mitigating forgetting and maintaining stable performance under diverse task variations. 
+
+# 2 Related works 
+
+2.1 Continual learning 
+
+CL aims to incrementally acquire new knowledge while preserving previously learned information. The primary challenge in CL is catastrophic forgetting, where optimizing for new tasks leads to a severe decline in performance on earlier ones. To address this issue, traditional solutions are generally categorized into three main approaches: (1) regularization-based methods mitigate forgetting by introducing penalty terms that protect the weights critical to prior tasks (Kirkpatrick et al., 2017; Zenke et al., 2017b; Aljundi et al., 2018; Benzing, 2022; Li & Hoiem, 2017; Dang et al., 2025; 2026); (2) replay-based methods maintain performance by either storing a subset of old data or using generative techniques to reconstruct past information (Rebuffi et al., 2017; Aljundi et al., 2019; Chaudhry et al., 2021; Buzzega et al., 2020); (3) architecture-based methods dynamically adjust the network structure or isolate specific parameter clusters to accommodate each new task (Mallya et al., 2018; Serra et al., 2018; Yoon et al., 2018). While these methods have made significant strides, the emergence of pre-trained models (Dosovitskiy et al., 2020) trained on massive datasets has triggered a paradigm shift. Recent trends have moved away from resource-intensive retraining toward parameter-efficient approaches (e.g., LoRA (Hu et al., 2021), Prompt Tuning (Lester et al., 2021)) and replay-free methods (Wang et al., 2022b;a; Smith et al., 2023), harnessing powerful pre-trained generalization capabilities for more efficient and scalable learning. 
+
+2.2 Prompt-based continual learning 
+
+For vision-based tasks, the prompting mechanism is typically implemented within the ViT (Dosovitskiy et al., 2020) architecture, which relies on a hierarchical sequence of multi-head self-attention (MSA) (Vaswani et al., 2017) blocks. Prompting originally emerged as a method of using hand-crafted, task-specific instructions to elicit desired responses from pre-trained models. In the realm of CL, prompt-based strategies have gained significant traction by enabling the retention of task-specific knowledge without the need for a memory-intensive replay buffer. These methods (Wang et al., 2022b;a; Smith et al., 2023) treat prompts as keys to retrieve stored knowledge, effectively eliminating the requirement for constant model parameter updates. Within this domain, several pivotal frameworks have advanced the field. L2P (Wang et al., 2022b) introduce a prompt-tuning mechanism that utilizes key-query matching to retrieve relevant task knowledge from a shared pool, while DualPrompt (Wang et al., 2022a) refines this by decoupling knowledge into task-invariant prompts for shared features and task-specific prompts to separately encode distinct task-related information. Coda-Prompt (Smith et al., 2023) proposes a decomposed attention-based prompting scheme to improve flexibility and scalability. 3Although the above methods prioritize the integration of multiple base prompts, they often overlook the representational diversity required for effective result unification. RainbowPrompt (Hong et al., 2025) solves this by aggregating independent task prompts into a unified structure. However, while RainbowPrompt optimizes knowledge integration, its reliance on static statistics often leads to suboptimal triggering. Our approach mitigates this by leveraging the specific context of each input to ensure more precise and adaptive prompt activation. 
+
+# 3 Methodology 
+
+3.1 Preliminaries 3.1.1 Continual learning setting 
+
+General CL consists of a sequence of T tasks {1, ..., T }. Let Dt as the dataset for t-th task with Nt pairs: 
+
+Dt = {(xi, y i)}Nt
+
+> i=1
+
+. We focus on the class-incremental learning (class-IL) setting, where there is no overlap of classes between tasks, and task identity is unknown during inference. Besides, as in other prompt-based CL methods (Wang et al., 2022a;b), we adopt the rehearsal-free scenario, where no past samples are stored. 
+
+3.1.2 Prompt-based method 
+
+Denote the pre-trained ViT model as fθ with L MSA layers, and the weights θ are frozen to prevent forgetting of base knowledge. With this standard ViT, the input to each transformer layer can be represented as: 
+
+X = [ xcls ; X ], (1) where the input sequence is composed of a class token xcls ∈ Rd and m patch embeddings X ∈ Rd×m.Prompt-based method augments this sequence with n learnable prompt tokens p ∈ Rd×n. The reformulated input sequence is: 
+
+X = [ xcls ; X ; p]. (2) In addition, most prompt-based methods (Wang et al., 2022a; Huang et al., 2024) adopt prefix tuning (Li & Liang, 2021), where the prompts comprising pK ∈ Rn/ 2×d and pV ∈ Rn/ 2×d are prepended to the key and value representations in the MSA layers of ViT. The prefix tuning of the reformulated input sequence is defined as: 
+
+fpref ix −tuning (X) = MSA 
+
+(
+
+xcls , XQ,
+
+[ pK
+
+XK
+
+]
+
+,
+
+[ pV
+
+XV
+
+]) 
+
+, (3) where XQ, XK , XV are the query, key, and value matrices of the input embeddings. During training, only the prompt parameters pK and pV are updated, while all other model parameters remain frozen. 
+
+3.1.3 Prompt position injection strategy 
+
+Determining where prompts should be injected across MSA layers plays an important role in prompt-based CL. A recent approach inserts prompts uniformly across all transformer layers (Huang et al., 2024), increasing model capacity but also introducing additional computational overhead. Other methods restrict prompt injection to a fixed subset of early layers (Wang et al., 2022b;a; Smith et al., 2023), motivated by the observation that lower layers capture more transferable visual representations. However, identifying suitable insertion layers is non-trivial and often relies on manual design choices or hyperparameter tuning. Moreover, such strategies result in static prompt insertion patterns that remain fixed across all inputs, ignoring instance-specific variations in visual complexity. Recently, RainbowPrompt (Hong et al., 2025) addresses this challenge by introducing task-conditioned gating to learn prompt insertion layers for each task. Specifically, it learns a task-specific gate Gt = {gtl }Ll=1 , where 
+
+gtl is a Bernoulli random variable indicating whether a prompt is inserted into layer l. To enable gradient-based optimization despite the discrete nature of gtl , the method adopts the Gumbel-Softmax trick to obtain a differentiable relaxation: ˆgtl (p) = exp (log δtl (p) + Ztl (p)/τ )
+
+∑ 
+
+> i∈{ 0,1}
+
+exp (log δtl (i) + Ztl (i)/τ ) (4) 4Task t   
+
+> Projection & Embedding
+> Query function
+> ...
+> Task t-1
+> Fusion
+> MSA layers ... ...
+> Task 1 Task 2 Task t
+> Task matching (inference only)
+> Task key Task-speci fi cprompt Shared prompt Soft gate Accumulated prompt
+> Frozen Learnable
+> Head Head
+
+Figure 2: Overall architecture of GAP-Prompt. It partitions prompts into shared and task-specific compo-nents and comprises three main modules. Shared prompt distillation - SPD (green boxes and LSP D ) stabilizes foundational knowledge in the shared prompt space. For task-specific prompts, instance-conditioned gating -ICG (blue bars Soft Gates) generates image-specific soft weights that drive dynamic knowledge fusion - DKF (pink boxes), which combines current and historical prompts into a unified representation. In inference, the query q adaptively retrieves and aggregates prompt-gate pairs for each input. where p ∈ { 0, 1}, Ztl denotes the Gumbel noise, and τ is the temperature scaling parameter. During several initial training epochs, soft decisions sampled from the distribution δtl = [ βtl , 1−βtl ] are used for optimization, where βtl denotes the probability of inserting a prompt at layer l. After this early training phase, discrete gating decisions are sampled from the learned distribution and then fixed. Nevertheless, the learned topology is still shared across all inputs within the task, limiting the model’s ability to adapt prompt activation to the specific characteristics of each instance. 
+
+3.2 Overall architecture 
+
+The overall architecture of our method is illustrated in Figure 2. During training, each input image x is first divided into patches and fed into the pre-trained ViT encoder. Following the hierarchical design of DualPrompt (Wang et al., 2022a), we partition prompts into shared and task-specific expert components, denoted as stj , ptl for the current task t, respectively ( j, l denote layer indices). Following Wang et al. (2022a), shared prompts are injected into the first two layers and are learned across tasks, as these layers mainly capture general visual features that are broadly transferable (Raghu et al., 2021). In contrast to DualPrompt, instead of fixing the next several layers to insert expert prompts, our method dynamically learns where to activate these prompts dynamically. To achieve this, we introduce an instance-conditioned gating (ICG) mechanism that generates soft activation weights for prompts at each layer. Similar to Wang 5et al. (2022a), a task-specific key kt is learned for each task t to associate with its corresponding expert prompts. Moreover, previously learned shared and expert prompts are frozen. Unlike DualPrompt, where shared prompts are updated naively across tasks, we introduce a shared prompt distillation (SPD) loss to anchor the output representations of the first two layers from previous tasks and mitigate forgetting. In addition, for each input image x, the proposed ICG module computes dynamic soft gates that determine how prompts from different tasks contribute to the prompt representation of the current task. Together with frozen prompts from previous tasks, these gates enable dynamic knowledge fusion (DKF) mechanism, which combines the current learnable prompt with historical prompts. The resulting [CLS] token representation from the final transformer layer is fed into a classification head and optimized using the cross-entropy (CE) loss. During inference , we first extract a query q from the input image. A task-matching module then identifies the corresponding task-specific expert prompts. Conditioned on q, the model adaptively weights and aggregates these gated prompts to produce an input-specific prompt representation. 
+
+3.3 Gated adaptive prompting mechanism 3.3.1 Instance-conditioned gating (ICG) 
+
+Although the task-specific learnable gates in RainbowPrompt (Hong et al., 2025) automatically learn, an optimized layer-wise topology for each task, they remain constrained by applying a fixed, static set of sampled gates to all instances within the task. This rigidity is suboptimal for handling high intra-task diversity and relies on stochastic sampling, which may permanently discard potentially useful prompts. The proposed ICG addresses this limitation in a more effective and generative manner: instead of relying on a task-level sampled mask, it dynamically computes gating logits for each specific input image, which eliminates the rigidity of task-shared topological constraints. Concretely, instead of modeling prompt insertion as a discrete Bernoulli decision, we adopt a continuous gating formulation that directly represents the contribution strength of each expert prompt. To obtain differentiable gate values in [0 , 1], we employ the Gumbel-sigmoid relaxation. Unlike the two-state softmax to sample a binary insertion decision, our formulation learns a continuous gate value for each layer, enabling multiple expert prompts to contribute simultaneously according to their relevance to the current input. Specifically, the gate gtl for each instance x is defined as: 
+
+gtl (x) = σ( log (πtl (x)) + ϵτ ), (5) where σ denotes the sigmoid function, ϵ is Gumbel noise sampled from a Gumbel(0, 1) distribution: using an uniform noise u ∼ unif orm (0 , 1), ϵ = −log (−log (u)), and τ is a temperature parameter controlling the sharpness of the relaxation. Here, ϵ plays the same role as the Gumbel noise used in Eq.( 4), but is simplified to a single noise term under the sigmoid-based relaxation. The gating parameter πtl (x) is dynamically generated from the input representation: πtl (x) = htϕ(q), where q ∈ Rd denotes the query of the input image 
+
+x. htϕ denotes the network to learn the gates for task t, implemented as a simple linear layer. Besides, q is extracted using the pre-trained ViT model fθ as the feature vector of the [class] token: q = fθ (x)[0]. We provide additional design details of htϕ in Appendix C.1. Together with the expert prompts ptl at each layer 
+
+l, the gating network htϕ is frozen after learning task t.In addition, to control the sharpness of the relaxation, we employ a linear temperature annealing schedule. Specifically, the temperature τ is decreased over the training epochs, 
+
+τ = τstart − e − 1
+
+E − 1 (τstart − τend ), (6) where e is the current epoch index (from 1) and E is the total number of training epochs. Starting from a high temperature τstart encourages exploratory soft gates, while gradually decreasing τ toward τend sharpens the relaxation and makes prompt activations more distinguishable without forcing them into strict 0s or 1s. This naturally matches our inference strategy: we keep the continuous gate values but suppress weak activations below the small threshold ζ, allowing relevant prompts to remain active while filtering out irrelevant ones. 63.3.2 Dynamic knowledge fusion (DKF) 
+
+While RainbowPrompt (Hong et al., 2025) shows that higher representation diversity can improve accuracy and reduce forgetting, its prompt integration mechanism produces a unified prompt that remains fixed during inference. This static representation limits the model’s ability to adapt prompt utilization to individual inputs. To overcome this limitation, we propose dynamic knowledge fusion (DKF), which dynamically aggregates historical and current prompts using gates produced by the ICG mechanism. Conditioned on the visual characteristics of each input instance, these gates determine the contribution of each prompt, enabling input-adaptive knowledge fusion. Furthermore, unlike RainbowPrompt, which introduces an additional attention-based transformation module with extra parameters and increases training complexity, DKF simply computes the previously learned instance-conditioned gates and only learn the gates for the current task. This design keeps the fusion mechanism simple while enabling knowledge retention across tasks with instance-level adaptability. Specifically, after learning each task, the corresponding prompt is frozen. Let Ppast l = {p1 
+
+> l
+
+, p2 
+
+> l
+
+, ..., pt−1 
+
+> l
+
+}
+
+denotes the set of old frozen expert prompts from the t − 1 previously learned tasks at the l-th MSA layer. Considering new task t at l-th layer, we have new learnable prompt ptl , with corresponding learnable gate gtl (x). For a given input image x with query feature q, we dynamically aggregate all old prompts in 
+
+Ppast l and current prompt ptl based on their corresponding ICG activation weight gil (x). Note that old gate 
+
+{g1 
+
+> l
+
+, . . . , g t−1 
+
+> l
+
+} are computed with given input x via Eq. (5). The fused prompt atl used for current task is formulated as a normalized weighted sum: 
+
+atl (x) = 
+
+∑t−1 
+
+> i=1
+
+gil (x)pil + gtl (x)ptl
+
+∑t−1 
+
+> i=1
+
+gil (x) + gtl (x) + η (7) where η is a small constant added for numerical stability to prevent division by zero. The aggregated prompt 
+
+atl is then computed on the fly for the current task t, and is not stored. Instead, ptl is stored for each task, with atl being recalculated during both training and inference. Separating the i = t term highlights that 
+
+{ptl , g tl } are learnable for current task t while {pil , g il }i<t are frozen. This formulation in Eq. (7) provides two key benefits. First, the instance-conditioned weights gtl (x) create a soft ensemble , allowing the model to selectively draw knowledge from relevant past prompts instead of relying on a rigid task-shared representation. Second, normalizing the accumulated prompt by the total activated gate weight acts as a distribution stabilizer , keeping the injected prompt magnitude bounded and consistent with the representation scale of the pre-trained ViT backbone. 
+
+Comparison with prior prompt integration methods. GAP-Prompt is related to CODA-Prompt (Smith et al., 2023) and RainbowPrompt (Hong et al., 2025), but differs in the role and granularity of prompt adaptation. CODA-Prompt uses input-conditioned coefficients for dense prompt-component com-position, whereas GAP-Prompt uses sigmoid-bounded gates as activation strengths that control where and how strongly current and historical task prompts are injected into MSA layers. RainbowPrompt performs task-level prompt evolution with task-specific layer gates, while GAP-Prompt fuses historical prompts on the fly using instance-conditioned layer-wise gates. Thus, GAP-Prompt shifts prompt integration from dense component composition or task-level evolution to instance-level sparse routing and normalized knowledge fusion. Further formulation, parameter, and efficiency analyses are provided in Appendix C.2 and E. 
+
+3.3.3 Shared prompt distillation (SPD) 
+
+Since we employ shared prompts in the first two layers as in Wang et al. (2022a), forgetting in these prompts is inevitable. To mitigate forgetting, we propose to adopt an additional SPD loss in the output of these two layers. Specifically, after learning the first task, the SPD loss is defined as: 
+
+LSP D = 1 − γ(zt, zt−1), (8) where γ(·, ·) denotes the cosine similarity between two feature representations. Here, zt−1 and zt represent the features of the first two MSA layers produced by the pre-trained ViT with previous shared prompts st−1
+
+> j
+
+7and the current shared prompts stj (j ∈ { 1, 2}), respectively. Minimizing this loss encourages the current shared prompts to preserve the feature representations learned by previous tasks. 
+
+3.3.4 Overall training objective 
+
+To learn the key kt for the current task t, we use the standard key matching loss as in Wang et al. (2022a): 
+
+Lmatch (x, kt) = γ(q, kt), x ∈ D t (9) where γ(·, ·), similar to Eq. (8), denotes cosine similarity, and q is the query feature extracted from the input 
+
+x. The final learning objective of our method is: 
+
+Lf inal = LCE + λmatch Lmatch + λSP D LSP D (10) where LCE denotes the standard cross-entropy classification loss, λmatch and λSP D are hyperparameters that control the contributions of the key matching loss and the SPD loss, respectively. 
+
+3.3.5 Inference process 
+
+During inference, we employ a small deterministic activation threshold ζ (empirically set to 0.1) to discretize the gate logits, suppressing negligible activation values. This filtering step benefits the proposed DKF mechanism by removing weak and noisy prompt contributions during fusion. As a result, only prompts with sufficient relevance to the current input participate in the aggregation process. Consequently, ICG produces more reliable gating decisions, and the fusion process becomes more stable and robust during inference. Specifically, the inference procedure consists of the following steps. 
+
+(1) Task querying. Given an input image x, the corresponding query q is extracted then q is compared with all task keys {k1, k2, . . . , kt} to identify the closest key with index ˆ t:ˆt = arg max 
+
+> i∈{ 1,...,t }
+
+γ(q, ki) (11) 
+
+(2) Prompt retrieval. Given the predicted task index ˆ t, the prompt used for each layer l is aggregated as: 
+
+aˆtl (x) = 
+
+∑ˆti=1 gil (x)pil
+
+∑ˆti=1 gil (x) + η
+
+(12) Here, the gate gil for each task i ∈ { 1, . . . , ˆt} is calculated from the input image x using Eq. (5) with threshold 
+
+ζ and without Gumbel noise ϵ, and is associated with the corresponding frozen prompt pil . Finally, the fused prompt aˆtl , together with the shared prompts s at the early layers, is used for inference. 
+
+# 4 Experiments 
+
+4.1 Datasets and implementation details 
+
+Datasets. To evaluate the performance of GAP-Prompt, we conduct comprehensive evaluations on im-age classification in the class-incremental learning settings across three primary benchmarks: ImageNet-R (Hendrycks et al., 2021), CIFAR-100 (Krizhevsky & Hinton, 2009), and CUB-200 (Welinder et al., 2010). ImageNet-R is selected for its inherent difficulty, containing 200 classes with diverse artistic styles and high intra-class variance. CIFAR-100 (100 classes) is a standard benchmark for prompt-based CL to evaluate gen-eralization. Finally, we utilize the fine-grained CUB-200 dataset of 200 bird species to test the model’s ability to distinguish subtle inter-class differences. Across all experiments, each dataset is partitioned into 10 tasks with disjoint classes: 20 classes/task for ImageNet-R, 10 classes/task for CIFAR-100, and 20 classes/task for CUB-200. 8Evaluation metrics. To evaluate performance, we use two standard metrics: Average Accuracy and Forgetting (Chaudhry et al., 2018). Average Accuracy measures the model’s performance across all tasks after completing the training sequence, while Forgetting quantifies the performance drop on previously learned tasks. Let Rt,i denote the accuracy on task i after training on task t. The Average Accuracy AT
+
+after the final task T is defined as: AT = 1
+
+> T
+
+∑Tk=1 RT,k . Similarly, the Forgetting metric F is defined as the mean performance drop from each task’s initial accuracy to its final state: F = 1 
+
+> T−1
+
+∑T −1 
+
+> i=1
+
+(Ri,i − RT,i ). 
+
+Compared methods. We evaluate the performance of GAP-Prompt against a comprehensive suite of methods, including non-prompt-based methods such as LAE (Gao et al., 2023), InfLoRA (Liang & Li, 2024), and EASE (Zhou et al., 2024), as well as established prompt-based architectures: L2P (Wang et al., 2022b), DualPrompt (Wang et al., 2022a), Coda-Prompt (Smith et al., 2023), ESN (Wang et al., 2023b), EvoPrompt (Kurniawan et al., 2024), OVOR (Huang et al., 2024), CPrompt (Gao et al., 2024), and Rain-bowPrompt (Hong et al., 2025). 
+
+Implementation details. All experiments are executed on a dual NVIDIA V100 GPUs. Following Hong et al. (2025); Wang et al. (2022b), we primarily use the supervised pre-trained backbones on ViT-B/16 on ImageNet-1K (Russakovsky et al., 2015) for CIFAR-100 and ImageNet-R and ImageNet-21K (Ridnik et al., 2021) for CUB-200. Besides, we also utilize self-supervised pretrained backbones, including iBOT-1K (Zhou et al., 2022) and DINO-1K (Caron et al., 2021). GAP-Prompt is optimized using the AdamW optimizer (Loshchilov & Hutter, 2017) with a cosine learning rate decay schedule to stabilize training. For training configurations, we employ a batch size of 64 for ImageNet-R, while a larger batch size of 128 is utilized for both CIFAR-100 and CUB-200. In addition, we re-implement RainbowPrompt using the official public code with the same experimental settings. 
+
+4.2 Experimental results 4.2.1 Main results 
+
+Results on three benchmarks are summarized in Table 1. • CIFAR-100: On CIFAR-100, GAP-Prompt achieves a new SoTA average accuracy of 89.24%, sur-passing the previous best prompt-based method, EvoPrompt (Kurniawan et al., 2024), by a margin of +1.27%. Furthermore, our method achieves the lowest forgetting rate of 3.03%, demonstrat-ing that the synergy between SPD and DKF effectively anchors historical knowledge. Compared to RainbowPrompt (Hong et al., 2025) (87.22%), which utilizes static task-specific gating, our instance-conditioned approach yields a significant improvement, highlighting the benefit of image-specific adaptation. • ImageNet-R: For the larger and more diverse ImageNet-R dataset, GAP-Prompt maintains its lead with an average accuracy of 78.72%, slightly outperforming competitive baselines like CPrompt (Gao et al., 2024) (77.14%) and EvoPrompt (Kurniawan et al., 2024) (76.83%). Our method effectively manages the representation shift in large-scale scenarios, reporting the lowest forgetting rate on this benchmark (3.12%). This consistency across scales validates the robustness of our gated adaptive prompting mechanism. • CUB-200: The most striking results are observed on CUB-200, a challenging fine-grained classifica-tion task. GAP-Prompt reaches an average accuracy of 87.29%, which is remarkably close to the joint training upper bound of 88.00%. Our method outperforms the previous best-reported prompt-based method, OVOR-Deep (Huang et al., 2024), by a substantial +9.18%, and represents a staggering +16.86% improvement over RainbowPrompt (Hong et al., 2025). The drastic reduction in forgetting (3.68%) compared to other methods suggests that our method is particularly adept at capturing the subtle, instance-specific visual nuances required to distinguish between similar sub-categories over time. Across all three datasets, GAP-Prompt consistently achieves the highest accuracy and lowest forgetting. These results show that ICG, normalized DKF, and SPD jointly enable effective instance-wise prompt ag-9Table 1: Performance comparison with other methods on CIFAR-100, ImageNet-R, and CUB-200 under the 10-task class-IL setting. Best results are in bold .
+
+Method CIFAR-100 ImageNet-R CUB-200 
+
+Avg Acc( ↑) Forgetting( ↓) Avg Acc( ↑) Forgetting( ↓) Avg Acc( ↑) Forgetting( ↓)Joint training 91.38 – 82.06 – 88.00 –LAE (Gao et al., 2023) 86.09 ±0.55 6.22 ±0.17 73.88 ±0.43 5.08 ±0.33 - -InfLoRA (Liang & Li, 2024) 86.91 ±0.34 4.22 ±0.37 76.13 ±0.44 5.22 ±0.48 - -EASE (Zhou et al., 2024) 87.28 ±0.71 4.81 ±0.42 75.82 ±0.54 5.83 ±0.37 - -L2P (Wang et al., 2022b) 83.86 ±0.28 7.35 ±0.38 61.57 ±0.66 9.73 ±0.47 71.22 ±0.54 10.68 ±0.61 
+
+DualPrompt (Wang et al., 2022a) 86.51 ±0.33 5.16 ±0.09 68.13 ±0.49 4.68 ±0.20 71.55 ±0.73 10.21 ±0.43 
+
+CODA-Prompt (Smith et al., 2023) 86.92 ±0.77 5.10 ±0.43 73.21 ±0.28 5.69 ±0.28 73.25 ±0.71 11.02 ±0.88 
+
+ESN (Wang et al., 2023b) 86.42 ±0.80 6.08 ±0.48 75.11 ±0.36 5.68 ±0.77 71.20 ±0.54 9.82 ±0.43 
+
+EvoPrompt (Kurniawan et al., 2024) 87.97 ±0.30 3.12 ±0.50 76.83 ±0.08 3.34 ±0.07 - -OVOR-Deep (Huang et al., 2024) 85.99 ±0.89 6.42 ±2.03 76.11 ±0.21 7.16 ±0.34 78.11 ±0.47 7.95 ±0.77 
+
+CPrompt (Gao et al., 2024) 87.82 ±0.21 5.06 ±0.50 77.14 ±0.11 5.97 ±0.68 77.09 ±0.64 10.27 ±0.54 
+
+RainbowPrompt (Hong et al., 2025) 87.22 ±0.53 4.81 ±0.41 76.65 ± 0.56 4.57 ± 0.33 70.43 ±1.23 10.53 ±0.91 
+
+GAP-Prompt (Ours) 89.24 ±0.28 3.03 ±0.44 78.72 ±0.35 3.12 ±0.54 87.29 ±0.45 3.68 ±0.27 
+
+Table 2: Average accuracy on CIFAR-100 and ImageNet-R with self-supervised pre-trained models iBOT-1K and DINO-1K. Best results are in bold .
+
+Pre-trained model Method CIFAR-100 ImageNet-R 
+
+iBOT-1K L2P 75 .57 ± 0.41 60 .97 ± 0.26 DualPrompt 76 .63 ± 0.05 61 .51 ± 1.05 CODA-Prompt 79 .11 ± 1.02 66 .56 ± 0.68 RainBowPrompt 76 .20 ± 0.34 65 .82 ± 0.52 
+
+GAP-Prompt (Ours) 79 .90 ± 0.57 69 .29 ± 0.32 
+
+DINO-1K L2P 70 .65 ± 0.57 57 .40 ± 0.23 DualPrompt 74 .90 ± 0.21 58 .57 ± 0.45 CODA-Prompt 77 .50 ± 0.64 63 .15 ± 0.39 RainBowPrompt 74 .77 ± 0.54 62 .04 ± 0.43 
+
+GAP-Prompt (Ours) 77 .61 ± 0.38 66 .46 ± 0.45 
+
+gregation, allowing the model to exploit accumulated prompt knowledge, preserve old knowledge, and remain adaptable to new tasks. 
+
+4.2.2 Performance with self-supervised pre-trained models 
+
+Tab. 2 presents a performance comparison between GAP-Prompt and current SoTA methods on the CIFAR-100 and ImageNet-R benchmarks, utilizing pre-trained backbones including iBOT-1K (Zhou et al., 2022) and DINO-1K (Caron et al., 2021). The experimental results demonstrate that GAP-Prompt achieves superior and consistent improvements across all testing scenarios. Specifically, with iBOT-1K, GAP-Prompt reaches 79 .90% on CIFAR-100 and 69 .29% on ImageNet-R, out-performing CODA-Prompt by +0 .79% and +2 .73%, respectively. Similarly, with DINO-1K, our method remains competitive on CIFAR-100 and achieves a clear +3 .31% gain over CODA-Prompt on ImageNet-R (66 .46% vs. 63 .15%). Notably, the consistent gap over RainbowPrompt across both backbones further sug-gests that instance-conditioned gating is more effective than task-level gating in adapting prompt usage to the visual context of each input. Overall, these results demonstrate the robustness and generalization ability of GAP-Prompt under different pre-training paradigms. 10 Figure 3: Comparison between our method (GAP-Prompt) and task-based adaptive prompting (Rainbow-Prompt (Hong et al., 2025)) on the dataset CUB-200, 10 tasks, CIL setting. (a) Accuracy after learning the first task; (b) Average accuracy (AA) after learning the fifth task; (c) AA after learning the final task; (d) Forgetting of the model after the final task. 
+
+4.2.3 Robustness comparison with task-specific adaptive prompting 
+
+To validate our hypothesis that ICG improves over task-based adaptive prompting (Hong et al., 2025), we compare GAP-Prompt with RainbowPrompt under varying class splits on CUB-200. The results, shown in Figure 3, highlight the impact of these variations on task performance. • After completing the first task: (Figure 3a), where no forgetting occurs, our method consistently outperforms RainbowPrompt. This shows the benefit of ICG alone: it selects prompts based on each input instead of using a task-shared prompt subset. The stable accuracy across runs further indicates that instance-conditioned layer-wise activation provides more consistent learning than task-based adaptive prompting. • After completing the fifth task: (Figure 3b), our method shows the same trend: it consistently outperforms RainbowPrompt and remains stable across runs. At this stage, in addition to ICG, both DKF and SPD are also involved, further demonstrating the superiority of our approach over RainbowPrompt. • After completing the tenth task: (Figure 3c, Figure 3d), our method still maintains a superior result compared to RainbowPrompt. Furthermore, our method remains stable across runs, while RainbowPrompt’s results fluctuate, indicating its instability when the diversity of tasks changes. Figure 3d further highlights this effect, showing that RainbowPrompt exhibits a much higher for-getting rate than GAP-Prompt and varies significantly across runs when the class set in each task changes, in contrast to GAP-Prompt’s low forgetting rate and minimal variation. 
+
+4.3 Ablation study 4.3.1 Component-wise ablation 
+
+To evaluate the individual contribution of each proposed component in our framework, we conduct a com-prehensive ablation study on the CIFAR-100 dataset. Starting from a baseline configuration that excludes our core components (ICG, DKF, and SPD), we systematically evaluate the impact of our method by incre-mentally integrating these components. The results, summarized in Table 3, highlight the synergistic effect of these components in enhancing accuracy and mitigating forgetting. 
+
+Instance-conditioned gating (ICG). Integration of ICG marks the most significant performance jump, improving average accuracy from 84.78% to 87.82% (a gain of +3.04%) and reducing forgetting from 4.56% to 4.05%. This substantial improvement validates our hypothesis that a static, task-level gating topology is insufficient for handling high intra-task diversity. By allowing each instance to dynamically navigate the layer-wise prompt space via ICG, the model captures fine-grained visual features more effectively. 
+
+Dynamic knowledge fusion (DKF). By adding DKF upon the ICG-enabled backbone, the average accuracy further increases to 88.94%, while forgetting drops to 3.73%. DKF leverages the soft weights 11 Table 3: Component-wise ablation of GAP-Prompt on the CIFAR-100 dataset 
+
+Training Strategy Avg Acc (↑) Forgetting (↓)Baseline 84.78 ± 0.80 4.56 ± 0.73 + Instance-Conditioned Gating (ICG) 87.82 ± 0.37 4.05 ± 0.22 + Dynamic Knowledge Fusion (DKF) 88.94 ± 0.46 3.73 ± 0.31 + Shared Prompt Distillation (SPD) 89.24 ± 0.28 3.03 ± 0.44 
+
+produced by ICG to perform context-aware aggregation, allowing the model to selectively reuse relevant knowledge from prompts of previous tasks based on the current input. The normalized weighted sum also stabilizes the representation distribution, keeping the fused features aligned with the pre-trained ViT. 
+
+Shared prompt distillation (SPD). The inclusion of SPD provides the final refinement, achieving the highest average accuracy of 89.24% and the lowest forgetting rate of 3.03%. While the early layers of a ViT are known to capture generic, task-agnostic patterns, they remain susceptible to overwriting during sequential learning. SPD effectively anchors the shared prompts in these initial layers by minimizing the cosine similarity between current and previous features of the first two MSA layers. Although the accuracy gain is modest (+0.30%), the noticeable reduction in forgetting demonstrates its critical role in preserving previous knowledge across tasks. Consequently, the combination of these three modules allows our framework to achieve a superior balance: ICG provides the necessary plasticity to adapt to diverse instances, while DKF and SPD provide the stability 
+
+required to preserve knowledge over long-term sequences. Together, they outperform the baseline by a total of 4 .46% in accuracy while simultaneously reducing forgetting by 1 .53%. 
+
+4.3.2 Prompt position granularity 
+
+To evaluate the effectiveness of instance-conditioned gating (ICG) in GAP-Prompt against the task-based adaptive prompting (TAP) mechanism in RainbowPrompt (Hong et al., 2025), we use a simplified fixed-position prompting baseline without ICG, DKF, and SPD. We then integrate either TAP or ICG into this baseline for comparison. As reported in Tab. 4, ICG significantly improves the fixed-position baseline and outperforms TAP by 1 .25% in average accuracy while reducing forgetting by 1 .63%. These results demonstrate the effectiveness of ICG in enabling instance-level dynamic activation of layer-wise prompts, rather than relying on fixed prompt positions (as in the baseline) or task-based adaptive prompting (as in TAP). This supports our claim that ICG provides finer-grained control over layer-wise prompt activation, rather than merely performing weighted prompt summation. When combined with DKF and SPD in the full GAP-Prompt framework, performance further improves. This indicates that instance-level routing, controlled historical knowledge fusion, and shared-prompt stabilization are complementary, enabling GAP-Prompt to clearly outperform RainbowPrompt. Table 4: Comparison between ICG and TAP on CIFAR-100. Bold highlights the best results. 
+
+Method Avg Acc (↑) Forgetting (↓)Baseline ( fixed prompting ) 84.78 ± 0.80 4.56 ± 0.73 Baseline + Task-based adaptive prompting (TAP) 86.62 ± 0.30 5.68 ± 0.26 Baseline + Instance-conditioned gating (ICG) 87.82 ± 0.37 4.05 ± 0.22 RainbowPrompt (Hong et al., 2025) 87.22 ± 0.53 4.81 ± 0.41 GAP -Prompt 89.24 ± 0.28 3.03 ± 0.44 
+
+12 5 Conclusion 
+
+In this paper, we introduce GAP-Prompt, an efficient and robust framework for prompt-based continual learning. By transitioning from rigid task-level topologies to an instance-conditioned gating mechanism, GAP-Prompt effectively captures fine-grained intra-task variances often neglected by static prompting meth-ods (both fixed prompt injections and task-specific adaptive prompting). Our framework combines adaptive plasticity (learning new knowledge) through ICG, historical knowledge integration via dynamic knowledge fusion, and foundational stability (preserving previously learned knowledge) through shared prompt distil-lation. Extensive experiments on CIFAR-100, ImageNet-R, and CUB-200 demonstrate the superiority of GAP-Prompt over existing state-of-the-art methods in both accuracy and forgetting mitigation. In partic-ular, the strong performance on fine-grained bird species classification highlights the framework’s ability to adapt to complex representation spaces. We believe GAP-Prompt provides a scalable and effective paradigm for lifelong learning in dynamic, real-world environments. In future work, we plan to explore more challenging settings, such as online continual learning and few-shot class-incremental learning. 
+
+# References 
+
+Rahaf Aljundi, Francesca Babiloni, Mohamed Elhoseiny, Marcus Rohrbach, and Tinne Tuytelaars. Memory aware synapses: Learning what (not) to forget. In Proceedings of the European conference on computer vision (ECCV) , pp. 139–154, 2018. Rahaf Aljundi, Min Lin, Baptiste Goujaud, and Yoshua Bengio. Gradient based sample selection for online continual learning. In Proceedings of the 33rd International Conference on Neural Information Processing Systems , Red Hook, NY, USA, 2019. Curran Associates Inc. Frederik Benzing. Unifying importance based regularisation methods for continual learning. In International Conference on Artificial Intelligence and Statistics , pp. 2372–2396. PMLR, 2022. Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, and Simone Calderara. Dark experience for general continual learning: a strong, simple baseline. In NeurIPS , 2020. Mathilde Caron, Hugo Touvron, Ishan Misra, Hervé Jégou, Julien Mairal, Piotr Bojanowski, and Armand Joulin. Emerging properties in self-supervised vision transformers. In ICCV , 2021. Hyuntak Cha, Jaeho Lee, and Jinwoo Shin. Co$ˆ2$L: Contrastive Continual Learning. In ICCV , 2021. Arslan Chaudhry, Puneet K. Dokania, Thalaiyasingam Ajanthan, and Philip H. S. Torr. Riemannian walk for incremental learning: Understanding forgetting and intransigence. In ECCV , 2018. Arslan Chaudhry, Albert Gordo, Puneet Dokania, Philip Torr, and David Lopez-Paz. Using hindsight to anchor past knowledge in continual learning. In Proceedings of the AAAI conference on artificial intelligence , pp. 6993–7001, 2021. Trung-Anh Dang, Vincent Nguyen, Ngoc-Son Vu, and Christel Vrain. Memory-efficient continual learning with neural collapse contrastive. In WACV , 2025. Trung-Anh Dang, Vincent Nguyen, Ngoc-Son Vu, and Christel Vrain. SAMix: Calibrated and Accu-rate Continual Learning via Sphere-Adaptive Mixup and Neural Collapse. Machine Learning , 115 (7):168, 2026. ISSN 1573-0565. doi: 10.1007/s10994-026-07049-3. URL https://doi.org/10.1007/ s10994-026-07049-3 .Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Un-terthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. Enrico Fini, Victor G. Turrisi da Costa, Xavier Alameda-Pineda, Elisa Ricci, Karteek Alahari, and Julien Mairal. Self-supervised models are continual learners. In CVPR , 2022. 13 Qiankun Gao, Chen Zhao, Yifan Sun, Teng Xi, Gang Zhang, Bernard Ghanem, and Jian Zhang. A unified continual learning framework with general parameter-efficient tuning. In CVPR , 2023. Zhanxin Gao, Jun Cen, and Xiaobin Chang. Consistent prompting for rehearsal-free continual learning. In 
+
+CVPR , 2024. Dan Hendrycks, Steven Basart, Norman Mu, Saurav Kadavath, Frank Wang, Evan Dorundo, Rahul Desai, Tyler Zhu, Samyak Parajuli, Mike Guo, et al. The many faces of robustness: A critical analysis of out-of-distribution generalization. In Proceedings of the IEEE/CVF international conference on computer vision ,pp. 8340–8349, 2021. Kiseong Hong, Gyeong-hyeon Kim, and Eunwoo Kim. Rainbowprompt: Diversity-enhanced prompt-evolving for continual learning. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,pp. 1130–1140, 2025. Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin de Laroussilhe, Andrea Ges-mundo, Mona Attariyan, and Sylvain Gelly. Parameter-efficient transfer learning for nlp. In ICML , 2019. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models, 2021. Wei-Cheng Huang, Chun-Fu Chen, and Hsiang Hsu. Ovor: Oneprompt with virtual outlier regularization for rehearsal-free class-incremental learning. arXiv preprint arXiv:2402.04129 , 2024. Eric Jang, Shixiang Gu, and Ben Poole. Categorical reparameterization with gumbel-softmax. In ICLR ,2017. Menglin Jia, Luming Tang, Bor-Chun Chen, Claire Cardie, Serge Belongie, Bharath Hariharan, and Ser-Nam Lim. Visual prompt tuning. In European conference on computer vision , pp. 709–727. Springer, 2022. Sangwon Jung, Hongjoon Ahn, Sungmin Cha, and Taesup Moon. Continual learning with node-importance based adaptive group sparse regularization. In NeurIPS , 2020. James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz, Joel Veness, Guillaume Desjardins, Andrei A Rusu, Kieran Milan, John Quan, Tiago Ramalho, Agnieszka Grabska-Barwinska, et al. Overcoming catastrophic forgetting in neural networks. Proceedings of the national academy of sciences , 114(13):3521–3526, 2017. Alex Krizhevsky and Geoffrey Hinton. Learning multiple layers of features from tiny images. Technical report, University of Toronto, Toronto, 2009. Muhammad Rifki Kurniawan, Xiang Song, Zhiheng Ma, Yuhang He, Yihong Gong, Yang Qi, and Xing Wei. Evolving parameterized prompt memory for continual learning. In AAAI , 2024. Brian Lester, Rami Al-Rfou, and Noah Constant. The power of scale for parameter-efficient prompt tuning, 2021. Xiang Lisa Li and Percy Liang. Prefix-tuning: Optimizing continuous prompts for generation. Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pp. 4582–4597, 2021. Zhizhong Li and Derek Hoiem. Learning without forgetting. IEEE transactions on pattern analysis and machine intelligence , 40(12):2935–2947, 2017. Yan-Shuo Liang and Wu-Jun Li. Inflora: Interference-free low-rank adaptation for continual learning. In 
+
+CVPR , 2024. Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. arXiv preprint arXiv:1711.05101 ,2017. Divyam Madaan, Jaehong Yoon, Yuanchun Li, Yunxin Liu, and Sung Ju Hwang. Representational continuity for unsupervised continual learning. In ICLR , 2022. 14 Chris J. Maddison, Andriy Mnih, and Yee Whye Teh. The concrete distribution: A continuous relaxation of discrete random variables. In ICLR , 2017. Arun Mallya, Dillon Davis, and Svetlana Lazebnik. Piggyback: Adapting a single network to multiple tasks by learning to mask weights. In Proceedings of the European conference on computer vision (ECCV) , pp. 67–82, 2018. Michael McCloskey and Neal J. Cohen. Catastrophic Interference in Connectionist Networks: The Sequential Learning Problem. Psychology of Learning and Motivation , 1989. Maithra Raghu, Thomas Unterthiner, Simon Kornblith, Chiyuan Zhang, and Alexey Dosovitskiy. Do vision transformers see like convolutional neural networks? In NIPS , 2021. Sylvestre-Alvise Rebuffi, Alexander Kolesnikov, Georg Sperl, and Christoph H. Lampert. icarl: Incremental classifier and representation learning. In CVPR , 2017. Tal Ridnik, Emanuel Ben-Baruch, Asaf Noy, and Lihi Zelnik-Manor. Imagenet-21k pretraining for the masses. 
+
+arXiv preprint arXiv:2104.10972 , 2021. Anthony V. Robins. Catastrophic forgetting, rehearsal and pseudorehearsal. Connect. Sci. , pp. 123–146, 1995. Olga Russakovsky, Jia Deng, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein, et al. Imagenet large scale visual recognition challenge. 
+
+International journal of computer vision , 115(3):211–252, 2015. Joan Serra, Didac Suris, Marius Miron, and Alexandros Karatzoglou. Overcoming catastrophic forgetting with hard attention to the task. In International conference on machine learning , pp. 4548–4557. PMLR, 2018. James Seale Smith, Leonid Karlinsky, Vyshnavi Gutta, Paola Cascante-Bonilla, Donghyun Kim, Assaf Ar-belle, Rameswar Panda, Rogerio Feris, and Zsolt Kira. Coda-prompt: Continual decomposed attention-based prompting for rehearsal-free continual learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 11909–11919, 2023. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. Yabin Wang, Zhiwu Huang, and Xiaopeng Hong. S-prompts learning with pre-trained transformers: An occam’s razor for domain incremental learning. In NeurIPS , 2023a. Yabin Wang, Zhiheng Ma, Zhiwu Huang, Yaowei Wang, Zhou Su, and Xiaopeng Hong. Isolation and impartial aggregation: A paradigm of incremental learning without interference. In AAAI , 2023b. Zifeng Wang, Zizhao Zhang, Sayna Ebrahimi, Ruoxi Sun, Han Zhang, Chen-Yu Lee, Xiaoqi Ren, Guolong Su, Vincent Perot, Jennifer Dy, et al. Dualprompt: Complementary prompting for rehearsal-free continual learning. In European conference on computer vision , pp. 631–648. Springer, 2022a. Zifeng Wang, Zizhao Zhang, Chen-Yu Lee, Han Zhang, Ruoxi Sun, Xiaoqi Ren, Guolong Su, Vincent Perot, Jennifer Dy, and Tomas Pfister. Learning to prompt for continual learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 139–149, 2022b. Peter Welinder, Steve Branson, Takeshi Mita, Catherine Wah, Florian Schroff, Serge Belongie, and Pietro Perona. Caltech-ucsd birds 200, 2010. Jaehong Yoon, Eunho Yang, Jeongtae Lee, and Sung Ju Hwang. Lifelong learning with dynamically expand-able networks. arXiv preprint 1708.01547 , 2018. 15 Friedemann Zenke, Ben Poole, and Surya Ganguli. Continual learning through synaptic intelligence. In 
+
+ICML , 2017a. Friedemann Zenke, Ben Poole, and Surya Ganguli. Continual learning through synaptic intelligence. In 
+
+International conference on machine learning , pp. 3987–3995. Pmlr, 2017b. Da-Wei Zhou, Hai-Long Sun, Han-Jia Ye, and De-Chuan Zhan. Expandable subspace ensemble for pre-trained model-based class-incremental learning. In CVPR , 2024. Jinghao Zhou, Chen Wei, Huiyu Wang, Wei Shen, Cihang Xie, Alan Yuille, and Tao Kong. ibot: Image bert pre-training with online tokenizer. In ICLR , 2022. 16 A Hyperparameter selection 
+
+The hyperparameters used in GAP-Prompt are described in Tab. 5. For selecting optimal hyperparameters, we utilize a grid search method. The final chosen values for all hyperparameters are shown in Tab. 6. In addition to these hyperparameters, in GAP-Prompt , we inject shared prompts into the first two layers following the hierarchical design in Wang et al. (2022a), and we inject task-specific expert prompts into the next eight layers with instance-conditioned gates gtl to dynamically activate these prompts. We do not inject any prompts into the last two layers, as Raghu et al. (2021) reveals that, in these highest layers, the network strictly focuses on updating the [CLS] token for the final classification readout, while spatial tokens (representing image patches or regions) are mostly bypassed via skip connections. Injecting task-specific expert prompts at this stage disrupts the dedicated feature aggregation process, leading to negligible or even negative benefits while increasing computational overhead. When re-implementing RainbowPrompt (Hong et al., 2025), to ensure a fair comparison, we utilize the configurations and hyperparameters specified in the original paper. Table 5: Hyperparameters used in GAP-Prompt 
+
+Hyperparameter Description 
+
+E Number of training epochs ˜η Learning rate 
+
+λmatch Coefficient of Lmatch in the final loss 
+
+λSP D Coefficient of LSP D in the final loss 
+
+bsz Batch size 
+
+Np Task-specific expert prompt length 
+
+Ns Shared prompt length 
+
+ζ Threshold for removing noise in gates gtl during inference 
+
+τstart , τend Initial and terminate value of temperature used to compute gate gtl
+
+Table 6: Selected hyperparameters in GAP-Prompt 
+
+## Dataset Hyperparameter 
+
+## All Np : 20, Ns : 6, λmatch : 1 .0, 
+
+## τstart : 5 .0, τend : 0 .1, ζ : 0 .1CIFAR-100 ˜η : 0 .005, E : 20, bsz : 128, λSP D : 0 .1ImageNet-R ˜η : 0 .003, E : 50, bsz : 64, λSP D : 0 .01 CUB-200 ˜η : 0 .005, E : 20, bsz : 128, λSP D : 0 .1
+
+# B Algorithm overview 
+
+Our training and inference procedures are summarized in Algo. 1 and Algo. 2, respectively. All equation references in the algorithms refer to the main paper. 17 Algorithm 1: GAP-Prompt training 
+
+Input: Training sets {D t}Tt=1 , frozen pre-trained ViT fθ , hyperparameters λmatch , λ SP D  
+
+> 1
+
+Initialize shared prompts {sj } 
+
+> 2
+
+for t = 1 , . . . , T do  
+
+> 3
+
+Initialize task-specific expert prompts {ptl }, task key kt, linear gating module htϕ, and classification head ˜htψ 
+
+> 4
+
+if t > 1 then  
+
+> 5
+
+Store and freeze the old shared prompts {st−1 
+
+> j
+
+} ← { sj } 
+
+> 6
+
+for (x, y ) ∈ D t do  
+
+> 7
+
+Extract query q ← fθ (x)[0] 
+
+// Instance-conditioned gating (ICG)  
+
+> 8
+
+Generate instance-conditioned gates gtl (x) using linear module htϕ as Eq. (5) 
+
+// Dynamic knowledge fusion (DKF)  
+
+> 9
+
+Perform DKF to get atl (x) following Eq. (7)  
+
+> 10
+
+Forward x through ViT fθ using sj and atl (x) as per Eq. (3)  
+
+> 11
+
+Compute Lmatch following Eq. (9) and LCE ;
+
+// Shared prompt distillation (SPD)  
+
+> 12
+
+if t > 1 then  
+
+> 13
+
+Compute LSP D with {st−1 
+
+> j
+
+} following Eq. (8)  
+
+> 14
+
+Update {sj }, {ptl }, kt, htϕ, ˜htψ by minimizing Lf inal in Eq. (10)  
+
+> 15
+
+Freeze {ptl }, kt, htϕ
+
+Output: Updated shared prompts {sj }, expert prompts {ptl }, task key kt, linear module 
+
+htϕ, and classification heads ˜htψ
+
+Algorithm 2: GAP-Prompt inference after learning task t
+
+Input: Input image x, frozen pre-trained ViT fθ , learned shared prompts {sj }, task-specific expert prompts {ptl }, linear gating module htϕ, and classification head ˜htψ , threshold ζ 
+
+> 1
+
+Extract query q ← fθ (x)[0] ;  
+
+> 2
+
+Perform task querying to identify task index ˆ t following Eq. (11);  
+
+> 3
+
+for i = 1 , . . . , ˆt do  
+
+> 4
+
+Compute instance-conditioned gates gil (x) using linear module hiϕ following Eq. (5) and filter with threshold ζ; 
+
+> 5
+
+Perform prompt retrieval and fusion aˆtl (x) following Eq. (12);  
+
+> 6
+
+Forward x through ViT fθ with fused prompts aˆtl (x) to get final features;  
+
+> 7
+
+Compute logits across all learned classes using classification head ˜htψ ; 
+
+> 8
+
+Compute predicted label ˆ y = argmax( logits ); 
+
+Output: Predicted label ˆ y
+
+# C Design choices and stability analysis 
+
+This section provides additional analyses for the main design choices of GAP-Prompt. We first compare the proposed lightweight linear gate with a bottleneck MLP for the gating network in Sec. C.1. We then provide a formulation-level comparison to clarify how GAP-Prompt differs from prior prompt integration methods in Sec. C.2. Specifically, we analyze the role of ICG compared with dense attention-based component weighting in CODA-Prompt (Smith et al., 2023) and task-level gating in RainbowPrompt (Hong et al., 2025), and then 18 discuss why Gumbel-Sigmoid is suitable for ICG. Finally, we analyze why DKF uses normalized fusion for instance-conditioned historical prompt integration. 
+
+C.1 Gating module architecture design 
+
+To learn the gating network in GAP-Prompt, intuition and standard practices in parameter-efficient fine-tuning, such as Adapters (Houlsby et al., 2019), might suggest that a bottleneck multi-layer perceptron (MLP) with non-linear activations provides a more expressive and noise-resilient mechanism. Such compres-sion–expansion structures are widely used in representation learning to filter redundant information capture complex non-linear mappings. Table 7: Comparison of gating module architectures in GAP-Prompt (Linear and MLP) on CIFAR-100, ImageNet-R, and CUB-200 under the 10-task class-IL setting. The best results are highlighted in bold .
+
+Gating module CIFAR-100 ImageNet-R CUB-200 
+
+Avg Acc( ↑) Forgetting( ↓) Avg Acc( ↑) Forgetting( ↓) Avg Acc( ↑) Forgetting( ↓)MLP 88.28 ±0.20 3.69 ±0.18 76.27 ± 0.36 4.35 ± 0.33 86.32 ±0.36 4.10 ±0.11 
+
+Linear 89.24 ±0.28 3.03 ±0.44 78.72 ±0.35 3.12 ±0.54 87.29 ±0.45 3.68 ±0.27 
+
+To verify this design, we replace the linear gating layer with a bottleneck MLP consisting of a down-projection linear layer, normalization, GELU activation, and an up-projection linear layer. The results on CIFAR-100, ImageNet-R, and CUB-200 are reported in Tab. 7. Interestingly, this modification leads to a performance drop compared to the linear gating layer. Specifically, the average accuracy decreases by 0.96%, 2.45%, and 0.97% on CIFAR-100, ImageNet-R, and CUB-200, respectively, accompanied by increased forgetting. We attribute this degradation to two main factors. First, the bottleneck compresses the rich input-aware features, potentially discarding fine-grained information necessary for instance-level routing. Second, the normalization and non-linearities reduce the variance of the gating logits, resulting in overly smooth and ambiguous gate activations rather than the sharp routing signals required for effective prompt selection. Therefore, we retain a linear gating mechanism, which preserves high-fidelity feature matching while remaining computationally efficient. 
+
+C.2 Why GAP-Prompt differs from prior prompt integration methods 
+
+GAP-Prompt is closely related to CODA-Prompt (Smith et al., 2023) and RainbowPrompt (Hong et al., 2025), since all three methods aim to improve prompt integration in CL. However, they differ in two key aspects: (1) the weighting or activation mechanism for prompts, and (2) the way historical prompt knowledge is integrated. We first compare ICG with prior weighting and gating mechanisms, then analyze the normalized DKF formulation for historical prompt fusion. 
+
+C.2.1 How ICG differs from prior weighting/gating mechanisms 
+
+Instance-conditioned gating (ICG) is designed to produce input-conditioned, layer-wise prompt activation strengths rather than dense attention coefficients or task-level insertion decisions. We clarify this design choice by comparing ICG with CODA-Prompt (Smith et al., 2023) and RainbowPrompt (Hong et al., 2025) below. 
+
+Dense attention-based prompt weighting in CODA-Prompt. CODA-Prompt (Smith et al., 2023) decomposes prompts into a set of prompt components and uses input-conditioned attention coefficients to compose the final prompt. For clarity and consistency with our notation, we denote M as the number of new components introduced per task. After learning task t, the available component dictionary therefore contains tM components, and the prompt at layer l is formed as: 19 pCODA  
+
+> l
+
+(x) = 
+
+> tM
+
+∑
+
+> m=1
+
+αl,m (x)Pl,m , (13) where Pl,m is the m-th prompt component at layer l, and αl,m (x) is the input-conditioned component weight. Each prompt component Pl,m is associated with a corresponding component key Kl,m and a learnable attention vector Al,m . When a new task arrives, CODA-Prompt expands the component dictionary by adding M new triplets {(Pl,m , Kl,m , Al,m )}, while previously learned components and their corresponding keys and attention vectors are frozen. This expansion strategy allows new capacity to be added without changing the weight computation of previously learned components. Here, the query derived from the input image x is denoted as q(x) instead of simply q to emphasize its input dependence. CODA-Prompt first computes an attended query by applying the component-specific attention vector Al,m to the input query 
+
+q(x), and then compares this attended query with the corresponding component key Kl,m :
+
+αl,m (x) = γ (q(x) ⊙ Al,m , Kl,m ) , (14) where γ(·, ·) denotes cosine similarity and ⊙ denotes element-wise multiplication. Here, Al,m is a learnable component-specific feature-selection vector rather than an input-conditioned module. It modulates the query representation before cosine matching with Kl,m .Therefore, the role of αl,m (x) in CODA-Prompt is prompt-component composition: it determines how decomposed components are assembled into the final prompt content. This differs from ICG, where the input-dependent value is not used to compose prompt components, but to decide the activation strength of a task-specific prompt at a particular layer. 
+
+Task-based Gumbel-Softmax gating in RainbowPrompt. RainbowPrompt (Hong et al., 2025) also studies prompt insertion across layers, but its gate is task-conditioned rather than instance-conditioned. Specifically, a task-specific Bernoulli gate is defined as: 
+
+Gt = {gtl }Ll=1 , (15) where gtl indicates whether the RainbowPrompt of task t should be inserted into layer l. To optimize this discrete decision, RainbowPrompt uses a two-state Gumbel-Softmax relaxation: ˆgtl (p) = exp ((log δtl (p) + Ztl (p)) /τ )
+
+∑ 
+
+> i∈{ 0,1}
+
+exp ((log δtl (i) + Ztl (i)) /τ ) , p ∈ { 0, 1}, (16) where δtl = [ βtl , 1 − βtl ] parameterizes the probability of inserting or not inserting the prompt at layer l.After the early training phase, discrete gates are sampled and then fixed for that task. Therefore, all inputs belonging to the same task share the same layer-wise prompt insertion pattern. 
+
+Instance-conditioned gating (ICG) in GAP-Prompt. Unlike CODA-Prompt, which produces input-dependent coefficients to compose prompt contents from a component dictionary, and unlike RainbowPrompt, which learns task-level insertion gates shared by all samples of a task, ICG predicts an activation strength for each input and each layer via Gumbel-Sigmoid relaxation: 
+
+gtl (x) = σ
+
+( log( πtl (x)) + ϵτ
+
+)
+
+, (17) where ϵ is Gumbel noise, τ is the temperature, and σ(·) is the sigmoid function. The gating parameter is generated from the input query: 
+
+πtl (x) = htϕ(q), (18) where htϕ is the task-specific gating module and q is the query feature extracted from the frozen ViT. Since the output is constrained to [0 , 1], gtl (x) can be interpreted as the activation strength of the task-specific prompt ptl at layer l for input x. This design differs from RainbowPrompt in both conditioning and 20 interpretation: two samples from the same task can produce different gate values, and the gate represents a continuous activation strength rather than a sampled binary insertion decision. Moreover, these gates are later used by DKF to control the fusion of current and historical prompts, instead of only deciding whether a task-level prompt is inserted into a layer. Thus, CODA-Prompt asks which prompt components should be composed, RainbowPrompt asks whether a task-level prompt should be inserted into a layer, whereas ICG asks which layer-wise task prompt should be activated for this particular input and to what extent. This changes the role of the weight from dense prompt-component composition or task-level insertion to instance-conditioned sparse prompt routing. 
+
+Why Gumbel-Sigmoid for ICG? The goal of ICG is to learn discrete-like prompt activation decisions while keeping the gating module differentiable during training. 
+
+A standard sigmoid gate ,
+
+gtl (x) = σ(ρtl (x)) , (19) where ρtl (x) denotes the gating logit predicted from the input query, can produce soft activation values, but may remain overly smooth, with limited exploration and no explicit encouragement toward sharp routing decisions. 
+
+A softmax-based attention mechanism , as another possible alternative to ICG, assigns dense relative weights over the available task prompts: 
+
+wil (x) = exp( γ(q, kil )) 
+
+∑tj=1 exp( γ(q, kjl )) , al(x) = 
+
+> t
+
+∑
+
+> i=1
+
+wil (x)pil . (20) Here, this formulation would require maintaining an additional key kil for each task prompt pil . Although it resembles attention-style dense prompt weighting, it is not equivalent to CODA-Prompt, where the weights are computed over decomposed prompt components with component-specific keys and attention vectors. More importantly, this dense formulation forces all candidate prompts to compete within a normalized distribution and allows every prompt to contribute to each input, even when some historical prompts are irrelevant. This behavior is less suitable for class-incremental learning, where irrelevant prompt reuse can introduce interference. Based on the Gumbel-Softmax relaxation (Jang et al., 2017; Maddison et al., 2017), Gumbel-Sigmoid better matches the intended behavior of ICG because it treats each prompt activation as an independent routing decision rather than a dense normalized competition among all candidates. The Gumbel perturbation en-courages exploration of different layer-wise activation patterns during training, while the sigmoid relaxation keeps the gate value in [0 , 1] and allows gradient-based optimization. As the temperature is annealed, the gates become sharper and more separable, making them naturally compatible with inference-time threshold-ing. Thus, Gumbel-Sigmoid supports the sparse routing objective of ICG: it learns soft gates during training, suppresses irrelevant prompts through thresholding, and provides routing signals for DKF. 
+
+C.2.2 Why normalized dynamic knowledge fusion (DKF)? 
+
+While ICG determines how strongly each layer-wise task prompt should be activated for a given input, DKF determines how current and historical task prompts are integrated. Here, we compare DKF with the prompt integration mechanisms in CODA-Prompt and RainbowPrompt, and then discuss why normalized fusion is used. 
+
+Dense component integration in CODA-Prompt. CODA-Prompt integrates prompt knowledge by densely composing decomposed prompt components as in Eq. (13). Historical knowledge is reused because previously learned components remain in the component dictionary and can still contribute to future prompts through their input-conditioned coefficients. However, this integration is performed at the component level. The weights αl,m (x) determine how decomposed prompt components are assembled into the final prompt, rather than deciding which task-specific historical prompts should be activated at each layer for each input. 21 Task-based prompt evolution in RainbowPrompt. RainbowPrompt integrates historical prompts through a prompt-evolving mechanism. Let {p1 
+
+> l
+
+, . . . , ptl } denote accumulated task prompts up to task t at layer l. RainbowPrompt transforms and aligns these accumulated prompts during training: ˜pil = Atl (pil ), {i = 1 , . . . , t }, (21) where Atl (·) denotes the task-conditioned transformation and alignment operation used for prompt evolution. The evolved prompts are then integrated into a unified task-level RainbowPrompt: 
+
+prainbow  
+
+> l,t
+
+= 1
+
+t
+
+> t
+
+∑
+
+> i=1
+
+˜pil . (22) The resulting evolved prompts are then used at inference. Therefore, RainbowPrompt performs historical prompt integration at the task level: the evolved prompt is shared by samples from the same task and remains fixed during inference. 
+
+Instance-conditioned historical prompt fusion in GAP-Prompt. GAP-Prompt addresses a com-plementary problem: historical prompt relevance may vary across inputs, even within the same task. After learning task i, the prompt pil and its gating module hiϕ are frozen. For an input x at task t, Dynamic Knowledge Fusion (DKF) computes gates gil (x) for current and historical prompts and fuses them on the fly: 
+
+atl (x) = 
+
+∑ti=1 gil (x)pil
+
+∑ti=1 gil (x) + η . (23) Unlike CODA-Prompt, the weights in DKF are not component-composition coefficients. They are activation strengths over task-specific prompts. Unlike RainbowPrompt, the fused prompt is not a stored task-level representation, but is recomputed for every input. Therefore, DKF performs instance-conditioned historical prompt fusion rather than dense component integration or task-level prompt evolution. 
+
+Why normalization? The denominator in DKF prevents the magnitude of the fused prompt from growing with the number of learned tasks or the number of active gates. Without normalization, an unnormalized gated sum, ¯atl (x) = 
+
+> t
+
+∑
+
+> i=1
+
+gil (x)pil (24) can increase in norm as more prompts are accumulated. This may shift the input distribution seen by the frozen ViT backbone, because prompt tokens are injected into the key and value streams of the MSA layers. Normalized DKF instead keeps the injected prompt scale controlled: 
+
+∥atl (x)∥2 ≤
+
+∑ti=1 gil (x)∥pil ∥2
+
+∑ti=1 gil (x) + η . (25) When the prompt norms are bounded, the fused prompt norm is also controlled. This is important because the ViT backbone is frozen, and the learned prompts must remain compatible with the representation scale of the pre-trained model. 
+
+Convergence and stability of DKF. We further analyze the convergence behavior and optimization stability of Dynamic Knowledge Fusion (DKF) using training loss curves. Since DKF recomputes the fused prompt from current and historical prompts for each input, one potential concern is that the fusion process may introduce unstable optimization dynamics. We therefore visualize the training loss curves at interme-diate and final stages, including task 5, task 10, and the global training loss across datasets. As shown in Fig. 4, the loss decreases smoothly without severe oscillations. This suggests that DKF does not destabilize optimization, despite recomputing input-specific fused prompts during training. Together with the normalized formulation discussed above, this supports the stability of DKF from both an optimization perspective and a scale-control perspective. 22 Figure 4: Convergence and optimization stability of DKF. We visualize the training loss curves during task 2, task 5, and task 10 training on different datasets. The curves decrease smoothly without severe oscillations, suggesting that input-specific dynamic fusion does not destabilize optimization. 
+
+C.2.3 Summary of differences 
+
+Table 8 summarizes the key differences among CODA-Prompt (Smith et al., 2023), RainbowPrompt (Hong et al., 2025), and GAP-Prompt. CODA-Prompt uses input-conditioned weights for dense prompt component composition. RainbowPrompt integrates historical prompts through task-level prompt evolution and uses task-level layer gates. In contrast, GAP-Prompt uses instance-conditioned gates for sparse prompt activation and normalized on-the-fly fusion of current and historical task prompts. Therefore, GAP-Prompt differs from prior prompt integration methods not merely by replacing one weighting function with another, but by changing the role of weights from component composition or task-level insertion to instance-level routing and controlled historical knowledge fusion. Table 8: Comparison of GAP-Prompt with CODA-Prompt and RainbowPrompt                   
+
+> Aspect CODA-Prompt (Smith et al., 2023) RainbowPrompt (Hong et al., 2025) GAP-Prompt
+> Weight/gate type Input-conditioned component weight Task-conditioned insertion gate Instance-conditioned activation gate Weight/gate semantics Component composition coefficient prompt insertion decision prompt activation strength Historical knowledge use Frozen accumulated components Evolved accumulated prompts Selective current/history fusion Inference behavior Dense component assembly Task-level evolved prompts On-the-fly input-specific fusion Sparsity Dense weighting Task-level selection Thresholded sparse activation
+
+# D Task querying accuracy and sensitivity analysis 
+
+At inference, GAP-Prompt first predicts a task index by matching the input query q with the learned task keys: ˆt(x) = arg max   
+
+> i∈{ 1,...,T }
+
+γ(q(x), ki), (26) where γ(·, ·) denotes cosine similarity. The predicted task index ˆ t(x) determines the candidate prompt range used by Dynamic Knowledge Fusion (DKF). Since incorrect task querying may affect the final classification performance, we analyze both task querying accuracy and the sensitivity of GAP-Prompt to task routing errors. 23 Task querying accuracy. Let Dtest = {(xn, y n, t n)}Nn=1 denote the test set after learning all tasks, where 
+
+tn is the ground-truth task index of sample xn. The task matching accuracy is defined as: Acc query = 1
+
+N
+
+> N
+
+∑
+
+> n=1
+
+I [ˆt(xn) = tn
+
+] , (27) where I[·] is the indicator function, which equals 1 if the condition is true and 0 otherwise. This metric measures how often the task querying stage retrieves the correct task key before prompt fusion. Table 9: Task querying accuracy (%) of the task-key retrieval module in GAP-Prompt after learning the final task under the 10-task class-IL setting. ↑ indicates that higher values are better 
+
+## Dataset Task querying accuracy (↑) Avg Acc (↑)CIFAR-100 55.75 89.24 ImageNet-R 44.69 78.72 CUB-200 44.30 87.29 Tab. 9 shows that the task querying accuracy is moderate across datasets, ranging from 44 .30% to 55 .75%. Nevertheless, the final average accuracy remains high, especially on CIFAR-100 and CUB-200. This indicates that GAP-Prompt does not rely solely on perfectly correct task-key retrieval. Instead, because the gates are input-conditioned, GAP-Prompt can adapt prompt usage for each input even when the queried task index is imperfect. DKF can still reuse useful historical prompts within the candidate range, while ICG and thresholding help suppress weak or irrelevant prompt activations. 
+
+Classification accuracy under correct and incorrect task querying. To understand whether per-formance degradation mainly comes from incorrect task querying or from actual forgetting, we split the test samples into two groups according to the correctness of the queried task, 
+
+Scorrect = {n | ˆt(xn) = tn
+
+} , Swrong = {n | ˆt(xn)̸ = tn
+
+} . (28) We then report classification accuracy separately for each group, Acc correct cls = 1
+
+|S correct |
+
+∑
+
+> n∈S correct
+
+I [ˆ yn = yn] , (29) Acc wrong cls = 1
+
+|S wrong |
+
+∑
+
+> n∈S wrong
+
+I [ˆ yn = yn] . (30) This analysis helps distinguish the effect of incorrect task querying from class-level errors within the selected prompt space. Tab. 10 further separates the effect of correct and incorrect task querying. As expected, samples with correct task querying achieve higher classification accuracy across all datasets. However, the accuracy under wrong querying remains reasonably high, e.g., 81 .91% on CIFAR-100 and 82 .57% on CUB-200. This suggests that incorrect task querying does not necessarily lead to immediate failure, because the retrieved candidate range may still contain useful historical prompts and DKF can selectively fuse them according to instance-conditioned gates. The larger gap on ImageNet-R indicates that task querying errors are more harmful when the dataset contains stronger distribution shifts and more diverse visual styles. 
+
+Over-estimation and under-estimation analysis. We further analyze the direction of task querying errors by defining: ∆tn = ˆ t(xn) − tn. (31) When ∆ tn = 0, task querying is correct. When ∆ tn > 0, the queried task is later than the ground-truth task. In this case, the candidate prompt range still contains the correct historical prompts but also includes 24 Table 10: Classification accuracy conditioned on task querying correctness. This analysis separates degra-dation due to incorrect task querying from degradation due to class-level forgetting or confusion 
+
+Dataset Correct query (%, ↑) Wrong query (%, ↑) Avg Acc (%, ↑)CIFAR-100 94.35 81.91 89.24 ImageNet-R 90.65 68.99 78.72 CUB-200 92.75 82.57 87.29 prompts from later tasks. ICG can mitigate this error by assigning low gates to irrelevant later-task prompts, which are further suppressed by thresholding. When ∆ tn < 0, the queried task is earlier than the ground-truth task. In this case, the correct task prompt may be excluded from the fusion range, making the error more harmful because DKF cannot directly access the prompt learned for the true task. Table 11: Sensitivity to the direction of task querying errors. ∆ t = 0 indicates correct task querying, ∆ t > 0indicates over-estimation, and ∆ t < 0 indicates under-estimation. All values are reported in percentage (%). 
+
+Dataset ∆t = 0 ( ↑) ∆t > 0 ( ↑) ∆t < 0 ( ↑) Avg Acc (↑)CIFAR-100 94.35 82.90 83.50 89.24 ImageNet-R 90.65 71.41 66.38 78.72 CUB-200 92.75 84.32 81.20 87.29 Tab. 11 shows that both over-estimation and under-estimation reduce classification accuracy compared with correct task querying. However, their effects are not symmetric. On ImageNet-R and CUB-200, under-estimation is more harmful than over-estimation, with larger drops from 90 .65% to 66 .38% on ImageNet-R and from 92 .75% to 81 .20% on CUB-200. This is consistent with our inference design: when ∆ tn < 0, the correct task prompt may be outside the candidate range and cannot participate in DKF. By contrast, when ∆tn > 0, the correct prompt remains within the range, while irrelevant later-task prompts can be suppressed by input-conditioned gates and thresholding. This analysis further supports the role of ICG and DKF as a second-stage correction mechanism after task querying. 
+
+# E Inference computational overhead and scalability 
+
+A potential concern is that GAP-Prompt may introduce additional inference cost because DKF fuses current and historical prompts. We therefore analyze the additional operations beyond the frozen ViT forward pass and report latency across different task increments. 
+
+Additional inference operations. For an input image x after learning t tasks, GAP-Prompt first extracts the query q(x) from the frozen ViT. The additional inference cost comes from three lightweight operations: 1. Task querying : compute cosine similarities between q(x) and the learned task keys {ki}ti=1 .2. Instance-conditioned gating (ICG) : compute gates gil (x) for candidate task prompts. 3. Dynamic knowledge fusion (DKF) : aggregate only the candidate prompts whose gates remain active after thresholding. The ViT backbone is unchanged and remains frozen. Therefore, the overhead of GAP-Prompt is determined only by task-key querying, linear gating modules, and prompt fusion. 
+
+Complexity analysis. Let d be the embedding dimension, Lg the number of gated layers, Np the task-specific prompt length, and ˆ t(x) the queried task index. Task querying requires: Cost task −querying = O(td ), (32) 25 which is small compared with the ViT forward pass. Under the standard predicted-querying setting, GAP-Prompt does not evaluate all learned tasks for fusion. Instead, it uses the candidate range {1, . . . , ˆt(x)}:Cost ICG = O(ˆt(x)Lg d). (33) After applying the inference threshold ζ, the number of active prompts can vary across layers and inputs. For an input xn at the l-th MSA layer, let 
+
+N l
+
+> active
+
+(xn) = 
+
+> ˆt(xn)
+
+∑
+
+> i=1
+
+I [gil (xn) > ζ ] (34) denote the number of active task prompts at layer l. The fusion cost for this input is then: Cost DKF (xn) = O
+
+Npd
+
+> Lg
+
+∑
+
+> l=1
+
+N l
+
+> active
+
+(xn)
+
+ . (35) 
+
+Candidate gates before thresholding. Since task querying is input-dependent, each sample may have a different queried task index ˆ t(xn) and therefore a different candidate prompt range. For an input xn, the number of candidate task-layer gates before thresholding is: 
+
+Ncand (xn) = ˆ t(xn)Lg , (36) where Lg is the number of gated MSA layers. We report the average number of candidate gates over the test set: ¯Ncand = 1
+
+N
+
+> N
+
+∑
+
+> n=1
+
+ˆt(xn)Lg . (37) 
+
+Effective active prompts after thresholding. After applying the inference threshold ζ, the number of active gates can vary across layers and inputs. We therefore report the average number of active task-layer 
+
+prompts: ¯Nactive = 1
+
+N
+
+> N
+
+∑
+
+> n=1
+> Lg
+
+∑
+
+> l=1
+
+N l
+
+> active
+
+(xn) = 1
+
+N
+
+> N
+
+∑
+
+> n=1
+> Lg
+
+∑
+
+> l=1 ˆt(xn)
+
+∑
+
+> i=1
+
+I [gil (xn) > ζ ] . (38) where I[·] is the indicator function. This metric reflects the average number of task-specific prompts that actually participate in DKF across all gated layers for each input, instead of the worst-case cost of densely aggregating all stored prompts. We also report the active ratio: 
+
+ractive = ¯Nactive 1
+
+> N
+
+∑Nn=1 ˆt(xn)Lg
+
+. (39) This metric quantifies how much thresholding reduces the effective fusion workload compared with using all candidate task-layer prompts. Tab. 12 shows that thresholding consistently reduces the effective number of prompts used by DKF. Af-ter learning 10 tasks, GAP-Prompt activates only 29 .61 out of 60 .3 candidate gates on CIFAR-100. For ImageNet-R and CUB-200, the active gates are 19 .18 /49 .9 and 7 .06 /52 .7, respectively. This confirms that DKF does not densely aggregate all candidate task-layer prompts; instead, it fuses only a thresholded subset of relevant prompts, reducing the effective inference workload as tasks accumulate. 26 Table 12: Average number of active task-layer gates after inference thresholding. Candidate and active gates are averaged over all test samples. Active gates and active ratio indicate the effective sparsity of DKF after thresholding 
+
+Dataset Tasks learned Avg candidate gates Active gates Active ratio 
+
+CIFAR-100 2 14.4 5.39 37.5% CIFAR-100 5 33.1 17.03 51.5% CIFAR-100 10 60.3 29.61 49.1% ImageNet-R 2 14.2 9.94 70.2% ImageNet-R 5 29.7 17.08 57.4% ImageNet-R 10 49.9 19.18 38.5% CUB-200 2 15.3 3.08 20.1% CUB-200 5 34.0 5.50 16.2% CUB-200 10 52.7 7.06 13.4% 
+
+Latency across task increments. We measure inference latency after learning different numbers of tasks. All measurements are conducted under the same hardware, batch size, and input resolution. We report the latency of the frozen ViT backbone, the total latency of GAP-Prompt, and the additional overhead: ∆latency = Latency GAP − Latency ViT , roverhead = ∆latency 
+
+Latency ViT 
+
+. (40) Tab. 13 shows that the latency of GAP-Prompt increases gradually as more tasks are learned, which is expected because the candidate prompt range expands with the queried task index. However, the increase remains controlled across datasets. For example, on CIFAR-100, the latency increases from 19 .87 ms/image after 2 tasks to 30 .77 ms/image after 10 tasks. A similar trend is observed on ImageNet-R and CUB-200, where the latency after 10 tasks remains around 29 to 30 ms/image. This indicates that the additional cost introduced by task querying, ICG, and DKF grows moderately with the task sequence length, rather than causing an uncontrolled computational bottleneck. Table 13: Inference latency across task increments (ms/image). “Overhead” denotes the additional inference time over the frozen ViT backbone. ↓ indicates that lower values are better. 
+
+Dataset Tasks learned ViT only (↓) GAP-Prompt (↓) Overhead (↓) Overhead ratio (↓)CIFAR-100 2 6.62ms 19.87ms 13.25ms 200.0% CIFAR-100 5 6.62ms 24.17ms 17.55ms 265.1% CIFAR-100 10 6.62ms 30.77ms 24.15ms 364.9% ImageNet-R 2 6.61ms 19.59ms 12.98ms 196.4% ImageNet-R 5 6.62ms 23.71ms 17.09ms 258.1% ImageNet-R 10 6.64ms 28.86ms 22.22ms 334.9% CUB-200 2 6.60ms 20.15ms 13.55ms 205.3% CUB-200 5 6.61ms 25.37ms 18.76ms 283.9% CUB-200 10 6.63ms 30.38ms 23.76ms 358.4% 
+
+Comparison with prompt-based CL methods. We further compare inference behavior with repre-sentative prompt-based CL methods. DualPrompt (Wang et al., 2022a) uses a fixed set of task prompts once the task is retrieved. CODA-Prompt (Smith et al., 2023) performs dense component assembly over its accumulated prompt-component dictionary. RainbowPrompt uses evolved prompts and task-level gates. In contrast, GAP-Prompt uses task querying to restrict the candidate prompt range to 1 : ˆ t(x), and further applies thresholded instance-conditioned gates to remove weak prompt activations before DKF. As a result, 27 GAP-Prompt avoids dense aggregation over all stored prompt components and uses fewer effective prompts during inference. Since GAP-Prompt performs input-dependent routing, its GFLOPs can vary across samples. We therefore report the average measured GFLOPs over the test set. As shown in Tab. 14, GAP-Prompt achieves compa-rable GFLOPs to DualPrompt, CODA-Prompt, and RainbowPrompt, while using substantially fewer extra stored parameters than CODA-Prompt and RainbowPrompt on CIFAR-100. Regarding extra inference parameters, RainbowPrompt requires 1.85M parameters after inference-time discard, while GAP-Prompt consistently uses only 1.36M. The similar GFLOPs are expected because the frozen ViT backbone domi-nates the overall computation. However, GAP-Prompt is more efficient in terms of prompt parameteriza-tion and effective prompt usage: it relies on compact task-specific prompts, lightweight linear gates, and thresholded DKF, rather than dense component aggregation or additional prompt-evolving modules. This demonstrates that GAP-Prompt achieves adaptive prompt reuse with comparable inference GFLOPs, fewer extra stored/inference parameters, and a more selective prompt-fusion process. Table 14: Inference efficiency comparison with prompt-based CL methods on CIFAR-100 under the 10-task class-IL setting. GFLOPs are measured under the same hardware and batch size, and averaged over the test set for GAP-Prompt due to input-dependent routing and thresholded DKF.                                
+
+> Method Extra stored params Extra inference params Candidate set at inference Active prompts/layers GFLOPs (↓)ViT only 0M 0M ––33.70 DualPrompt 1.10M 1.10M Retrieved task prompt Fixed 67.44 CODA-Prompt 3.99M 3.99M Accumulated components Dense component assembly 67.44 RainbowPrompt 6.44M 1.85M Evolved task prompts Task-level gates 67.46 GAP-Prompt 1.36M 1.36M 1 : ˆ t(x)Thresholded instance gates 67.39
+
+Discussion. Overall, GAP-Prompt remains inference-efficient by restricting prompt computation rather than densely using all stored prompts. Task querying limits the candidate range to 1 : ˆ t(x), while thresholding removes weak gates before DKF. As a result, the practical fusion cost depends on the active task-layer prompts after thresholding, instead of the total number of stored historical prompts. Together with the lightweight linear ICG module, this design keeps the inference overhead controlled as the number of learned tasks increases. 28
