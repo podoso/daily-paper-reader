@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-26</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-06</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 26 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 0 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>11</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>15</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-26 21:02:11 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-06 22:32:17 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读26篇论文，重点聚焦大型语言模型的持续预训练与高风险场景下的结构化信息抽取评估。最值得关注的两大方向：用间隔重复策略优化模型预训练效率（9.0分），以及开放模型在公共部门应用中的可靠性验证（9.0分）；速读中记忆检索增强和知识编辑攻击也值得一瞥。若想跟上热点，建议优先精读这两篇9分工作，速读可稍后补上。</p>
+<p>今日无新推荐，系统未产出可展示论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">11 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="When to Review: Spaced Repetition for Continual Pre-Training of Language Models">When to Review: Spaced Repetition for Continual Pre-Training of Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="Evaluating Structured Information Extraction with Open Models in a High Risk Public Sector Application">Evaluating Structured Information Extraction with Open Models in a High Risk Public Sector Application</span></li><li><span class="dpr-home-dashboard-paper-title" title="From Inference to Adaptation: A Unified Optimal Transport View of Vision Language Model">From Inference to Adaptation: A Unified Optimal Transport View of Vision Language Model</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">continual <strong>4</strong></span><span class="dpr-home-dashboard-tag">llm <strong>3</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span><span class="dpr-home-dashboard-tag">ie <strong>1</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">15 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MoNe: Modular Neural Memory for Efficient Long Context Inference">MoNe: Modular Neural Memory for Efficient Long Context Inference</span></li><li><span class="dpr-home-dashboard-paper-title" title="Leveraging Association Context Retrieval in Knowledge Edit- ing to Build White-Box Attacks on LLMs">Leveraging Association Context Retrieval in Knowledge Edit- ing to Build White-Box Attacks on LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="CABLE: Extending the Reach of Memory Retrieval via Complementary Antecedent-Based Linking and Expansion">CABLE: Extending the Reach of Memory Retrieval via Complementary Antecedent-Based Linking and Expansion</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">llm <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span><span class="dpr-home-dashboard-tag">continual <strong>2</strong></span><span class="dpr-home-dashboard-tag">ie <strong>1</strong></span></div>
+
 </section>
 </div>
 
